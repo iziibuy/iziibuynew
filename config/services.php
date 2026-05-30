@@ -36,7 +36,7 @@ return [
         'partner_account_id' => env('DINTERO_PARTNER_ACCOUNT_ID'),
         'client_id' => env('DINTERO_CLIENT_ID'),
         'client_secret' => env('DINTERO_CLIENT_SECRET'),
-        'onboarding_url' => env('DINTERO_ONBOARDING_URL','https://onboarding.dintero.com'),
+        'onboarding_url' => env('DINTERO_ONBOARDING_URL', 'https://onboarding.dintero.com'),
     ],
 
     /*
@@ -50,6 +50,15 @@ return [
         'sandbox' => env('ELAVON_ENTERPRISE_SANDBOX') !== null
             ? filter_var(env('ELAVON_ENTERPRISE_SANDBOX'), FILTER_VALIDATE_BOOLEAN)
             : env('APP_ENV') === 'local',
+    ],
+
+    'surfboard' => [
+        'api_url' => env('SURFBOARD_API_URL', 'https://lithium.surfgw.com/api'),
+        'api_key' => env('SURFBOARD_API_KEY'),
+        'api_secret' => env('SURFBOARD_API_SECRET'),
+        'partner_id' => env('SURFBOARD_PARTNER_ID'),
+        'merchant_id' => env('SURFBOARD_MERCHANT_ID'),
+        'store_id' => env('SURFBOARD_STORE_ID'),
     ],
 
 ];

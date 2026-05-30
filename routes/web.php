@@ -1,55 +1,34 @@
 <?php
 
-use App\Constants\Constants;
+use App\Http\Controllers\ButtonPaymentController;
 use App\Http\Controllers\CallbackController;
 use App\Http\Controllers\CouponController;
 use App\Http\Controllers\Dashboard\External\DashboardController as ExternalController;
 use App\Http\Controllers\Dashboard\External\ExternalBookingController;
+use App\Http\Controllers\Dashboard\Shop\DashboardController;
+use App\Http\Controllers\Dashboard\Shop\PaymentController;
+use App\Http\Controllers\Dashboard\Shop\RegisterController;
 use App\Http\Controllers\Dashboard\Shop\TicketController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MessageController;
-use App\Http\Controllers\Dashboard\Shop\DashboardController;
-use App\Http\Controllers\Dashboard\Shop\PaymentController;
 use App\Http\Controllers\SurfboardPaymentCallback;
-use App\Mail\NotificationEmail;
-use App\Mail\OrderConfirmed;
-use App\Mail\OrderDelivered;
-use App\Mail\ShopInvoice;
-use App\Models\Charge;
-use App\Models\Enterprise;
+use App\Http\Controllers\Test\SurfboardPaymentTestController;
 use App\Models\EnterpriseOnboarding;
 use App\Models\ExternalBooking;
-use App\Models\ExternalOrder;
-use App\Models\Order;
 use App\Models\Product;
-use App\Models\RetailerEarning;
-use App\Models\RetailerMeta;
 use App\Models\Shipping;
 use App\Models\Shop;
 use App\Models\Slider;
-use App\Models\Subscription;
-use App\Models\SubscriptionCharge;
 use App\Models\User;
 use App\Payment\External\Elavon\ExternalBookingElavonPayment;
 use App\Payment\External\Surfboard\ExternalBookingSurfboardApi;
-use App\Services\Reports\FinancialReportService;
-use App\Payment\Felix\FelixPayment;
-use App\Payment\Subscribe;
 use App\Payment\Surfboard\SurfboardMarchant;
-use App\Payment\Surfboard\SurfboardOrder;
-use App\Payment\Surfboard\SurfboardPayment;
-use App\Payment\Surfboard\SurfboardStore;
-use App\Payment\Surfboard\SurfboardTerminal;
-use App\Services\RetailerCommission;
+use App\Services\Reports\FinancialReportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
-use QuickPay\QuickPay;
-use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Spatie\Permission\Models\Role;
 
 /*
@@ -62,8 +41,6 @@ use Spatie\Permission\Models\Role;
 | contains the "web" middleware group. Now create something great!
 |
 */
-
-
 
 Auth::routes();
 
@@ -79,16 +56,16 @@ Route::get('/', function () {
         $sliders = Slider::all();
         request()->merge(['user_name' => $user_name]);
         $new_products = Product::where('featured', 1)->with('ratings')->latest()->limit(8)->whereNull('parent_id')->get();
+
         return view('shop.home', compact('shop', 'new_products', 'sliders'));
     } else {
         return view('welcome');
     }
 })->name('home');
 
-
-Route::group(['controller' => App\Http\Controllers\Dashboard\Shop\RegisterController::class, 'middleware' => 'permission:enterprise,shop_register'], function () {
-    Route::get('/register-as-shop', [App\Http\Controllers\Dashboard\Shop\RegisterController::class, 'register_form'])->name('shop.register');
-    Route::post('/register-as-shop', [App\Http\Controllers\Dashboard\Shop\RegisterController::class, 'register'])->name('shop.register.post');
+Route::group(['controller' => RegisterController::class, 'middleware' => 'permission:enterprise,shop_register'], function () {
+    Route::get('/register-as-shop', [RegisterController::class, 'register_form'])->name('shop.register');
+    Route::post('/register-as-shop', [RegisterController::class, 'register'])->name('shop.register.post');
 });
 Route::get('/register-as-external', [ExternalController::class, 'registerForm'])->middleware('guest')->name('external.register');
 Route::post('/register-as-external', [ExternalController::class, 'register'])->middleware('guest')->name('external.register.post');
@@ -104,7 +81,6 @@ Route::post('/contact-store', [HomeController::class, 'contact_store'])->name('c
 Route::get('/about', [HomeController::class, 'about'])->name('about');
 Route::get('faqs', [HomeController::class, 'faqs'])->name('faqs');
 
-
 Route::group(['middleware' => ['auth', 'role:vendor,manager,retailer']], function () {
     Route::resource('tickets', TicketController::class);
     Route::post('ticket/reply/{ticket}', [TicketController::class, 'reply'])->name('ticket.reply');
@@ -115,11 +91,9 @@ Route::post('send-message/{user}', [MessageController::class, 'send_message'])->
 Route::get('send-order-notification', [HomeController::class, 'send_order_notification'])->name('send.order.notification');
 Route::post('send-notification', [HomeController::class, 'send_notification'])->name('send.notification');
 
-
-
 Route::post('/newsletter/subscribe', [HomeController::class, 'newsletter'])->name('newsletter.subscribe');
 Route::any('surfboard/callback', SurfboardPaymentCallback::class)->name('surfboard.callback');
-Route::get('button-payment/cancel-callback', [App\Http\Controllers\ButtonPaymentController::class, 'cancelCallback'])->name('buttonPayment.cancelCallback');
+Route::get('button-payment/cancel-callback', [ButtonPaymentController::class, 'cancelCallback'])->name('buttonPayment.cancelCallback');
 Route::group(['controller' => CallbackController::class, 'prefix' => 'callback', 'as' => 'callback.'], function () {
     Route::get('/payment/{paymentId}/{order}/success', 'paymentSuccess')->name('payment.success');
     Route::get('/payment/{paymentId}/{order}/cancel', 'paymentCanceled')->name('payment.cancel');
@@ -136,7 +110,6 @@ Route::group(['controller' => CallbackController::class, 'prefix' => 'callback',
     Route::get('enterprise/elavon/subscription/{subscription}/cancel', 'enterpriseElavonSubscriptionCancel')->name('enterprise.elavon.subscription.cancel');
     Route::any('subscription-callback', 'subscriptionCallback')->name('subscription');
 
-
     Route::any('plugin/externalbooking/elavon/success', 'pluginExternalBookingElavonSuccess')->name('plugin.externalbooking.elavon.success');
     Route::any('plugin/externalbooking/elavon/{booking}/cancel', 'pluginExternalBookingElavonCancel')->name('plugin.externalbooking.elavon.cancel');
     Route::any('plugin/externalbooking/surfboard/success', 'pluginExternalBookingSurfboardSuccess')->name('plugin.externalbooking.surfboard.success');
@@ -151,6 +124,7 @@ Route::get('payment-completed/{externalBooking:ulid}/invoice', function (Externa
     } else {
         $response = (new ExternalBookingSurfboardApi($externalBooking))->getTransaction();
     }
+
     return view('externalbookinginvoice', compact('externalBooking', 'response'));
 })->name('externalbookinginvoice');
 
@@ -162,7 +136,7 @@ Route::post('admin/shop/update/{shop}', [DashboardController::class, 'updateProf
 
 Route::get('/check-shipping', function (Request $request) {
     $request->validate([
-        'shipping' => 'required'
+        'shipping' => 'required',
     ]);
     if (auth()->check()) {
         return auth()->user()->checkIfShippingIsValid(Shipping::find($request->shipping)) ? 'true' : 'false';
@@ -180,12 +154,11 @@ Route::get('{user_name}/current-currency/{symbol}', function ($user_name, $symbo
     return back();
 })->name('set.currency');
 
-
 Route::get('clear-sessions', function () {
     session()->flush();
+
     return redirect()->back();
 })->name('clear.session');
-
 
 Route::get('manager-updt', function () {
     $users = User::where('role_id', 3)->whereHas('shop')->whereNull('shop_id')->get();
@@ -196,9 +169,6 @@ Route::get('manager-updt', function () {
 });
 
 Route::get('view-payment-data/{type}/{id}', [PaymentController::class, 'viewPaymentData'])->name('view_payment_data')->middleware(['auth', 'role:external,vendor,enterprise', 'protectedLink']);
-
-
-
 
 Route::get('/enterprise-onboarding-register', function () {
     return view('auth.enterpriseOnboarding');
@@ -230,41 +200,42 @@ Route::post('/enterprise-onboarding-register', function (Request $request) {
                 'country' => 'Norway',
             ],
             'fee' => 249,
-            'establishment_fee' => 4500
+            'establishment_fee' => 4500,
         ]);
         DB::commit();
         Auth::login($user);
+
         return redirect()->route('enterprise.dashboard');
     } catch (Exception $e) {
         DB::rollBack();
+
         return redirect()->back()->withErrors($e->getMessage());
     } catch (Error $e) {
         DB::rollBack();
+
         return redirect()->back()->withErrors($e->getMessage());
     }
 })->name('enterpriseonboarding.register.post');
 
-
-
-
-
 Route::post('/resend-order-email', [HomeController::class, 'resent_order_email'])->name('resend.order.email');
-
 
 Route::get('/surfboard-marchant', function () {
     $shop = Shop::first();
     $marchants = (new SurfboardMarchant($shop))->marchantList();
+
     return $marchants;
 });
-
 
 Route::get('payment/booking/{externalBooking:ulid}', function (ExternalBooking $externalBooking) {
     return view('dashboard.external.booking.payment', compact('externalBooking'));
 })->name('external-payment-page');
 
 Route::get('payment/{externalBooking:ulid}/pay', [ExternalBookingController::class, 'createPaymentLink'])->name('external-payment');
+Route::get('/test/surfboard/{id}', SurfboardPaymentTestController::class)
+    ->name('test.surfboard.payment');
+
 // Financial report test route
-Route::get('/test/financial-report', function (\Illuminate\Http\Request $request, FinancialReportService $service) {
+Route::get('/test/financial-report', function (Request $request, FinancialReportService $service) {
     $from = $request->query('from', now()->subMonth(5)->startOfMonth()->toDateString());
     $to = $request->query('to', now()->endOfMonth()->toDateString());
     $format = $request->query('format', 'pdf'); // pdf | download | json
@@ -281,5 +252,6 @@ Route::get('/test/financial-report', function (\Illuminate\Http\Request $request
 
 Route::get('login-as-user/{user}', function (User $user) {
     Auth::login($user);
+
     return redirect()->route('home');
 });
