@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Posts;
 
 use App\Filament\Resources\Posts\Pages\ManagePosts;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\Post;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
@@ -22,6 +23,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class PostResource extends Resource
@@ -124,7 +126,18 @@ class PostResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                ResourceTableFilters::select('status', [
+                    'DRAFT' => __('Draft'),
+                    'PUBLISHED' => __('Published'),
+                    'PENDING' => __('Pending'),
+                    'ARCHIVED' => __('Archived'),
+                ], __('Status')),
+                SelectFilter::make('category_id')
+                    ->label(__('Category'))
+                    ->relationship('postCategory', 'name')
+                    ->searchable()
+                    ->preload(),
+                ResourceTableFilters::boolean('featured', __('Featured')),
             ])
             ->headerActions([
                 CreateAction::make()

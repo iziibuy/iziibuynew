@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\SiteSettings;
 
 use App\Filament\Resources\SiteSettings\Pages\ManageSiteSettings;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\SiteSetting;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
@@ -21,6 +22,7 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 
@@ -167,6 +169,24 @@ class SiteSettingResource extends Resource
             ])
             ->defaultGroup('group_name')
             ->defaultSort('sort_order')
+            ->filters([
+                SelectFilter::make('group_name')
+                    ->label(__('Group'))
+                    ->options(fn (): array => SiteSetting::query()
+                        ->distinct()
+                        ->orderBy('group_name')
+                        ->pluck('group_name', 'group_name')
+                        ->all()),
+                ResourceTableFilters::select('type', [
+                    'text' => __('Text'),
+                    'textarea' => __('Text Area'),
+                    'number' => __('Number'),
+                    'checkbox' => __('Checkbox'),
+                    'file' => __('File'),
+                    'image' => __('Image'),
+                    'select_dropdown' => __('Select Dropdown'),
+                ], __('Type')),
+            ])
             ->recordActions([
                 EditAction::make(),
                 DeleteAction::make(),

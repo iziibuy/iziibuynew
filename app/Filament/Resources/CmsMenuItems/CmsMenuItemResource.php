@@ -8,6 +8,7 @@ use App\Enums\MenuContext;
 use App\Enums\MenuLinkType;
 use App\Filament\Resources\CmsMenuItems\Pages\ManageCmsMenuItems;
 use App\Filament\Resources\CmsMenuItems\Pages\MenuBuilder;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\CmsMenu;
 use App\Models\CmsMenuItem;
 use App\Services\Cms\FilamentResourceRegistry;
@@ -25,6 +26,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Route;
@@ -148,6 +150,16 @@ class CmsMenuItemResource extends Resource
                     ->boolean(),
                 IconColumn::make('open_new_tab')
                     ->boolean(),
+            ])
+            ->filters([
+                SelectFilter::make('cms_menu_id')
+                    ->label(__('Menu'))
+                    ->relationship('menu', 'name')
+                    ->searchable()
+                    ->preload(),
+                ResourceTableFilters::menuLinkType(),
+                ResourceTableFilters::boolean('is_active', __('Active')),
+                ResourceTableFilters::boolean('open_new_tab', __('Open in new tab')),
             ])
             ->recordActions([
                 EditAction::make(),

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Tickets;
 
 use App\Filament\Resources\Tickets\Pages\ManageTickets;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\Ticket;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
@@ -90,7 +91,7 @@ class TicketResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                ResourceTableFilters::boolean('status', __('Resolved')),
             ])
             ->recordActions([
                 EditAction::make(),

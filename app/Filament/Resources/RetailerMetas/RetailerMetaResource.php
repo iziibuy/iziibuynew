@@ -30,6 +30,8 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ViewColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -193,6 +195,16 @@ class RetailerMetaResource extends Resource
                     ->sortable(false),
             ])
             ->defaultSort('id', 'desc')
+            ->filters([
+                SelectFilter::make('type')
+                    ->label(__('Retailer type'))
+                    ->relationship('retailerType', 'label')
+                    ->searchable()
+                    ->preload(),
+                TernaryFilter::make('parent_id')
+                    ->label(__('Has parent'))
+                    ->nullable(),
+            ])
             ->recordActions([
                 ActionGroup::make([
                     Action::make('withdrawals')

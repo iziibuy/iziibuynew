@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\SubscriptionCharges;
 
 use App\Filament\Resources\SubscriptionCharges\Pages\ManageSubscriptionCharges;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\SubscriptionCharge;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
@@ -129,7 +130,7 @@ class SubscriptionChargeResource extends Resource
                     ->searchable(),
             ])
             ->filters([
-                //
+                ResourceTableFilters::boolean('status', __('Paid')),
             ])
             ->recordActions([
                 ViewAction::make(),

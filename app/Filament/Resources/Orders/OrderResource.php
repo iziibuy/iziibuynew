@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders;
 
 use App\Filament\Resources\Orders\Pages\ManageOrders;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\Order;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
@@ -364,7 +365,14 @@ class OrderResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
-                //
+                ResourceTableFilters::orderStatus(),
+                ResourceTableFilters::shop(),
+                ResourceTableFilters::select('payment_method', [
+                    'quickpay' => 'QuickPay',
+                    'elavon' => 'Elavon',
+                    'surfboard' => 'Surfboard',
+                    'vipps' => 'Vipps',
+                ], __('Payment method')),
             ])
             ->recordActions([
                 ViewAction::make()

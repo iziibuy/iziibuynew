@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\PaymentMethodAccesses\Tables;
 
 use App\Filament\Resources\Users\UserResource;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\PaymentMethodAccess;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -54,6 +55,14 @@ class PaymentMethodAccessesTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('created_at', 'desc')
+            ->filters([
+                ResourceTableFilters::boolean('status', __('Active')),
+                ResourceTableFilters::select('paymentMethod', [
+                    'quickpay' => 'QuickPay',
+                    'elavon' => 'Elavon',
+                    'surfboard' => 'Surfboard',
+                ], __('Gateway')),
+            ])
             ->recordActions([
                 Action::make('editOwner')
                     ->label(__('Edit owner'))

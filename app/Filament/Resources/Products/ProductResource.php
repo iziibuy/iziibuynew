@@ -7,6 +7,7 @@ use App\Filament\Resources\Products\Pages\CreateProduct;
 use App\Filament\Resources\Products\Pages\EditProduct;
 use App\Filament\Resources\Products\Pages\ListProducts;
 use App\Filament\Resources\Products\Pages\ViewProduct;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\Product;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
@@ -385,6 +386,11 @@ class ProductResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('name')
+            ->filters([
+                ResourceTableFilters::shop(),
+                ResourceTableFilters::boolean('status', __('Published')),
+                ResourceTableFilters::boolean('featured', __('Featured')),
+            ])
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),

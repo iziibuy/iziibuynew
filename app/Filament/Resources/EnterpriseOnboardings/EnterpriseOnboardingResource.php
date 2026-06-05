@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\EnterpriseOnboardings;
 
 use App\Filament\Resources\EnterpriseOnboardings\Pages\ManageEnterpriseOnboardings;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\EnterpriseOnboarding;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
@@ -201,7 +202,13 @@ class EnterpriseOnboardingResource extends Resource
                     ->sortable(),
             ])
             ->filters([
-                //
+                ResourceTableFilters::boolean('is_establishment', __('Establishment')),
+                ResourceTableFilters::boolean('kyc_status', __('KYC approved')),
+                ResourceTableFilters::select('paymentMethod', [
+                    'quickpay' => 'QuickPay',
+                    'elavon' => 'Elavon',
+                    'surfboard' => 'Surfboard',
+                ], __('Payment method')),
             ])
             ->recordActions([
                 EditAction::make(),

@@ -9,6 +9,7 @@ use App\Filament\Resources\Shops\Pages\EditShop;
 use App\Filament\Resources\Shops\Pages\ListShops;
 use App\Filament\Resources\Shops\Pages\ViewShop;
 use App\Filament\Resources\Users\UserResource;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\Shop;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -526,7 +527,14 @@ class ShopResource extends Resource
                     ]),
             ])
             ->filters([
-                //
+                ResourceTableFilters::boolean('is_demo', __('Demo / Live')),
+                ResourceTableFilters::boolean('status', __('Active')),
+                ResourceTableFilters::shopArea(),
+                ResourceTableFilters::select('paymentMethod', [
+                    'quickpay' => 'QuickPay',
+                    'elavon' => 'Elavon',
+                    'surfboard' => 'Surfboard',
+                ], __('Payment method')),
             ])
             ->recordActions([
                 ActionGroup::make([

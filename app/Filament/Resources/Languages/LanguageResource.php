@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Languages;
 
 use App\Filament\Resources\Languages\Pages\ManageLanguages;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\Language;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
@@ -80,7 +81,7 @@ class LanguageResource extends Resource
                     ->searchable(),
             ])
             ->filters([
-                //
+                ResourceTableFilters::boolean('shopCanEdit', __('Shop can edit')),
             ])
             ->recordActions([
                 EditAction::make(),

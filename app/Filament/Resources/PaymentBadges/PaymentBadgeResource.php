@@ -17,7 +17,9 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class PaymentBadgeResource extends Resource
 {
@@ -80,6 +82,21 @@ class PaymentBadgeResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('name')
+            ->filters([
+                SelectFilter::make('image_status')
+                    ->label(__('Image'))
+                    ->options([
+                        'with' => __('With image'),
+                        'without' => __('Without image'),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value'] ?? null) {
+                            'with' => $query->whereNotNull('image')->where('image', '!=', ''),
+                            'without' => $query->where(fn (Builder $query): Builder => $query->whereNull('image')->orWhere('image', '')),
+                            default => $query,
+                        };
+                    }),
+            ])
             ->recordActions([
                 EditAction::make(),
                 DeleteAction::make(),

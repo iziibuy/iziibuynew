@@ -7,6 +7,7 @@ namespace App\Filament\Resources\CmsMenus;
 use App\Enums\MenuContext;
 use App\Filament\Resources\CmsMenuItems\Pages\MenuBuilder;
 use App\Filament\Resources\CmsMenus\Pages\ManageCmsMenus;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\CmsMenu;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -113,6 +114,11 @@ class CmsMenuResource extends Resource
                 TextColumn::make('all_items_count')
                     ->counts('allItems')
                     ->label(__('Items')),
+            ])
+            ->filters([
+                ResourceTableFilters::menuContext(),
+                ResourceTableFilters::boolean('is_active', __('Active')),
+                ResourceTableFilters::boolean('replaces_panel_navigation', __('Replaces sidebar')),
             ])
             ->recordActions([
                 Action::make('build')

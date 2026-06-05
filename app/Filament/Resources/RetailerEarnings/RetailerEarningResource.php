@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\RetailerEarnings;
 
 use App\Filament\Resources\RetailerEarnings\Pages\ManageRetailerEarnings;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\RetailerEarning;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
@@ -101,7 +102,16 @@ class RetailerEarningResource extends Resource
                     ->badge(),
             ])
             ->filters([
-                //
+                ResourceTableFilters::shop(),
+                ResourceTableFilters::select('transaction_type', [
+                    'Add' => 'Add',
+                    'Remove' => 'Remove',
+                ], __('Transaction type')),
+                ResourceTableFilters::select('method', [
+                    'one_time_pay_out' => __('One time payout'),
+                    'commission_from_recurring_payments' => __('Recurring commission'),
+                    'commission_from_sales' => __('Sales commission'),
+                ], __('Method')),
             ])
             ->recordActions([
                 EditAction::make(),

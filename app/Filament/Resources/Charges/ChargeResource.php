@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Charges;
 
 use App\Filament\Resources\Charges\Pages\ManageCharges;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\Charge;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
@@ -114,7 +115,13 @@ class ChargeResource extends Resource
                     ->badge(),
             ])
             ->filters([
-                //
+                ResourceTableFilters::shop(),
+                ResourceTableFilters::select('payment_type', [
+                    'Unresolved' => 'Unresolved',
+                    'Test' => 'Test',
+                    'Real' => 'Real',
+                ], __('Payment type')),
+                ResourceTableFilters::boolean('status', __('Paid')),
             ])
             ->recordActions([
                 EditAction::make(),

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\SitePlugins;
 
 use App\Filament\Resources\SitePlugins\Pages\ManageSitePlugins;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\SitePlugin;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
@@ -106,6 +107,9 @@ class SitePluginResource extends Resource
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                ResourceTableFilters::boolean('is_enabled', __('Enabled')),
             ])
             ->recordActions([
                 EditAction::make(),

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Changelogs;
 
 use App\Filament\Resources\Changelogs\Pages\ManageChangelogs;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\Changelog;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
@@ -73,6 +74,13 @@ class ChangelogResource extends Resource
                     ->sortable(),
             ])
             ->defaultSort('created_at', 'desc')
+            ->filters([
+                ResourceTableFilters::select('type', [
+                    'feature' => __('Feature'),
+                    'fix' => __('Fix'),
+                    'improvement' => __('Improvement'),
+                ], __('Type')),
+            ])
             ->recordActions([
                 EditAction::make(),
                 DeleteAction::make(),

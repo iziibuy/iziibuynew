@@ -5,6 +5,7 @@ namespace App\Filament\Resources\RetailerTypes;
 use App\Filament\Resources\RetailerTypes\Pages\CreateRetailerType;
 use App\Filament\Resources\RetailerTypes\Pages\EditRetailerType;
 use App\Filament\Resources\RetailerTypes\Pages\ListRetailerTypes;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\RetailerType;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
@@ -114,6 +115,19 @@ class RetailerTypeResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('label')
+            ->filters([
+                ResourceTableFilters::select('has_sub_retailer', [
+                    'yes' => __('Has sub-retailer rates'),
+                    'no' => __('No sub-retailer rates'),
+                ], __('Sub-retailer'))
+                    ->query(function ($query, array $data) {
+                        return match ($data['value'] ?? null) {
+                            'yes' => $query->whereNotNull('sub_retailer_one_time_pay_out'),
+                            'no' => $query->whereNull('sub_retailer_one_time_pay_out'),
+                            default => $query,
+                        };
+                    }),
+            ])
             ->recordActions([
                 EditAction::make(),
                 DeleteAction::make(),

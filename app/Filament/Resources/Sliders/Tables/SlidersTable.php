@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Sliders\Tables;
 
 use App\Facades\IziibuyFacades;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\Slider;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -38,6 +39,9 @@ class SlidersTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('created_at', 'desc')
+            ->filters([
+                ResourceTableFilters::shop(),
+            ])
             ->recordActions([
                 EditAction::make(),
                 DeleteAction::make(),

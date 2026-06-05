@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Pages;
 
 use App\Filament\Resources\Pages\Pages\ManagePages;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\Page;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
@@ -105,7 +106,10 @@ class PageResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                ResourceTableFilters::select('status', [
+                    'INACTIVE' => __('Inactive'),
+                    'ACTIVE' => __('Active'),
+                ], __('Status')),
             ])
             ->recordActions([
                 EditAction::make(),

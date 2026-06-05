@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Faqs;
 
 use App\Filament\Resources\Faqs\Pages\ManageFaqs;
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\Faq;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
@@ -75,6 +76,9 @@ class FaqResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('sort_order')
+            ->filters([
+                ResourceTableFilters::boolean('is_published', __('Published')),
+            ])
             ->recordActions([
                 EditAction::make(),
                 DeleteAction::make(),

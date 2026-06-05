@@ -2,12 +2,12 @@
 
 namespace App\Filament\Resources\Coupons\Tables;
 
+use App\Filament\Tables\Filters\ResourceTableFilters;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class CouponsTable
@@ -52,11 +52,8 @@ class CouponsTable
             ])
             ->defaultSort('expire_at', 'desc')
             ->filters([
-                SelectFilter::make('shop_id')
-                    ->label(__('Shop'))
-                    ->relationship('shop', 'user_name')
-                    ->searchable()
-                    ->preload(),
+                ResourceTableFilters::couponScope(),
+                ResourceTableFilters::shop(),
             ])
             ->recordActions([
                 EditAction::make(),
