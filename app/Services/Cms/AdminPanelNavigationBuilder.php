@@ -26,6 +26,7 @@ final class AdminPanelNavigationBuilder
         private readonly MenuTreeBuilder $treeBuilder,
         private readonly MenuUrlResolver $urlResolver,
         private readonly VoyagerIconMapper $iconMapper,
+        private readonly MenuItemActiveMatcher $activeMatcher,
     ) {}
 
     /**
@@ -157,7 +158,7 @@ final class AdminPanelNavigationBuilder
                 $label = $record->title ?: $resourceClass::getNavigationLabel();
                 $icon ??= $resourceClass::getNavigationIcon();
                 $activeIcon = $resourceClass::getActiveNavigationIcon();
-                $isActiveWhen = fn (): bool => original_request()->routeIs($resourceClass::getNavigationItemActiveRoutePattern());
+                $isActiveWhen = fn (): bool => $this->activeMatcher->matchesResource($resourceClass, $url);
             }
         }
 
@@ -187,15 +188,7 @@ final class AdminPanelNavigationBuilder
             return fn (): bool => original_request()->routeIs($record->route_name);
         }
 
-        return function () use ($url): bool {
-            $current = url()->current();
-
-            if ($current === $url) {
-                return true;
-            }
-
-            return str_starts_with($current, rtrim($url, '/').'/');
-        };
+        return fn (): bool => $this->activeMatcher->matchesUrl($url);
     }
 
     private function resolveIcon(CmsMenuItem $item): string|BackedEnum|null

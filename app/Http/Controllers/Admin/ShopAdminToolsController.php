@@ -6,12 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Mail\NotificationEmail;
 use App\Models\Shop;
 use App\Models\Shop as ModelsShop;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 
 class ShopAdminToolsController extends Controller
 {
-    public function sendShopPassword(ModelsShop $shop): \Illuminate\Http\RedirectResponse
+    public function sendShopPassword(ModelsShop $shop): RedirectResponse
     {
         $password = rand(9999, 99999999);
         $mail_data = [
@@ -32,8 +34,12 @@ class ShopAdminToolsController extends Controller
         ]);
     }
 
-    public function advanceShopEdit(Shop $shop): \Illuminate\Contracts\View\View
+    public function advanceShopEdit(Shop $shop): View
     {
-        return view('vendor.voyager.shops.advanceedit', ['shop' => $shop]);
+        $shop->load('user');
+
+        return view('admin.shops.advance-edit', [
+            'shop' => $shop,
+        ]);
     }
 }

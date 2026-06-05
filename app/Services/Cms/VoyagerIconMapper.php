@@ -43,6 +43,7 @@ final class VoyagerIconMapper
         'voyager-data' => Heroicon::OutlinedCircleStack,
         'voyager-compass' => Heroicon::OutlinedMap,
         'voyager-bread' => Heroicon::OutlinedTableCells,
+        'voyager-youtube' => Heroicon::OutlinedPlayCircle,
     ];
 
     public function map(?string $icon): string|BackedEnum|null

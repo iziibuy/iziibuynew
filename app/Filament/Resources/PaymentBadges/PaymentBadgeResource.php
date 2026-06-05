@@ -2,8 +2,9 @@
 
 namespace App\Filament\Resources\PaymentBadges;
 
+use App\Facades\IziibuyFacades;
 use App\Filament\Resources\PaymentBadges\Pages\ManagePaymentBadges;
-use App\Models\PaymentBadge;
+use App\Models\PaymentMethod;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -11,18 +12,18 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
 class PaymentBadgeResource extends Resource
 {
-    protected static ?string $model = PaymentBadge::class;
+    protected static ?string $model = PaymentMethod::class;
+
+    protected static bool $shouldRegisterNavigation = false;
 
     protected static string|\UnitEnum|null $navigationGroup = 'site';
 
@@ -38,7 +39,17 @@ class PaymentBadgeResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
+    protected static ?string $slug = 'payment-badges';
+
     protected static ?int $globalSearchSort = 82;
+
+    /**
+     * @return array<int, string>
+     */
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['name'];
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -49,16 +60,8 @@ class PaymentBadgeResource extends Resource
                     ->maxLength(255),
                 FileUpload::make('image')
                     ->image()
-                    ->directory('payment-badges'),
-                TextInput::make('url')
-                    ->url()
-                    ->maxLength(2048),
-                TextInput::make('sort_order')
-                    ->numeric()
-                    ->default(0),
-                Toggle::make('is_active')
-                    ->label(__('Active'))
-                    ->default(true),
+                    ->directory('payment-methods')
+                    ->required(),
             ]);
     }
 
@@ -67,18 +70,16 @@ class PaymentBadgeResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('name')
-                    ->searchable(),
-                ImageColumn::make('image'),
-                TextColumn::make('url')
-                    ->limit(30)
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('sort_order')
-                    ->numeric()
+                    ->searchable()
                     ->sortable(),
-                IconColumn::make('is_active')
-                    ->boolean(),
+                ImageColumn::make('image')
+                    ->getStateUsing(fn (PaymentMethod $record): ?string => filled($record->image) ? IziibuyFacades::image($record->image) : null),
+                TextColumn::make('updated_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->defaultSort('sort_order')
+            ->defaultSort('name')
             ->recordActions([
                 EditAction::make(),
                 DeleteAction::make(),

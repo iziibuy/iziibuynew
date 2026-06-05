@@ -20,6 +20,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class ChargeResource extends Resource
 {
@@ -41,6 +42,20 @@ class ChargeResource extends Resource
     public static function getGloballySearchableAttributes(): array
     {
         return ['order_id', 'payment_type', 'details', 'comment'];
+    }
+
+    /**
+     * @return Builder<Charge>
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery()->with('shop');
+
+        if (request()->has('demo')) {
+            $query->where('is_demo', request()->boolean('demo'));
+        }
+
+        return $query;
     }
 
     public static function form(Schema $schema): Schema

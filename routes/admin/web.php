@@ -4,8 +4,10 @@ use App\Exports\LanguageExport;
 use App\Filament\Pages\RetailerReportPage;
 use App\Filament\Pages\RetailerWithdrawalsPage;
 use App\Filament\Resources\RetailerMetas\RetailerMetaResource;
+use App\Filament\Resources\Shops\ShopResource;
 use App\Http\Controllers\Admin\ImportsController;
 use App\Http\Controllers\Admin\OrderAdminController;
+use App\Http\Controllers\Admin\RetailerAdminController;
 use App\Http\Controllers\Admin\RetailerTransferController;
 use App\Http\Controllers\Admin\ShopAdminToolsController;
 use App\Http\Controllers\Dashboard\External\DashboardController;
@@ -15,6 +17,7 @@ use App\Http\Controllers\Shop\PagesController;
 use App\Http\Controllers\TwoPaymentController;
 use App\Models\RetailerMeta;
 use App\Models\RetailerWithdrawal;
+use App\Models\Shop;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
 use Maatwebsite\Excel\Facades\Excel;
@@ -51,9 +54,7 @@ Route::middleware(['web', 'admin.user'])->prefix('admin/retailer')->as('admin.re
 
         return redirect()->to($url, 302);
     })->name('retailer-withdrawals');
-    Route::post('/withdrawals/balance/{user}', function (User $user) {
-        return redirect()->to(RetailerWithdrawalsPage::getUrl().'?user='.$user->id, 302);
-    })->name('retailer-withdrawals-balance');
+    Route::post('/withdrawals/balance/{user}', [RetailerAdminController::class, 'withdrawalsBalance'])->name('retailer-withdrawals-balance');
     Route::post('/delete-retailer/{retailer}', function (RetailerMeta $retailer) {
         $owner = $retailer->user;
         $retailer->delete();
@@ -80,7 +81,9 @@ Route::middleware(['web', 'admin.user'])->prefix('admin/retailer')->as('admin.re
 });
 
 Route::middleware(['web', 'admin.user'])->prefix('admin')->as('admin.')->group(function () {
-    Route::get('advance-shop-edit/{shop}', [ShopAdminToolsController::class, 'advanceShopEdit'])->name('advance.shop.edit');
+    Route::get('advance-shop-edit/{shop}', function (Shop $shop) {
+        return redirect()->to(ShopResource::getUrl('advance-edit', ['record' => $shop]), 302);
+    })->name('advance.shop.edit');
     Route::get('send-shop-password/{shop}', [ShopAdminToolsController::class, 'sendShopPassword'])->name('send.shop.password');
     Route::get('orders/{order}/refund', [OrderAdminController::class, 'refundView'])->name('orders.refund');
     Route::post('orders/{order}/refund-store', [OrderAdminController::class, 'refund'])->name('orders.refund.store');

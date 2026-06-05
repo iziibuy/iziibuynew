@@ -15,13 +15,13 @@ use App\Filament\Resources\Languages\LanguageResource;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Filament\Resources\Pages\PageResource;
 use App\Filament\Resources\PaymentBadges\PaymentBadgeResource;
+use App\Filament\Resources\PaymentMethodAccesses\PaymentMethodAccessResource;
 use App\Filament\Resources\PostCategories\PostCategoryResource;
 use App\Filament\Resources\Posts\PostResource;
 use App\Filament\Resources\Products\ProductResource;
 use App\Filament\Resources\RetailerEarnings\RetailerEarningResource;
 use App\Filament\Resources\RetailerMetas\RetailerMetaResource;
 use App\Filament\Resources\Shops\ShopResource;
-use App\Filament\Resources\SitePlugins\SitePluginResource;
 use App\Filament\Resources\SubscriptionCharges\SubscriptionChargeResource;
 use App\Filament\Resources\Tickets\TicketResource;
 use App\Filament\Resources\Users\UserResource;
@@ -61,7 +61,7 @@ class AdminQuickLinksWidget extends Widget
             ['label' => __('Menus'), 'url' => CmsMenuResource::getUrl()],
             ['label' => __('FAQ'), 'url' => FaqResource::getUrl()],
             ['label' => __('Changelog'), 'url' => ChangelogResource::getUrl()],
-            ['label' => __('Plugins'), 'url' => SitePluginResource::getUrl()],
+            ['label' => __('Plugins'), 'url' => PaymentMethodAccessResource::getUrl()],
             ['label' => __('Payment badges'), 'url' => PaymentBadgeResource::getUrl()],
             ['label' => __('Server status'), 'url' => ServerStatusPage::getUrl()],
         ];

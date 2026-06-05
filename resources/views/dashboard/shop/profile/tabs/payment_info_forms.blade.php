@@ -97,17 +97,16 @@
         @php
             $methodArray = $shop->footerPaymentMethod ? json_decode($shop->footerPaymentMethod) : [];
         @endphp
-        @foreach ($paymentMethods as $item)
-            <div class="row row-cols-4 container mb-3">
-
-                <div class="form-check">
+        <div class="d-flex border mb-3 rounded flex-wrap">
+            @foreach ($paymentMethods as $item)
+                <div class="form-check m-2">
                     <input class="form-check-input" name="meta[footerPaymentMethod][]" type="checkbox"
                         @if (in_array($item->id, $methodArray)) checked @endif value="{{ $item->id }}"
                         id="method{{ $item->id }}" />
                     <label class="form-check-label" for="method{{ $item->id }}"> {{ $item->name }} </label>
                 </div>
-            </div>
-        @endforeach
+            @endforeach
+        </div>
     </div>
 
 </div>

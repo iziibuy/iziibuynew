@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Users;
 
+use App\Facades\IziibuyFacades;
+use App\Filament\Resources\Users\Pages\EditUser;
 use App\Filament\Resources\Users\Pages\ManageUsers;
 use App\Models\User;
 use BackedEnum;
@@ -9,7 +11,6 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -20,9 +21,10 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
-use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class UserResource extends Resource
 {
@@ -44,6 +46,14 @@ class UserResource extends Resource
     public static function getGloballySearchableAttributes(): array
     {
         return ['name', 'email', 'last_name', 'phone'];
+    }
+
+    /**
+     * @return Builder<User>
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with(['role', 'metas']);
     }
 
     public static function form(Schema $schema): Schema
@@ -140,53 +150,56 @@ class UserResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('name')
-                    ->searchable(),
+                    ->label(__('Name'))
+                    ->searchable()
+                    ->sortable(),
                 TextColumn::make('last_name')
-                    ->searchable(),
+                    ->label(__('Last name'))
+                    ->searchable()
+                    ->sortable()
+                    ->placeholder('—'),
+                TextColumn::make('email')
+                    ->label(__('Email'))
+                    ->searchable()
+                    ->sortable(),
                 TextColumn::make('phone')
-                    ->searchable(),
+                    ->label(__('Phone'))
+                    ->searchable()
+                    ->placeholder('—'),
                 TextColumn::make('tax_id')
-                    ->searchable(),
-                TextColumn::make('shop_id')
-                    ->numeric()
+                    ->label(__('Tax id'))
+                    ->searchable()
+                    ->placeholder('—'),
+                TextColumn::make('created_at')
+                    ->label(__('Created at'))
+                    ->dateTime('Y-m-d H:i:s')
                     ->sortable(),
                 TextColumn::make('role.name')
-                    ->searchable(),
-                TextColumn::make('avatar')
-                    ->searchable(),
-                TextColumn::make('email')
-                    ->label('Email address')
-                    ->searchable(),
-                TextColumn::make('email_verified_at')
-                    ->dateTime()
+                    ->label(__('Role'))
+                    ->formatStateUsing(fn (?string $state): string => match (strtolower((string) $state)) {
+                        'user' => __('Customer'),
+                        default => ucfirst((string) $state),
+                    })
+                    ->searchable()
                     ->sortable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('pt_package_id')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('pt_trainer_id')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('pt_package_price')
-                    ->money()
-                    ->sortable(),
-                IconColumn::make('pt_free_tier')
-                    ->boolean(),
-                TextColumn::make('service_type')
-                    ->searchable(),
+                TextColumn::make('status')
+                    ->label(__('Status'))
+                    ->state(function (User $record): ?string {
+                        $status = $record->metas->firstWhere('column_name', 'status')?->column_value;
+
+                        return filled($status) ? (string) $status : null;
+                    })
+                    ->placeholder('—'),
+                ImageColumn::make('avatar')
+                    ->label(__('Avatar'))
+                    ->circular()
+                    ->getStateUsing(fn (User $record): ?string => filled($record->avatar) ? IziibuyFacades::image($record->avatar) : null),
             ])
+            ->defaultSort('created_at', 'desc')
             ->filters([
                 //
             ])
             ->recordActions([
-                ViewAction::make(),
                 EditAction::make(),
                 DeleteAction::make(),
             ])
@@ -201,6 +214,7 @@ class UserResource extends Resource
     {
         return [
             'index' => ManageUsers::route('/'),
+            'edit' => EditUser::route('/{record}/edit'),
         ];
     }
 }

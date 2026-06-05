@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 use App\Enums\MenuContext;
 use App\Enums\MenuLinkType;
+use App\Filament\Resources\Shops\ShopResource;
+use App\Filament\Resources\Sliders\SliderResource;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\CmsMenu;
 use App\Models\CmsMenuItem;
 use App\Services\Cms\AdminPanelNavigationBuilder;
 use App\Services\Cms\LegacyAdminMenuSynchronizer;
+use App\Services\Cms\MenuItemActiveMatcher;
 use App\Services\Cms\MenuTreeBuilder;
 use App\Services\Cms\MenuUrlResolver;
 use App\Services\Cms\VoyagerIconMapper;
@@ -20,6 +23,7 @@ it('maps legacy voyager icon classes to heroicons', function (): void {
 
     expect($mapper->map('voyager-boat'))->toBe(Heroicon::OutlinedHome)
         ->and($mapper->map('voyager-person'))->toBe(Heroicon::OutlinedUser)
+        ->and($mapper->map('voyager-youtube'))->toBe(Heroicon::OutlinedPlayCircle)
         ->and($mapper->map('voyager-unknown'))->toBeNull()
         ->and($mapper->map('not-an-icon'))->toBeNull();
 });
@@ -125,6 +129,113 @@ it('syncs legacy admin menu for filament sidebar', function (): void {
     expect($navigation)->not->toBeFalse();
 });
 
+it('syncs sliders menu item to filament sliders resource', function (): void {
+    $menu = CmsMenu::query()->updateOrCreate(
+        ['slug' => LegacyAdminMenuSynchronizer::ADMIN_MENU_SLUG],
+        [
+            'name' => 'admin',
+            'context' => MenuContext::Admin,
+            'is_active' => true,
+            'replaces_panel_navigation' => true,
+        ],
+    );
+
+    CmsMenuItem::query()->create([
+        'cms_menu_id' => $menu->id,
+        'title' => 'Sliders',
+        'link_type' => MenuLinkType::Url,
+        'url' => '/panel/shops',
+        'sort_order' => 5,
+        'is_active' => true,
+    ]);
+
+    app(LegacyAdminMenuSynchronizer::class)->sync();
+
+    $sliders = CmsMenuItem::query()
+        ->where('cms_menu_id', $menu->id)
+        ->where('title', 'Sliders')
+        ->first();
+
+    expect($sliders->link_type)->toBe(MenuLinkType::Resource)
+        ->and($sliders->resource_class)->toBe(SliderResource::class);
+});
+
+it('deactivates sign-ups and adds youtube guide icon during admin menu sync', function (): void {
+    $menu = CmsMenu::query()->updateOrCreate(
+        ['slug' => LegacyAdminMenuSynchronizer::ADMIN_MENU_SLUG],
+        [
+            'name' => 'admin',
+            'context' => MenuContext::Admin,
+            'is_active' => true,
+            'replaces_panel_navigation' => true,
+        ],
+    );
+
+    CmsMenuItem::query()->create([
+        'cms_menu_id' => $menu->id,
+        'title' => 'sign-ups',
+        'link_type' => MenuLinkType::Url,
+        'url' => '/panel/users',
+        'sort_order' => 90,
+        'is_active' => true,
+    ]);
+
+    CmsMenuItem::query()->create([
+        'cms_menu_id' => $menu->id,
+        'title' => 'Youtube guide',
+        'link_type' => MenuLinkType::Url,
+        'url' => 'https://www.youtube.com/playlist?list=PLcxIFCbE9hcA2n-K5wjlNj8kiOeaK2umQ',
+        'sort_order' => 91,
+        'is_active' => true,
+    ]);
+
+    app(LegacyAdminMenuSynchronizer::class)->sync();
+
+    $signUps = CmsMenuItem::query()
+        ->where('cms_menu_id', $menu->id)
+        ->where('title', 'sign-ups')
+        ->first();
+
+    $youtubeGuide = CmsMenuItem::query()
+        ->where('cms_menu_id', $menu->id)
+        ->where('title', 'Youtube guide')
+        ->first();
+
+    expect($signUps->is_active)->toBeFalse()
+        ->and($youtubeGuide->icon)->toBe('voyager-youtube');
+});
+
+it('syncs active shops menu item to filament shops list', function (): void {
+    $menu = CmsMenu::query()->updateOrCreate(
+        ['slug' => LegacyAdminMenuSynchronizer::ADMIN_MENU_SLUG],
+        [
+            'name' => 'admin',
+            'context' => MenuContext::Admin,
+            'is_active' => true,
+            'replaces_panel_navigation' => true,
+        ],
+    );
+
+    CmsMenuItem::query()->create([
+        'cms_menu_id' => $menu->id,
+        'title' => '.. ACTIVE SHOPS',
+        'link_type' => MenuLinkType::Url,
+        'url' => 'https://iziibuy.com/admin/shops?s=0&filter=equals&key=is_demo',
+        'sort_order' => 2,
+        'is_active' => true,
+    ]);
+
+    app(LegacyAdminMenuSynchronizer::class)->sync();
+
+    $activeShops = CmsMenuItem::query()
+        ->where('cms_menu_id', $menu->id)
+        ->where('title', '.. ACTIVE SHOPS')
+        ->first();
+
+    expect($activeShops->link_type)->toBe(MenuLinkType::Url)
+        ->and($activeShops->url)->toBe('/panel/shops?active=1');
+});
+
 it('builds parent menu items as collapsible navigation groups', function (): void {
     $menu = CmsMenu::query()->create([
         'name' => 'Admin',
@@ -162,6 +273,32 @@ it('builds parent menu items as collapsible navigation groups', function (): voi
         ->and($retailerGroup->isCollapsible())->toBeTrue()
         ->and(collect($retailerGroup->getItems()))->toHaveCount(1)
         ->and($retailerGroup->getItems()[0]->getLabel())->toBe('Users');
+});
+
+it('marks filtered url menu items active when query parameters match', function (): void {
+    $matcher = app(MenuItemActiveMatcher::class);
+
+    $this->get('/panel/charges?demo=0');
+
+    expect($matcher->matchesUrl(url('/panel/charges?demo=0')))->toBeTrue()
+        ->and($matcher->matchesUrl(url('/panel/charges?demo=1')))->toBeFalse();
+});
+
+it('marks base resource menu items inactive when distinguishing query parameters are present', function (): void {
+    $matcher = app(MenuItemActiveMatcher::class);
+
+    $this->get('/panel/shops?active=1');
+
+    expect($matcher->matchesUrl(url('/panel/shops?active=1')))->toBeTrue()
+        ->and($matcher->matchesResource(ShopResource::class, ShopResource::getUrl()))->toBeFalse();
+});
+
+it('marks resource menu items active on nested resource pages', function (): void {
+    $matcher = app(MenuItemActiveMatcher::class);
+
+    $this->get('/panel/shops/1/edit');
+
+    expect($matcher->matchesResource(ShopResource::class, ShopResource::getUrl()))->toBeTrue();
 });
 
 it('scopes menus by context', function (): void {
