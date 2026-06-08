@@ -5,6 +5,7 @@ namespace App\Payment\Elavon;
 use App\Elavon\Converge2\Client\ClientConfig;
 use App\Elavon\Converge2\Converge2;
 use App\Elavon\Converge2\Response\OrderResponse;
+use App\Elavon\Converge2\Response\ResponseInterface;
 use App\Models\Shop;
 use Illuminate\Support\Facades\Log;
 
@@ -140,7 +141,7 @@ class ElavonShopHostedSubscription
             'billTo' => $this->billTo(),
             'returnUrl' => $returnUrl,
             'cancelUrl' => $cancelUrl,
-            'originUrl' => rtrim((string) config('app.url'), '/'),
+            'originUrl' => url('/'),
             'defaultLanguageTag' => 'en-US',
             'customFields' => [
                 'vendor_id' => env('APP_NAME'),
@@ -173,10 +174,7 @@ class ElavonShopHostedSubscription
 
         $order_create_response = $this->elavon->createOrder($this->makeOrderCreateBody($amountNok));
         if (! $order_create_response->isSuccess()) {
-            $data = $order_create_response->getData();
-            $failures = (is_object($data) && isset($data->failures)) ? $data->failures : [];
-
-            return $this->failureFromResponse(is_object($data) && isset($data->status) ? (int) $data->status : 500, $failures);
+            return $this->failureFromResponse($order_create_response, 'order');
         }
 
         $session_body = $this->makePaymentSessionCreateBody($order_create_response, $returnUrl, $cancelUrl);
@@ -195,31 +193,71 @@ class ElavonShopHostedSubscription
             ];
         }
 
-        $sessData = $payment_session_create_response->getData();
-        $sessFailures = (is_object($sessData) && isset($sessData->failures)) ? $sessData->failures : [];
-
-        return $this->failureFromResponse(is_object($sessData) && isset($sessData->status) ? (int) $sessData->status : 500, $sessFailures);
+        return $this->failureFromResponse($payment_session_create_response, 'payment_session');
     }
 
     /**
-     * @param  mixed  $failures
      * @return array{status: bool, code: int, data: array{message: string}}
      */
-    protected function failureFromResponse(int $code, $failures): array
+    protected function failureFromResponse(ResponseInterface $response, string $stage): array
     {
-        $message = '';
-        if (is_iterable($failures)) {
-            foreach ($failures as $failure) {
-                $message .= ' | '.(is_object($failure) && method_exists($failure, 'getDescription') ? $failure->getDescription() : '');
-            }
-        }
-        $message = $message !== '' ? trim($message, ' |') : 'Elavon payment session failed.';
+        $message = $this->extractFailureMessage($response);
+
+        Log::warning('Elavon shop subscription HPP failed', [
+            'stage' => $stage,
+            'shop_id' => $this->shop->id,
+            'credential_source' => $this->credentialSource(),
+            'sandbox' => $this->keys['sandbox'],
+            'origin_url' => url('/'),
+            'status_code' => $response->getRawResponseStatusCode(),
+            'message' => $message,
+            'response_body' => $response->getRawResponseBody(),
+        ]);
 
         return [
             'status' => false,
-            'code' => $code,
+            'code' => $response->getRawResponseStatusCode() ?: 500,
             'data' => ['message' => $message],
         ];
+    }
+
+    protected function extractFailureMessage(ResponseInterface $response): string
+    {
+        $parts = [];
+
+        if ($response->hasFailures()) {
+            foreach ($response->getFailures() as $failure) {
+                $description = method_exists($failure, 'getDescription') ? (string) $failure->getDescription() : '';
+                if ($description !== '') {
+                    $parts[] = $description;
+                }
+            }
+        }
+
+        if ($parts === []) {
+            $shortError = $response->getShortErrorMessage();
+            if (is_string($shortError) && $shortError !== '') {
+                $parts[] = $shortError;
+            }
+        }
+
+        if ($parts === []) {
+            $rawError = $response->getRawErrorMessage();
+            if (is_string($rawError) && $rawError !== '') {
+                $parts[] = $rawError;
+            }
+        }
+
+        return $parts !== [] ? implode(' | ', $parts) : 'Elavon payment session failed.';
+    }
+
+    protected function credentialSource(): string
+    {
+        $merchant = (string) ($this->shop->elavon_merchant_alias ?? '');
+        $public = (string) ($this->shop->elavon_public_key ?? '');
+        $secret = (string) ($this->shop->elavon_secret_key ?? '');
+
+        return $merchant !== '' && $public !== '' && $secret !== '' ? 'shop' : 'platform';
     }
 
     public function convergeClient(): Converge2
