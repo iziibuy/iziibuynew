@@ -50,6 +50,9 @@ return [
         'sandbox' => env('ELAVON_ENTERPRISE_SANDBOX') !== null
             ? filter_var(env('ELAVON_ENTERPRISE_SANDBOX'), FILTER_VALIDATE_BOOLEAN)
             : env('APP_ENV') === 'local',
+        'disable_hpp_3ds' => filter_var(env('ELAVON_HPP_DISABLE_3DS', false), FILTER_VALIDATE_BOOLEAN),
+        'charge_on_server' => filter_var(env('ELAVON_HPP_CHARGE_ON_SERVER', false), FILTER_VALIDATE_BOOLEAN),
+        'hpp_origin_url' => env('ELAVON_HPP_ORIGIN_URL'),
     ],
 
     'surfboard' => [

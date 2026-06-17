@@ -6,6 +6,7 @@ use App\Elavon\Converge2\Client\ClientConfig;
 use App\Elavon\Converge2\Converge2;
 use App\Elavon\Converge2\DataObject\Resource\Endpoint;
 use App\Elavon\Converge2\Response\PaymentSessionResponse;
+use App\Elavon\Converge2\Response\PlanResponse;
 use App\Elavon\Converge2\Response\ShopperResponse;
 use App\Elavon\Converge2\Response\StoredCardResponse;
 use App\Models\Shop;
@@ -326,6 +327,48 @@ class ElavonShopSubscription
             ];
         }
 
+        $hosted = new ElavonShopHostedSubscription($this->shop);
+        $amount = (float) Iziibuy::round_num($this->shop->subscriptionFee());
+        $transactionId = $this->resolveTransactionIdFromPaymentSession($session);
+
+        if ($transactionId === '') {
+            if ($hosted->chargesOnServer()) {
+                $chargeResult = $hosted->chargeSignupFeeFromSession($session, $amount);
+                if (! $chargeResult['status']) {
+                    return [
+                        'status' => false,
+                        'data' => ['message' => $chargeResult['data']['message'] ?? 'Payment failed.'],
+                    ];
+                }
+                $transactionId = (string) ($chargeResult['data']['transactionId'] ?? '');
+                $session = $this->elavon->getPaymentSession($sessionId);
+            } else {
+                return [
+                    'status' => false,
+                    'data' => ['message' => 'Payment was not completed on the hosted page. Please try again.'],
+                ];
+            }
+        } else {
+            $transaction = $this->elavon->getTransaction($transactionId);
+            if (! $transaction->isSuccess() || ! $hosted->transactionIsApproved($transaction)) {
+                $message = 'Payment was not approved.';
+                if ($transaction->isSuccess() && $transaction->hasFailures()) {
+                    foreach ($transaction->getFailures() as $failure) {
+                        $description = method_exists($failure, 'getDescription') ? (string) $failure->getDescription() : '';
+                        if ($description !== '') {
+                            $message = $description;
+                            break;
+                        }
+                    }
+                }
+
+                return [
+                    'status' => false,
+                    'data' => ['message' => $message],
+                ];
+            }
+        }
+
         $shopperCandidates = $this->shopperReferenceCandidatesFromPaymentSession($session);
 
         $cardId = $this->resolveStoredCardIdFromPaymentSession($session);
@@ -346,6 +389,10 @@ class ElavonShopSubscription
             ];
         }
 
+        if ($transactionId !== '') {
+            $this->shop->payment_order_id = $transactionId;
+        }
+
         $this->shop->subscription_id = $cardId;
         $primaryShopper = $shopperCandidates[0] ?? '';
         if ($primaryShopper !== '') {
@@ -356,8 +403,21 @@ class ElavonShopSubscription
 
         return [
             'status' => true,
-            'data' => ['cardId' => $cardId],
+            'data' => [
+                'cardId' => $cardId,
+                'transactionId' => $transactionId !== '' ? $transactionId : null,
+            ],
         ];
+    }
+
+    protected function resolveTransactionIdFromPaymentSession(PaymentSessionResponse $session): string
+    {
+        $txHref = $session->getTransaction();
+        if ($txHref) {
+            return $this->convergeEntityIdFromHrefOrId((string) $txHref);
+        }
+
+        return '';
     }
 
     /**
@@ -395,6 +455,11 @@ class ElavonShopSubscription
 
         if ($session->getStoredCard() || $session->getHostedCard()) {
             return true;
+        }
+
+        $hosted = new ElavonShopHostedSubscription($this->shop);
+        if ($hosted->chargesOnServer()) {
+            return false;
         }
 
         $txHref = $session->getTransaction();
@@ -667,8 +732,59 @@ class ElavonShopSubscription
         ];
     }
 
-    public function getSubscription()
+    public function getStoredCardResource()
     {
         return $this->elavon->getStoredCard($this->shop->subscription_id);
+    }
+
+    /**
+     * @deprecated Use getStoredCardResource() for vaulted cards or planSubscription()->getConvergeSubscription() for billing.
+     */
+    public function getSubscription()
+    {
+        return $this->getStoredCardResource();
+    }
+
+    public function planSubscription(): ElavonShopPlanSubscription
+    {
+        return new ElavonShopPlanSubscription($this->shop, $this->elavon, $this->apiBase);
+    }
+
+    /**
+     * @return array{status: bool, code?: int, data: array<string, mixed>}
+     */
+    public function ensurePlanAndSubscription(): array
+    {
+        return $this->planSubscription()->ensurePlanAndSubscription();
+    }
+
+    public function waitForActiveSubscription(int $maxAttempts = 15, int $delayMicros = 2_000_000): bool
+    {
+        return $this->planSubscription()->waitForActiveSubscription($maxAttempts, $delayMicros);
+    }
+
+    /**
+     * @return array{status: bool, code?: int, data: array<string, mixed>}
+     */
+    public function syncRecurringPlan(): array
+    {
+        return $this->planSubscription()->syncRecurringPlanAmount();
+    }
+
+    /**
+     * @return array{status: bool, code?: int, data: array<string, mixed>}
+     */
+    public function cancelElavonBilling(): array
+    {
+        return $this->planSubscription()->cancelConvergeSubscription();
+    }
+
+    public function getConvergePlan(): ?PlanResponse
+    {
+        if (! filled($this->shop->elavon_plan_id)) {
+            return null;
+        }
+
+        return $this->elavon->getPlan($this->shop->elavon_plan_id);
     }
 }

@@ -5,6 +5,7 @@ namespace App\Payment\Elavon;
 use App\Elavon\Converge2\Client\ClientConfig;
 use App\Elavon\Converge2\Converge2;
 use App\Elavon\Converge2\Response\OrderResponse;
+use App\Elavon\Converge2\Response\PaymentSessionResponse;
 use App\Elavon\Converge2\Response\ResponseInterface;
 use App\Models\Shop;
 use Illuminate\Support\Facades\Log;
@@ -79,21 +80,81 @@ class ElavonShopHostedSubscription
         return (string) ($this->shop->contact_email ?: $this->shop->user->email);
     }
 
+    protected function shopperFullName(): string
+    {
+        $name = trim((string) ($this->shop->user->fullName ?? ''));
+
+        return $name !== '' ? $name : 'Shop Owner';
+    }
+
     /**
      * @return array<string, mixed>
      */
     protected function billTo(): array
     {
         return [
-            'fullName' => $this->shop->user->fullName,
+            'fullName' => $this->shopperFullName(),
             'company' => (string) ($this->shop->company_name ?? ''),
-            'postalCode' => (string) ($this->shop->post_code ?? ''),
-            'street1' => (string) ($this->shop->street ?? ''),
+            'postalCode' => (string) ($this->shop->post_code ?: '0000'),
+            'street1' => (string) ($this->shop->street ?: 'N/A'),
             'street2' => '',
-            'city' => (string) ($this->shop->city ?? ''),
+            'city' => (string) ($this->shop->city ?: 'Oslo'),
             'countryCode' => 'NOR',
-            'primaryPhone' => (string) ($this->shop->contact_phone ?: $this->shop->user->phone ?? ''),
+            'primaryPhone' => (string) ($this->shop->contact_phone ?: $this->shop->user->phone ?? '00000000'),
             'email' => $this->shopperEmail(),
+        ];
+    }
+
+    protected function threeDSecureEnabled(): bool
+    {
+        // Vault-only HPP (charge on return) requires 3DS — same as ApiElavonPayment.
+        if ($this->chargesOnServer()) {
+            return true;
+        }
+
+        if ($this->keys['sandbox'] && (bool) config('services.enterprise_elavon.disable_hpp_3ds', false)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    protected function hppOriginUrl(): string
+    {
+        $configured = config('services.enterprise_elavon.hpp_origin_url');
+        if (is_string($configured) && trim($configured) !== '') {
+            return rtrim(trim($configured), '/');
+        }
+
+        return rtrim((string) config('app.url'), '/');
+    }
+
+    public function chargesOnServer(): bool
+    {
+        return (bool) config('services.enterprise_elavon.charge_on_server', false);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function makePaymentSessionCreateBody(OrderResponse $response, string $returnUrl, string $cancelUrl): array
+    {
+        return [
+            'order' => $response->getId(),
+            'billTo' => $this->billTo(),
+            'returnUrl' => $returnUrl,
+            'cancelUrl' => $cancelUrl,
+            'originUrl' => $this->hppOriginUrl(),
+            'defaultLanguageTag' => 'en-US',
+            'customFields' => [
+                'vendor_id' => config('app.name'),
+                'vendor_app_name' => config('app.name'),
+                'vendor_app_version' => '1.0.0',
+                'shop_id' => (string) $this->shop->id,
+            ],
+            'doCreateTransaction' => ! $this->chargesOnServer(),
+            'doThreeDSecure' => $this->threeDSecureEnabled() ? 1 : 0,
+            'hppType' => 'fullPageRedirect',
         ];
     }
 
@@ -109,51 +170,15 @@ class ElavonShopHostedSubscription
             ],
             'description' => sprintf('Shop subscription — %s', $this->shop->user_name),
             'items' => null,
-            'shipTo' => [
-                'fullName' => $this->shop->user->fullName,
-                'company' => (string) ($this->shop->company_name ?? ''),
-                'postalCode' => (string) ($this->shop->post_code ?? ''),
-                'street1' => (string) ($this->shop->street ?? ''),
-                'street2' => '',
-                'city' => (string) ($this->shop->city ?? ''),
-                'countryCode' => 'NOR',
-                'primaryPhone' => (string) ($this->shop->contact_phone ?: $this->shop->user->phone ?? ''),
-                'email' => $this->shopperEmail(),
-            ],
+            'shipTo' => $this->billTo(),
             'shopperEmailAddress' => $this->shopperEmail(),
             'shopperReference' => (string) $this->shop->id,
             'customFields' => [
-                'vendor_id' => env('APP_NAME'),
-                'vendor_app_name' => env('APP_NAME'),
+                'vendor_id' => config('app.name'),
+                'vendor_app_name' => config('app.name'),
                 'vendor_app_version' => '1.0.0',
-                'php_version' => phpversion(),
+                'shop_id' => (string) $this->shop->id,
             ],
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    protected function makePaymentSessionCreateBody(OrderResponse $response, string $returnUrl, string $cancelUrl): array
-    {
-        return [
-            'order' => $response->getId(),
-            'billTo' => $this->billTo(),
-            'returnUrl' => $returnUrl,
-            'cancelUrl' => $cancelUrl,
-            'originUrl' => url('/'),
-            'defaultLanguageTag' => 'en-US',
-            'customFields' => [
-                'vendor_id' => env('APP_NAME'),
-                'vendor_app_name' => env('APP_NAME'),
-                'vendor_app_version' => '1.0.0',
-                'php_version' => phpversion(),
-            ],
-            // Vault + 3DS on HPP; capture the subscription in-app (confirmSubscription → chargeViaCard).
-            // If true, Converge charges here and confirmSubscription charges again — duplicate sale / declines.
-            'doCreateTransaction' => false,
-            'doThreeDSecure' => 1,
-            'hppType' => 'fullPageRedirect',
         ];
     }
 
@@ -172,12 +197,25 @@ class ElavonShopHostedSubscription
             ];
         }
 
+        $amountNok = round($amountNok, 2);
+
         $order_create_response = $this->elavon->createOrder($this->makeOrderCreateBody($amountNok));
         if (! $order_create_response->isSuccess()) {
             return $this->failureFromResponse($order_create_response, 'order');
         }
 
         $session_body = $this->makePaymentSessionCreateBody($order_create_response, $returnUrl, $cancelUrl);
+
+        Log::info('Elavon shop subscription HPP: creating payment session', [
+            'shop_id' => $this->shop->id,
+            'amount' => $amountNok,
+            'sandbox' => $this->keys['sandbox'],
+            'charge_on_server' => $this->chargesOnServer(),
+            'three_d_secure' => $this->threeDSecureEnabled(),
+            'origin_url' => $this->hppOriginUrl(),
+            'return_url' => $returnUrl,
+        ]);
+
         $payment_session_create_response = $this->elavon->createPaymentSession($session_body);
 
         if ($payment_session_create_response->isSuccess()) {
@@ -197,6 +235,154 @@ class ElavonShopHostedSubscription
     }
 
     /**
+     * Charge the signup fee from a completed HPP session (ApiElavon pattern).
+     *
+     * @return array{status: bool, data: array<string, mixed>}
+     */
+    public function chargeSignupFeeFromSession(PaymentSessionResponse $session, float $amountNok): array
+    {
+        $existingTransactionId = $this->entityIdFromHref($session->getTransaction());
+        if ($existingTransactionId !== '') {
+            $transaction = $this->elavon->getTransaction($existingTransactionId);
+            if ($transaction->isSuccess() && $this->transactionIsApproved($transaction)) {
+                return [
+                    'status' => true,
+                    'data' => ['transactionId' => $existingTransactionId],
+                ];
+            }
+        }
+
+        $hostedCard = $session->getHostedCard();
+        if (! $hostedCard) {
+            Log::warning('Elavon shop subscription: no hostedCard on session for server-side charge', [
+                'shop_id' => $this->shop->id,
+                'session_id' => $session->getId(),
+            ]);
+
+            return [
+                'status' => false,
+                'data' => ['message' => 'Payment was not completed on the hosted page. Please try again.'],
+            ];
+        }
+
+        $response = $this->elavon->createSaleTransaction(
+            $this->makeTransactionCreateBody($session, $amountNok)
+        );
+
+        if (! $response->isSuccess() || ! $this->transactionIsApproved($response)) {
+            $message = $this->extractFailureMessage($response);
+
+            Log::warning('Elavon shop subscription: server-side signup charge failed', [
+                'shop_id' => $this->shop->id,
+                'session_id' => $session->getId(),
+                'message' => $message,
+                'response_body' => $response->getRawResponseBody(),
+            ]);
+
+            return [
+                'status' => false,
+                'data' => ['message' => $message !== '' ? $message : 'Payment was not approved.'],
+            ];
+        }
+
+        return [
+            'status' => true,
+            'data' => ['transactionId' => $response->getId()],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function makeTransactionCreateBody(PaymentSessionResponse $session, float $amountNok): array
+    {
+        $body = [
+            'type' => 'sale',
+            'total' => (object) [
+                'amount' => $amountNok,
+                'currencyCode' => 'NOK',
+            ],
+            'doCapture' => true,
+            'shopperInteraction' => 'ecommerce',
+            'shipTo' => $this->billTo(),
+            'shopperEmailAddress' => $this->shopperEmail(),
+            'doSendReceipt' => false,
+            'shopperIpAddress' => request()->ip() ?? '127.0.0.1',
+            'shopperReference' => (string) $this->shop->id,
+            'shopperStatement' => [
+                'name' => $this->shopperFullName(),
+                'phone' => (string) ($this->shop->contact_phone ?: $this->shop->user->phone ?? ''),
+                'url' => '',
+            ],
+            'description' => sprintf('Shop subscription — %s', $this->shop->user_name),
+            'shopperLanguageTag' => app()->getLocale(),
+            'shopperTimeZone' => config('app.timezone'),
+            'customFields' => [
+                'vendor_id' => config('app.name'),
+                'shop_id' => (string) $this->shop->id,
+            ],
+            'createdBy' => config('app.name'),
+            'orderReference' => (string) $this->shop->id,
+            'order' => $this->entityIdFromHref($session->getOrder()),
+            'hostedCard' => $this->entityIdFromHref((string) $session->getHostedCard()),
+        ];
+
+        $threeDS = $session->getThreeDSecure();
+        if ($threeDS) {
+            $body['threeDSecure'] = [
+                'directoryServerTransactionId' => $threeDS->getDirectoryServerTransactionId(),
+                'transactionStatus' => $threeDS->getTransactionStatus(),
+                'electronicCommerceIndicator' => $threeDS->getElectronicCommerceIndicator(),
+                'authenticationValue' => $threeDS->getAuthenticationValue(),
+                'protocolVersion' => $threeDS->getProtocolVersion(),
+            ];
+        }
+
+        return $body;
+    }
+
+    public function transactionIsApproved(ResponseInterface $transaction): bool
+    {
+        if (! $transaction->isSuccess()) {
+            return false;
+        }
+
+        if (! method_exists($transaction, 'getState')) {
+            return true;
+        }
+
+        $state = $transaction->getState();
+        if ($state === null) {
+            return false;
+        }
+
+        return $state->isAuthorized() || $state->isCaptured() || $state->isSettled();
+    }
+
+    protected function entityIdFromHref(?string $href): string
+    {
+        if ($href === null || trim($href) === '') {
+            return '';
+        }
+
+        $href = trim($href);
+        if (! str_contains($href, '/')) {
+            return $href;
+        }
+
+        $path = parse_url($href, PHP_URL_PATH);
+        if (! is_string($path) || $path === '') {
+            $parts = array_values(array_filter(explode('/', $href)));
+
+            return $parts !== [] ? (string) end($parts) : '';
+        }
+
+        $parts = array_values(array_filter(explode('/', $path)));
+
+        return $parts !== [] ? (string) end($parts) : '';
+    }
+
+    /**
      * @return array{status: bool, code: int, data: array{message: string}}
      */
     protected function failureFromResponse(ResponseInterface $response, string $stage): array
@@ -208,7 +394,7 @@ class ElavonShopHostedSubscription
             'shop_id' => $this->shop->id,
             'credential_source' => $this->credentialSource(),
             'sandbox' => $this->keys['sandbox'],
-            'origin_url' => url('/'),
+            'origin_url' => rtrim((string) config('app.url'), '/'),
             'status_code' => $response->getRawResponseStatusCode(),
             'message' => $message,
             'response_body' => $response->getRawResponseBody(),

@@ -13,6 +13,7 @@ use App\Models\Shop;
 use App\Models\User;
 use App\Payment\Elavon\ElavonShopSubscription;
 use App\Rules\CreditCardValidation;
+use App\Services\Elavon\ElavonShopSubscriptionBilling;
 use App\Services\RetailerCommission;
 use App\Services\Subscription\ShopSubscriptionService;
 use Exception;
@@ -22,6 +23,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Session;
 use Iziibuy;
@@ -227,13 +229,23 @@ class RegisterController extends Controller
         $shop = auth()->user()->shop;
 
         if (request()->has('type')) {
+            ElavonShopSubscriptionBilling::cancel($shop);
+
             $shop->update([
                 'subscription_id' => null,
                 'shopperId' => null,
+                'elavon_plan_id' => null,
+                'elavon_subscription_id' => null,
             ]);
         }
 
         if (! request()->has('type') && $shop->subscription_id) {
+            if ($shop->subscriptionMethod === 'elavon') {
+                return redirect()->route('shop.confirm.subscription', [
+                    'subscription_id' => $shop->subscription_id,
+                ]);
+            }
+
             $amount = Iziibuy::round_num($shop->subscriptionFee());
             $charge_status = (new ElavonShopSubscription($shop))->chargeViaCard($amount);
 
@@ -272,10 +284,13 @@ class RegisterController extends Controller
 
     public function elavonSubscriptionReturn(Request $request)
     {
+        $shop = auth()->user()->shop;
+
         $sessionId = $request->input('sessionId')
             ?? $request->input('session_id')
             ?? $request->query('sessionId')
-            ?? $request->query('session_id');
+            ?? $request->query('session_id')
+            ?? $shop->payment_order_id;
 
         if (! is_string($sessionId) || trim($sessionId) === '') {
             return redirect()->route('shop.subscription.payment')
@@ -288,10 +303,20 @@ class RegisterController extends Controller
                 ->withErrors('Invalid payment session.');
         }
 
-        $shop = auth()->user()->shop;
+        Log::info('Elavon shop subscription: HPP return', [
+            'shop_id' => $shop->id,
+            'session_id' => $sessionId,
+        ]);
+
         $result = (new ElavonShopSubscription($shop))->finalizeHostedSubscriptionFromSession($sessionId);
 
         if (! $result['status']) {
+            Log::warning('Elavon shop subscription: HPP return failed', [
+                'shop_id' => $shop->id,
+                'session_id' => $sessionId,
+                'message' => $result['data']['message'] ?? null,
+            ]);
+
             return redirect()->route('shop.subscription.payment')
                 ->withErrors($result['data']['message'] ?? 'Payment could not be completed.');
         }

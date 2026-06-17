@@ -8,9 +8,10 @@ use App\Payment\Elavon\ElavonShopSubscription;
 use App\Services\RetailerCommission;
 use Carbon\Carbon;
 use Exception;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Iziibuy;
-use Illuminate\Support\Facades\Log;
+
 trait ElavonSubscriptionServiceTrait
 {
     protected function createSubscriptionWithElavon()
@@ -23,6 +24,7 @@ trait ElavonSubscriptionServiceTrait
 
         if (! empty($subscription['data']['requires_hpp'])) {
             $this->shop->payment_url = $subscription['data']['url'];
+            $this->shop->payment_order_id = $subscription['data']['payment_id'] ?? null;
             $this->shop->save();
 
             return $subscription['data']['url'];
@@ -37,63 +39,68 @@ trait ElavonSubscriptionServiceTrait
 
     protected function confirmSubscriptionWithElavon()
     {
+        $elavon = new ElavonShopSubscription($this->shop);
+        $storedCard = $elavon->getStoredCardResource();
 
-        $subscription = (new ElavonShopSubscription($this->shop))->getSubscription();
+        if (! $storedCard->isSuccess()) {
+            return redirect(route('shop.subscription.payment'))->withErrors('There is a problem with your Payment method. Please try again later');
+        }
 
-        if ($subscription->isSuccess()) {
+        if ($this->shop->status == 1) {
+            return redirect(route('shop.complete.signup'))->with('Thank your for subscribe');
+        }
 
-            if ($this->shop->status == 1) {
-                return redirect(route('shop.complete.signup'))->with('Thank your for subscribe');
-            }
-            if ($this->shop->paid_at) {
-                if ($this->shop->paid_at->isSameMonth(today())) {
-                    $this->shop->status = 1;
-                    $this->shop->establishment = 1;
+        if ($this->shop->paid_at && $this->shop->paid_at->isSameMonth(today())) {
+            $this->shop->status = 1;
+            $this->shop->establishment = 1;
+            $this->shop->save();
 
-                    return redirect(route('shop.dashboard'))->with('Thank your for subscribe');
-                }
-            }
+            return redirect(route('shop.dashboard'))->with('Thank your for subscribe');
+        }
 
-            $amount = Iziibuy::round_num($this->shop->subscriptionFee());
-
-            $charge_status = (new ElavonShopSubscription($this->shop))->chargeViaCard($amount);
-
-            if ($charge_status['status'] && ($charge_status['data']['status'] ?? false)) {
-try {
-                Mail::to($this->shop->user->email)->send(new ShopInvoice($this->shop));
-            } catch (Exception $e) {
-                Log::error('Error sending shop invoice: ' . $e->getMessage());
-            }
-                Charge::create([
-                    'shop_id' => $this->shop->id,
-                    'order_id' => $charge_status['data']['id'],
-                    'amount' => $amount,
-                    'status' => true,
-                    'comment' => 'subscription fee',
-                    'details' => json_encode($this->shop->subscriptionFeeDetails()),
-                ]);
-                $this->shop->status = 1;
-                $this->shop->establishment = 1;
-                $this->shop->paid_at = Carbon::now();
-                if ($this->shop->retailer_id) {
-                    RetailerCommission::one_time_pay_out($this->shop)->pay();
-                    RetailerCommission::commission_from_recurring_payments($this->shop)->pay();
-                }
-                $this->shop->save();
-
-                return redirect(route('shop.complete.signup'))->with('Thank your for subscribe');
-            }
-
-            $detail = trim((string) ($charge_status['data']['message'] ?? ''));
-            if ($detail === '' && ($charge_status['status'] ?? false) && ! ($charge_status['data']['status'] ?? false)) {
-                $detail = 'Payment was not approved. Please try again or use another payment method.';
-            }
-
+        $planResult = $elavon->ensurePlanAndSubscription();
+        if (! $planResult['status']) {
             return redirect(route('shop.subscription.payment'))->withErrors(
-                $detail !== '' ? $detail : 'There is a problem with your Payment method. Please try again later'
+                $planResult['data']['message'] ?? 'Could not start your subscription. Please try again later.'
             );
         }
 
-        return redirect(route('shop.subscription.payment'))->withErrors('There is a problem with your Payment method. Please try again later');
+        $elavon->waitForActiveSubscription(5);
+
+        return $this->activateShopAfterElavonSubscription($elavon);
+    }
+
+    protected function activateShopAfterElavonSubscription(ElavonShopSubscription $elavon)
+    {
+        $amount = Iziibuy::round_num($this->shop->subscriptionFee());
+        $transactionId = filled($this->shop->payment_order_id)
+            ? (string) $this->shop->payment_order_id
+            : (string) ($this->shop->elavon_subscription_id ?? uniqid('elavon-sub-'));
+
+        try {
+            Mail::to($this->shop->user->email)->send(new ShopInvoice($this->shop));
+        } catch (Exception $e) {
+            Log::error('Error sending shop invoice: '.$e->getMessage());
+        }
+
+        Charge::create([
+            'shop_id' => $this->shop->id,
+            'order_id' => $transactionId,
+            'amount' => $amount,
+            'status' => true,
+            'comment' => 'subscription fee',
+            'details' => json_encode($this->shop->subscriptionFeeDetails()),
+        ]);
+
+        $this->shop->status = 1;
+        $this->shop->establishment = 1;
+        $this->shop->paid_at = Carbon::now();
+        if ($this->shop->retailer_id) {
+            RetailerCommission::one_time_pay_out($this->shop)->pay();
+            RetailerCommission::commission_from_recurring_payments($this->shop)->pay();
+        }
+        $this->shop->save();
+
+        return redirect(route('shop.complete.signup'))->with('Thank your for subscribe');
     }
 }

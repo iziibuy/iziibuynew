@@ -5,10 +5,9 @@ namespace App\Console\Commands;
 use App\Models\Charge;
 use App\Models\Shop;
 use App\Services\RetailerCommission;
-use Illuminate\Console\Command;
-use Carbon\Carbon;
 use Error;
 use Exception;
+use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use QuickPay\QuickPay;
 
@@ -57,16 +56,20 @@ class MonthlyCharge extends Command
 
         foreach ($shops as $shop) {
             try {
+                if ($shop->subscriptionMethod === 'elavon' && $shop->usesElavonNativeSubscription()) {
+                    continue;
+                }
+
                 if ($shop) {
                     if ($shop->subscription_id) {
                         $shop->update([
-                            'status' => 0
+                            'status' => 0,
                         ]);
                         $order_id = hexdec(uniqid());
-                        $payment = $quickpay->request->post(sprintf("/subscriptions/%s/recurring", $shop->subscription_id), [
+                        $payment = $quickpay->request->post(sprintf('/subscriptions/%s/recurring', $shop->subscription_id), [
                             'auto_capture' => true,
                             'amount' => $shop->subscriptionFeeFull() * 100,
-                            'order_id' => $order_id
+                            'order_id' => $order_id,
                         ]);
                         if (isset($payment->asObject()->id)) {
                             Charge::create([
@@ -82,9 +85,9 @@ class MonthlyCharge extends Command
                         } else {
                             $shop->update([
                                 'status' => $this->argument('status'),
-                                'subscription_id' => $this->argument('status') ? $shop->subscription_id : null
+                                'subscription_id' => $this->argument('status') ? $shop->subscription_id : null,
                             ]);
-                        };
+                        }
                     } else {
 
                         $shop->update([
@@ -100,6 +103,6 @@ class MonthlyCharge extends Command
                 continue;
             }
         }
-        //Log::info('job Run at ' . now());
+        // Log::info('job Run at ' . now());
     }
 }

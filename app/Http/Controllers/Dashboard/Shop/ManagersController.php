@@ -15,7 +15,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Payment\Payment;
 use App\Payment\Subscribe;
-use App\Services\CheckoutService;
+use App\Services\Elavon\ElavonShopSubscriptionBilling;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -30,8 +30,10 @@ class ManagersController extends Controller
         if (request('manager_id')) {
             $manager_edit = User::where('id', request('manager_id'))->first();
 
-            if ($manager_edit->getShop()->id != auth()->user()->shop->id) abort(403);
-            if (!$manager_edit) {
+            if ($manager_edit->getShop()->id != auth()->user()->shop->id) {
+                abort(403);
+            }
+            if (! $manager_edit) {
                 return redirect(route('shop.managers'));
             }
         } else {
@@ -39,6 +41,7 @@ class ManagersController extends Controller
         }
         $levels = Level::where('shop_id', auth()->user()->shop->id)->get();
         $managers = User::where('shop_id', auth()->user()->shop->id)->get();
+
         return view('dashboard.shop.managers.index', compact('managers', 'manager_edit', 'levels'));
     }
 
@@ -76,6 +79,8 @@ class ManagersController extends Controller
             Mail::to($manager['email'])->send(new NotificationEmail($mail_data));
         }
         User::insert($managers);
+        ElavonShopSubscriptionBilling::syncRecurringPlan($shop->fresh());
+
         // $payment = (new Subscribe(setting('payment.api_key')))->subscription(auth()->user()->subscription_id);
         // $amount = auth()->user()->shop->singleUserCost() * count($request->managers);
         // $tax = $amount * (setting('payment.registration_tax') / 100);
@@ -103,17 +108,25 @@ class ManagersController extends Controller
                 $schedule
             );
         }
+
         return redirect()
             ->back()
             ->with('success', 'Schedule updated successfully');
     }
+
     public function delete(User $user)
     {
 
-        if ($user->avatar && Storage::exists($user->avatar)) Storage::delete($user->avatar);
+        if ($user->avatar && Storage::exists($user->avatar)) {
+            Storage::delete($user->avatar);
+        }
+        $shop = auth()->user()->shop;
         $user->delete();
+        ElavonShopSubscriptionBilling::syncRecurringPlan($shop->fresh());
+
         return back()->with('success', 'Manager Deleted');
     }
+
     public function update(Request $request, User $user)
     {
         $request->validate([
@@ -125,34 +138,34 @@ class ManagersController extends Controller
 
         ]);
 
-
-
         $user->createMetas($request->meta);
         $data = [
             'name' => $request->name,
             'last_name' => $request->last_name,
             'phone' => $request->phone,
             'tax_id' => $request->tax,
-            'service_type' => json_encode($request->service_type)
+            'service_type' => json_encode($request->service_type),
         ];
 
         if ($request->has('avatar')) {
-            $data['avatar'] =  $request->avatar->store('avatar');
+            $data['avatar'] = $request->avatar->store('avatar');
         }
         if ($request->filled('password')) {
-            $data['password'] =  Hash::make($request->password);
+            $data['password'] = Hash::make($request->password);
         }
         $result = $user->update($data);
-
 
         if ($request->has('permissions')) {
             $user->accesses()->sync($request->permissions);
         }
+
         return redirect(route('shop.managers'))->with('success', 'Manager Updated');
     }
+
     public function myQr(User $user)
     {
         $products = Product::where('shop_id', auth()->user()->shop->id)->paginate(30);
+
         return view('dashboard.shop.managers.qr', compact('products', 'user'));
     }
 
@@ -161,7 +174,7 @@ class ManagersController extends Controller
 
         $request->validate([
             'product' => 'required',
-            'managers' => 'required'
+            'managers' => 'required',
         ]);
         try {
 
@@ -181,7 +194,7 @@ class ManagersController extends Controller
                 'subtotal' => $request->total,
                 'total' => $request->total,
                 'is_vcard' => 1,
-                'details' => json_encode($request->managers)
+                'details' => json_encode($request->managers),
 
             ];
 
@@ -193,7 +206,7 @@ class ManagersController extends Controller
                 'payment_method' => 'quickpay',
                 'total' => $request->total,
                 'store_id' => request()->store,
-                'type' =>  0,
+                'type' => 0,
                 'currency' => 'NOK',
                 'payment_status' => 0,
             ]);
@@ -209,7 +222,7 @@ class ManagersController extends Controller
                 'state' => auth()->user()->state,
                 'phone' => auth()->user()->phone,
                 'is_vcard' => 1,
-                'details' => json_encode($request->managers)
+                'details' => json_encode($request->managers),
             ]);
 
             $order->products()->attach($product->id, [
@@ -223,24 +236,25 @@ class ManagersController extends Controller
 
             $payment = (new Payment($order))->getUrl();
 
-            if ($payment['status'] == false) throw new Exception($payment['data']['message']);
+            if ($payment['status'] == false) {
+                throw new Exception($payment['data']['message']);
+            }
             $order->payment_id = $payment['data']['payment_id'];
             $order->payment_url = $payment['data']['url'];
 
-
-
             $order->save();
 
-            $message =  'Her er dine detaljer for din ordre plassert den ' . $order->created_at->format('M d, Y') . ' hos ' . $order->shop->name . ' Vennligst betal nå for å bekrefte din ordre';
-            Mail::to($order->email)->send(new   OrderPlaced($order, false, $message));
-            $message =  "A new order has been placed . Download details from here: <a href='" . route('order.managers-csv', $order->id) . "'>Download CSV</a>";
+            $message = 'Her er dine detaljer for din ordre plassert den '.$order->created_at->format('M d, Y').' hos '.$order->shop->name.' Vennligst betal nå for å bekrefte din ordre';
+            Mail::to($order->email)->send(new OrderPlaced($order, false, $message));
+            $message = "A new order has been placed . Download details from here: <a href='".route('order.managers-csv', $order->id)."'>Download CSV</a>";
             Mail::to($order->shop->user->email)->send(new OrderPlaced($order, $message));
+
             return redirect()
                 ->route(
                     'payment',
                     [
                         'order' => $order,
-                        'user_name' => $order->shop->user_name
+                        'user_name' => $order->shop->user_name,
                     ]
                 )
                 ->with('success_msg', 'Ordre plassert. Vennligst betal nå for å bekrefte din ordre');

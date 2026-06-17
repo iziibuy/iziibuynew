@@ -536,6 +536,27 @@ class Shop extends Model
         return $amount;
     }
 
+    /**
+     * Monthly recurring amount for Elavon plan `total` (excludes one-time establishment fee).
+     */
+    public function elavonRecurringSubscriptionAmount(): float
+    {
+        if ($this->users->count() > 1) {
+            $perUserCost = $this->singleUserCost();
+        } else {
+            $perUserCost = 0;
+        }
+
+        $amount = $this->monthly_cost + $perUserCost - (float) $this->discount();
+
+        return $amount + ($amount * ($this->registrationTax() / 100));
+    }
+
+    public function usesElavonNativeSubscription(): bool
+    {
+        return $this->subscriptionMethod === 'elavon' && filled($this->elavon_subscription_id);
+    }
+
     public function subscriptionFee()
     {
         if ($this->paid_at == null && @$this->paid_at?->isCurrentMonth() == false) {

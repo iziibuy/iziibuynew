@@ -12,6 +12,7 @@ use App\Http\Controllers\Dashboard\Shop\TicketController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\SurfboardPaymentCallback;
+use App\Http\Controllers\Test\ElavonShopSubscriptionTestController;
 use App\Http\Controllers\Test\SurfboardPaymentTestController;
 use App\Models\EnterpriseOnboarding;
 use App\Models\ExternalBooking;
@@ -109,6 +110,7 @@ Route::group(['controller' => CallbackController::class, 'prefix' => 'callback',
     Route::get('enterprise/elavon/subscription/{subscription}/success', 'enterpriseElavonSubscriptionSuccess')->name('enterprise.elavon.subscription.success');
     Route::get('enterprise/elavon/subscription/{subscription}/cancel', 'enterpriseElavonSubscriptionCancel')->name('enterprise.elavon.subscription.cancel');
     Route::any('subscription-callback', 'subscriptionCallback')->name('subscription');
+    Route::any('elavon/shop-subscription', 'elavonShopSubscriptionNotification')->name('elavon.shop.subscription');
 
     Route::any('plugin/externalbooking/elavon/success', 'pluginExternalBookingElavonSuccess')->name('plugin.externalbooking.elavon.success');
     Route::any('plugin/externalbooking/elavon/{booking}/cancel', 'pluginExternalBookingElavonCancel')->name('plugin.externalbooking.elavon.cancel');
@@ -233,6 +235,8 @@ Route::get('payment/booking/{externalBooking:ulid}', function (ExternalBooking $
 Route::get('payment/{externalBooking:ulid}/pay', [ExternalBookingController::class, 'createPaymentLink'])->name('external-payment');
 Route::get('/test/surfboard/{id}', SurfboardPaymentTestController::class)
     ->name('test.surfboard.payment');
+Route::get('/test/elavon/shop/{shop}', ElavonShopSubscriptionTestController::class)
+    ->name('test.elavon.shop.subscription');
 
 // Financial report test route
 Route::get('/test/financial-report', function (Request $request, FinancialReportService $service) {

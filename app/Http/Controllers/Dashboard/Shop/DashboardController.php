@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\Shop;
 use App\Models\User;
 use App\Services\Clearhaus;
+use App\Services\Elavon\ElavonShopSubscriptionBilling;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Exception;
 use Illuminate\Http\Request;
@@ -209,9 +210,14 @@ class DashboardController extends Controller
 
     public function cancelSubscription()
     {
-        auth()->user()->shop->update([
+        $shop = auth()->user()->shop;
+        ElavonShopSubscriptionBilling::cancel($shop);
+
+        $shop->update([
             'subscription_id' => null,
             'shopperId' => null,
+            'elavon_plan_id' => null,
+            'elavon_subscription_id' => null,
         ]);
 
         return redirect()->back()->with('success', 'Subscription cancelled for this account');
