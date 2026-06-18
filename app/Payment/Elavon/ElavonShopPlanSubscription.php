@@ -7,6 +7,7 @@ use App\Elavon\Converge2\DataObject\Resource\Endpoint;
 use App\Elavon\Converge2\Response\ResponseInterface;
 use App\Elavon\Converge2\Response\SubscriptionResponse;
 use App\Models\Shop;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Iziibuy;
 
@@ -58,11 +59,9 @@ class ElavonShopPlanSubscription
      */
     protected function ensurePlan(): array
     {
-        $payload = $this->buildPlanPayload();
-
         if (filled($this->shop->elavon_plan_id)) {
-            $response = $this->elavon->updatePlan($this->shop->elavon_plan_id, $payload);
-            if ($response->isSuccess()) {
+            $existing = $this->elavon->getPlan($this->shop->elavon_plan_id);
+            if ($existing->isSuccess()) {
                 return [
                     'status' => true,
                     'code' => 200,
@@ -70,14 +69,13 @@ class ElavonShopPlanSubscription
                 ];
             }
 
-            Log::warning('Elavon shop subscription: updatePlan failed, creating a new plan', [
+            Log::warning('Elavon shop subscription: stored plan id not found at Elavon, creating a new plan', [
                 'shop_id' => $this->shop->id,
                 'plan_id' => $this->shop->elavon_plan_id,
-                'message' => $this->extractFailureMessage($response),
             ]);
         }
 
-        $response = $this->elavon->createPlan($payload);
+        $response = $this->elavon->createPlan($this->buildPlanPayload());
         if (! $response->isSuccess()) {
             return $this->failureFromResponse($response, 'create_plan');
         }
@@ -105,13 +103,10 @@ class ElavonShopPlanSubscription
             'plan' => $planHref,
             'storedCard' => $storedCardHref,
             'timeZoneId' => config('app.timezone', 'Europe/Oslo'),
+            'firstBillAt' => $this->firstSubscriptionBillDate(),
             'customReference' => $this->shopCustomReference(),
             'customFields' => $this->shopCustomFields(),
         ];
-
-        if (filled($this->shop->shopperId)) {
-            $payload['shopper'] = $this->convergeResourceUrl(Endpoint::SHOPPER, (string) $this->shop->shopperId);
-        }
 
         $response = $this->elavon->createSubscription($payload);
         if (! $response->isSuccess()) {
@@ -236,6 +231,14 @@ class ElavonShopPlanSubscription
             'code' => 200,
             'data' => ['subscriptionId' => $this->shop->elavon_subscription_id],
         ];
+    }
+
+    protected function firstSubscriptionBillDate(): string
+    {
+        return Carbon::now(config('app.timezone', 'Europe/Oslo'))
+            ->addMonth()
+            ->startOfMonth()
+            ->format('Y-m-d');
     }
 
     /**
