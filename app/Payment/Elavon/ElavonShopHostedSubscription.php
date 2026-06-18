@@ -4,6 +4,7 @@ namespace App\Payment\Elavon;
 
 use App\Elavon\Converge2\Client\ClientConfig;
 use App\Elavon\Converge2\Converge2;
+use App\Elavon\Converge2\DataObject\Resource\Endpoint;
 use App\Elavon\Converge2\Response\OrderResponse;
 use App\Elavon\Converge2\Response\PaymentSessionResponse;
 use App\Elavon\Converge2\Response\ResponseInterface;
@@ -16,6 +17,8 @@ class ElavonShopHostedSubscription
 
     protected Converge2 $elavon;
 
+    protected string $apiBase;
+
     /**
      * @var array{mercahantAlias:string,publicKey:string,secretKey:string,sandbox:bool}
      */
@@ -27,8 +30,19 @@ class ElavonShopHostedSubscription
         $this->endpoint = $this->keys['sandbox']
             ? 'https://uat.hpp.converge.eu.elavonaws.com'
             : 'https://hpp.eu.convergepay.com';
+        $this->apiBase = $this->keys['sandbox']
+            ? 'https://uat.api.converge.eu.elavonaws.com'
+            : 'https://api.converge.eu.elavonaws.com';
 
         $this->elavon = new Converge2($this->config());
+    }
+
+    /**
+     * Subscriptions must vault the card on HPP first; charging on HPP consumes the hosted card.
+     */
+    public function createsTransactionOnHostedPage(): bool
+    {
+        return false;
     }
 
     /**
@@ -131,7 +145,67 @@ class ElavonShopHostedSubscription
 
     public function chargesOnServer(): bool
     {
-        return (bool) config('services.enterprise_elavon.charge_on_server', false);
+        return ! $this->createsTransactionOnHostedPage();
+    }
+
+    protected function convergeResourceUrl(string $collection, string $idOrHref): string
+    {
+        $value = trim($idOrHref);
+        if ($value === '') {
+            return '';
+        }
+        if (str_contains($value, '://')) {
+            return $value;
+        }
+
+        return rtrim($this->apiBase, '/').'/'.$collection.'/'.$value;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function getShopperCreateBody(): array
+    {
+        return [
+            'fullName' => $this->shopperFullName(),
+            'company' => (string) ($this->shop->company_name ?? ''),
+            'primaryAddress' => [
+                'street1' => (string) ($this->shop->street ?: 'N/A'),
+                'street2' => '',
+                'city' => (string) ($this->shop->city ?: 'Oslo'),
+                'region' => (string) ($this->shop->city ?: 'Oslo'),
+                'postalCode' => (string) ($this->shop->post_code ?: '0000'),
+                'countryCode' => 'NOR',
+            ],
+            'primaryPhone' => (string) ($this->shop->contact_phone ?: $this->shop->user->phone ?? '00000000'),
+            'email' => $this->shopperEmail(),
+        ];
+    }
+
+    protected function resolveShopperReferenceForSession(): ?string
+    {
+        if (filled($this->shop->shopperId)) {
+            return $this->convergeResourceUrl(Endpoint::SHOPPER, (string) $this->shop->shopperId);
+        }
+
+        $shopper = $this->elavon->createShopper($this->getShopperCreateBody());
+        if (! $shopper->isSuccess()) {
+            Log::warning('Elavon shop subscription HPP: could not create shopper before payment session', [
+                'shop_id' => $this->shop->id,
+            ]);
+
+            return null;
+        }
+
+        $shopperId = $shopper->getId();
+        if ($shopperId) {
+            $this->shop->shopperId = $shopperId;
+            $this->shop->save();
+        }
+
+        $href = $shopper->getHref();
+
+        return $href ? (string) $href : ($shopperId ? $this->convergeResourceUrl(Endpoint::SHOPPER, $shopperId) : null);
     }
 
     /**
@@ -139,7 +213,7 @@ class ElavonShopHostedSubscription
      */
     protected function makePaymentSessionCreateBody(OrderResponse $response, string $returnUrl, string $cancelUrl): array
     {
-        return [
+        $body = [
             'order' => $response->getId(),
             'billTo' => $this->billTo(),
             'returnUrl' => $returnUrl,
@@ -152,10 +226,18 @@ class ElavonShopHostedSubscription
                 'vendor_app_version' => '1.0.0',
                 'shop_id' => (string) $this->shop->id,
             ],
-            'doCreateTransaction' => ! $this->chargesOnServer(),
+            'doCreateTransaction' => $this->createsTransactionOnHostedPage(),
             'doThreeDSecure' => $this->threeDSecureEnabled() ? 1 : 0,
+            'useStoredPaymentMethod' => true,
             'hppType' => 'fullPageRedirect',
         ];
+
+        $shopper = $this->resolveShopperReferenceForSession();
+        if ($shopper !== null) {
+            $body['shopper'] = $shopper;
+        }
+
+        return $body;
     }
 
     /**
@@ -211,6 +293,7 @@ class ElavonShopHostedSubscription
             'amount' => $amountNok,
             'sandbox' => $this->keys['sandbox'],
             'charge_on_server' => $this->chargesOnServer(),
+            'creates_transaction_on_hpp' => $this->createsTransactionOnHostedPage(),
             'three_d_secure' => $this->threeDSecureEnabled(),
             'origin_url' => $this->hppOriginUrl(),
             'return_url' => $returnUrl,
@@ -232,6 +315,40 @@ class ElavonShopHostedSubscription
         }
 
         return $this->failureFromResponse($payment_session_create_response, 'payment_session');
+    }
+
+    /**
+     * Charge the signup fee using a vaulted stored card (preferred after HPP vault).
+     *
+     * @return array{status: bool, data: array<string, mixed>}
+     */
+    public function chargeSignupFeeWithStoredCard(PaymentSessionResponse $session, float $amountNok, string $storedCardId): array
+    {
+        $response = $this->elavon->createSaleTransaction(
+            $this->makeTransactionCreateBody($session, $amountNok, $storedCardId)
+        );
+
+        if (! $response->isSuccess() || ! $this->transactionIsApproved($response)) {
+            $message = $this->extractFailureMessage($response);
+
+            Log::warning('Elavon shop subscription: stored-card signup charge failed', [
+                'shop_id' => $this->shop->id,
+                'session_id' => $session->getId(),
+                'stored_card_id' => $storedCardId,
+                'message' => $message,
+                'response_body' => $response->getRawResponseBody(),
+            ]);
+
+            return [
+                'status' => false,
+                'data' => ['message' => $message !== '' ? $message : 'Payment was not approved.'],
+            ];
+        }
+
+        return [
+            'status' => true,
+            'data' => ['transactionId' => $response->getId()],
+        ];
     }
 
     /**
@@ -266,7 +383,7 @@ class ElavonShopHostedSubscription
         }
 
         $response = $this->elavon->createSaleTransaction(
-            $this->makeTransactionCreateBody($session, $amountNok)
+            $this->makeTransactionCreateBody($session, $amountNok, null)
         );
 
         if (! $response->isSuccess() || ! $this->transactionIsApproved($response)) {
@@ -294,7 +411,7 @@ class ElavonShopHostedSubscription
     /**
      * @return array<string, mixed>
      */
-    protected function makeTransactionCreateBody(PaymentSessionResponse $session, float $amountNok): array
+    protected function makeTransactionCreateBody(PaymentSessionResponse $session, float $amountNok, ?string $storedCardId): array
     {
         $body = [
             'type' => 'sale',
@@ -324,8 +441,13 @@ class ElavonShopHostedSubscription
             'createdBy' => config('app.name'),
             'orderReference' => (string) $this->shop->id,
             'order' => $this->entityIdFromHref($session->getOrder()),
-            'hostedCard' => $this->entityIdFromHref((string) $session->getHostedCard()),
         ];
+
+        if ($storedCardId !== null && $storedCardId !== '') {
+            $body['storedCard'] = $this->convergeResourceUrl(Endpoint::STORED_CARD, $storedCardId);
+        } else {
+            $body['hostedCard'] = $this->entityIdFromHref((string) $session->getHostedCard());
+        }
 
         $threeDS = $session->getThreeDSecure();
         if ($threeDS) {

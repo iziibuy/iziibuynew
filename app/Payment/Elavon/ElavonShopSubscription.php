@@ -329,25 +329,46 @@ class ElavonShopSubscription
 
         $hosted = new ElavonShopHostedSubscription($this->shop);
         $amount = (float) Iziibuy::round_num($this->shop->subscriptionFee());
+
+        $shopperCandidates = $this->shopperReferenceCandidatesFromPaymentSession($session);
+        $cardId = $this->resolveStoredCardIdFromPaymentSession($session);
+
+        if ($cardId === '') {
+            $cardId = $this->resolveStoredCardIdFromShopperOnSession($session, $shopperCandidates);
+        }
+
+        if ($cardId === '') {
+            $hostedCardRef = $this->resolveHostedCardReferenceFromPaymentSession($session);
+            if ($hostedCardRef !== '' && $shopperCandidates === []) {
+                $shopperCandidates = $this->shopperReferenceCandidatesFromNewShopperRecord();
+            }
+            if ($hostedCardRef !== '' && $shopperCandidates !== []) {
+                $cardId = $this->createStoredCardIdFromHostedInstrument($shopperCandidates, $hostedCardRef);
+            }
+        }
+
         $transactionId = $this->resolveTransactionIdFromPaymentSession($session);
 
         if ($transactionId === '') {
-            if ($hosted->chargesOnServer()) {
+            if ($cardId !== '') {
+                $chargeResult = $hosted->chargeSignupFeeWithStoredCard($session, $amount, $cardId);
+            } elseif ($hosted->chargesOnServer()) {
                 $chargeResult = $hosted->chargeSignupFeeFromSession($session, $amount);
-                if (! $chargeResult['status']) {
-                    return [
-                        'status' => false,
-                        'data' => ['message' => $chargeResult['data']['message'] ?? 'Payment failed.'],
-                    ];
-                }
-                $transactionId = (string) ($chargeResult['data']['transactionId'] ?? '');
-                $session = $this->elavon->getPaymentSession($sessionId);
             } else {
                 return [
                     'status' => false,
                     'data' => ['message' => 'Payment was not completed on the hosted page. Please try again.'],
                 ];
             }
+
+            if (! $chargeResult['status']) {
+                return [
+                    'status' => false,
+                    'data' => ['message' => $chargeResult['data']['message'] ?? 'Payment failed.'],
+                ];
+            }
+
+            $transactionId = (string) ($chargeResult['data']['transactionId'] ?? '');
         } else {
             $transaction = $this->elavon->getTransaction($transactionId);
             if (! $transaction->isSuccess() || ! $hosted->transactionIsApproved($transaction)) {
@@ -367,22 +388,21 @@ class ElavonShopSubscription
                     'data' => ['message' => $message],
                 ];
             }
-        }
 
-        $shopperCandidates = $this->shopperReferenceCandidatesFromPaymentSession($session);
-
-        $cardId = $this->resolveStoredCardIdFromPaymentSession($session);
-        if ($cardId === '') {
-            $hostedCardRef = $this->resolveHostedCardReferenceFromPaymentSession($session);
-            if ($hostedCardRef !== '' && $shopperCandidates === []) {
-                $shopperCandidates = $this->shopperReferenceCandidatesFromNewShopperRecord();
-            }
-            if ($hostedCardRef !== '' && $shopperCandidates !== []) {
-                $cardId = $this->createStoredCardIdFromHostedInstrument($shopperCandidates, $hostedCardRef);
+            if ($cardId === '') {
+                $cardId = $this->resolveStoredCardIdFromShopperOnSession($session, $shopperCandidates);
             }
         }
 
         if ($cardId === '') {
+            Log::warning('Elavon shop subscription: card vault failed after HPP return', [
+                'shop_id' => $this->shop->id,
+                'session_id' => $sessionId,
+                'transaction_id' => $transactionId !== '' ? $transactionId : null,
+                'hosted_card' => $session->getHostedCard(),
+                'stored_card' => $session->getStoredCard(),
+            ]);
+
             return [
                 'status' => false,
                 'data' => ['message' => 'Card was not saved. Complete payment on the hosted page, or try again.'],
@@ -457,11 +477,6 @@ class ElavonShopSubscription
             return true;
         }
 
-        $hosted = new ElavonShopHostedSubscription($this->shop);
-        if ($hosted->chargesOnServer()) {
-            return false;
-        }
-
         $txHref = $session->getTransaction();
         if (! $txHref) {
             return false;
@@ -474,6 +489,44 @@ class ElavonShopSubscription
         }
 
         return (bool) ($tx->getStoredCard() || $tx->getHostedCard());
+    }
+
+    /**
+     * @param  list<string>  $shopperCandidates
+     */
+    protected function resolveStoredCardIdFromShopperOnSession(PaymentSessionResponse $session, array $shopperCandidates): string
+    {
+        $href = $session->getStoredCard();
+        if ($href) {
+            return $this->convergeEntityIdFromHrefOrId((string) $href);
+        }
+
+        foreach ($shopperCandidates as $shopperRef) {
+            $shopperId = $this->convergeEntityIdFromHrefOrId((string) $shopperRef);
+            if ($shopperId === '') {
+                continue;
+            }
+
+            $list = $this->elavon->getShopperStoredCardList($shopperId);
+            if (! $list->isSuccess()) {
+                continue;
+            }
+
+            $items = $list->getItems();
+            if (! is_array($items) || $items === []) {
+                continue;
+            }
+
+            $latest = $items[array_key_last($items)];
+            if (is_object($latest) && method_exists($latest, 'getId')) {
+                $id = $latest->getId();
+                if ($id) {
+                    return (string) $id;
+                }
+            }
+        }
+
+        return '';
     }
 
     protected function resolveStoredCardIdFromPaymentSession(PaymentSessionResponse $session): string
