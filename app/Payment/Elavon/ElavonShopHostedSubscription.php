@@ -213,7 +213,7 @@ class ElavonShopHostedSubscription
      */
     protected function makePaymentSessionCreateBody(OrderResponse $response, string $returnUrl, string $cancelUrl): array
     {
-        $body = [
+        return [
             'order' => $response->getId(),
             'billTo' => $this->billTo(),
             'returnUrl' => $returnUrl,
@@ -228,16 +228,8 @@ class ElavonShopHostedSubscription
             ],
             'doCreateTransaction' => $this->createsTransactionOnHostedPage(),
             'doThreeDSecure' => $this->threeDSecureEnabled() ? 1 : 0,
-            'useStoredPaymentMethod' => true,
             'hppType' => 'fullPageRedirect',
         ];
-
-        $shopper = $this->resolveShopperReferenceForSession();
-        if ($shopper !== null) {
-            $body['shopper'] = $shopper;
-        }
-
-        return $body;
     }
 
     /**
@@ -285,6 +277,8 @@ class ElavonShopHostedSubscription
         if (! $order_create_response->isSuccess()) {
             return $this->failureFromResponse($order_create_response, 'order');
         }
+
+        $this->resolveShopperReferenceForSession();
 
         $session_body = $this->makePaymentSessionCreateBody($order_create_response, $returnUrl, $cancelUrl);
 
