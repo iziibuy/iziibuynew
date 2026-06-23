@@ -7,10 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class ExternalOrder extends Model
 {
-    protected $guarded = [];
     use HasFactory;
 
-    public function paymentMethodAccess(){
+    protected $guarded = [];
+
+    public function paymentMethodAccess()
+    {
         return $this->belongsTo(PaymentMethodAccess::class);
     }
 }

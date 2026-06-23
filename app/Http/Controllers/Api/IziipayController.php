@@ -11,7 +11,6 @@ use App\Payment\Surfboard\SurfboardOrderApi;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class IziipayController extends Controller
@@ -36,7 +35,6 @@ class IziipayController extends Controller
 
         try {
             $order = ExternalOrder::create([
-                'ulid' => (string) Str::ulid(),
                 'payment_method_access_id' => $paymentMethodAccess->id,
                 'api_id' => $api->id,
                 'customer_name' => $request->name,
