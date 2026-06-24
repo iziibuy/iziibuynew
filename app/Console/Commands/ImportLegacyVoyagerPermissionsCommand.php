@@ -93,6 +93,14 @@ class ImportLegacyVoyagerPermissionsCommand extends Command
 
         $this->info("Permissions ensured in Spatie: {$importedPerms}");
 
+        Role::query()
+            ->where(fn ($q) => $q->whereNull('guard_name')->orWhere('guard_name', ''))
+            ->update(['guard_name' => 'web']);
+
+        Permission::query()
+            ->where(fn ($q) => $q->whereNull('guard_name')->orWhere('guard_name', ''))
+            ->update(['guard_name' => 'web']);
+
         if ($hasPivot && $pivotCount > 0) {
             $legacyPermissions = DB::connection($source)->table('permissions')->pluck($keyColumn, 'id');
             $pivots = DB::connection($source)->table('permission_role')->get();
