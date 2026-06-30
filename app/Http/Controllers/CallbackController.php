@@ -18,6 +18,7 @@ use App\Models\Shop;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Payment\Elavon\ApiElavonPayment;
+use App\Payment\Elavon\ElavonEnterpriseSubscription;
 use App\Payment\Elavon\ElavonPayment;
 use App\Payment\External\Elavon\ExternalBookingElavonPayment;
 use App\Payment\External\Surfboard\ExternalBookingSurfboardApi;
@@ -552,19 +553,49 @@ class CallbackController extends Controller
 
     public function enterpriseElavonSubscriptionSuccess(Request $request, Subscription $subscription)
     {
+        $sessionId = $request->input('sessionId')
+            ?? $request->input('session_id')
+            ?? $request->query('sessionId')
+            ?? $request->query('session_id')
+            ?? $subscription->key;
+
         Log::info('Enterprise Elavon subscription HPP return', [
             'subscription_id' => $subscription->id,
-            'session_id' => $request->query('sessionId'),
+            'session_id' => $sessionId,
         ]);
 
         $subscribable = $subscription->subscribable;
-        if ($subscribable instanceof Enterprise) {
-            $base = rtrim((string) $subscribable->domain, '/');
-
-            return redirect($base.'/admin/admin/confirm_subscription/'.$subscribable->unqid);
+        if (! $subscribable instanceof Enterprise) {
+            return redirect('/')->withErrors('Invalid subscription callback');
         }
 
-        return redirect('/')->withErrors('Invalid subscription callback');
+        if (! is_string($sessionId) || trim($sessionId) === '') {
+            $base = rtrim((string) $subscribable->domain, '/');
+
+            return redirect($base.'/admin/admin/confirm_subscription/'.$subscribable->unqid)
+                ->withErrors('Payment session is missing.');
+        }
+
+        $fee = (float) ($subscription->fee ?: 299);
+        $result = (new ElavonEnterpriseSubscription($subscribable))
+            ->finalizeHostedSubscriptionFromSession(trim($sessionId), $subscription, $fee);
+
+        if (! $result['status']) {
+            Log::warning('Enterprise Elavon subscription HPP return failed', [
+                'enterprise_id' => $subscribable->id,
+                'session_id' => $sessionId,
+                'message' => $result['data']['message'] ?? null,
+            ]);
+
+            $base = rtrim((string) $subscribable->domain, '/');
+
+            return redirect($base.'/admin/admin/confirm_subscription/'.$subscribable->unqid)
+                ->withErrors($result['data']['message'] ?? 'Payment could not be completed.');
+        }
+
+        $base = rtrim((string) $subscribable->domain, '/');
+
+        return redirect($base.'/admin/admin/confirm_subscription/'.$subscribable->unqid);
     }
 
     public function enterpriseElavonSubscriptionCancel(Subscription $subscription)

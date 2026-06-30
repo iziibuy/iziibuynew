@@ -2,18 +2,16 @@
 
 use App\Constants\Constants;
 use App\Http\Controllers\Api\ApiController;
+use App\Http\Controllers\Api\EnterpriseSubscriptionController;
 use App\Http\Controllers\Api\MasterApiController;
-use App\Models\Product;
 use App\Http\Controllers\Dashboard\Shop\PaymentController;
 use App\Http\Resources\OrdersResource;
 use App\Mail\OrderPlaced;
-use App\Models\Enterprise;
 use App\Models\Order;
 use App\Models\PaymentMethodAccess;
+use App\Models\Product;
 use App\Models\Shop;
 use App\Payment\Payment;
-use App\Payment\Elavon\ElavonEnterpriseHostedSubscription;
-use App\Payment\Subscribe;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
@@ -45,7 +43,10 @@ Route::group(['prefix' => '{shop:user_name}', 'middleware' => 'checkShop'], func
 Route::get('/ean-to-id', function (Request $request) {
 
     $product = Product::where('ean', $request->ean)->where('shop_id', $request->shop_id)->first();
-    if ($product) return response($product->id);
+    if ($product) {
+        return response($product->id);
+    }
+
     return response('Product not found', 404);
 });
 Route::post('quickpay-webhook', [PaymentController::class, 'quickpayWebhook'])->name('quickpay.webhook');
@@ -58,7 +59,6 @@ Route::get('/payment-method-access/{paymentMethodAccess:key}', function (Payment
         'status' => $paymentMethodAccess->status ? true : false,
     ];
 });
-
 
 Route::get('vCard/price', function (Request $request) {
     $request->validate(['person_count' => 'required|integer']);
@@ -77,8 +77,6 @@ Route::post('vCard/order', function (Request $request) {
 
     $shop = Shop::find(Constants::vCardShop);
     $product = $shop->products()->first();
-
-
 
     $request->validate([
         'first_name' => 'required|string',
@@ -117,7 +115,7 @@ Route::post('vCard/order', function (Request $request) {
             'payment_method' => 'quickpay',
             'subtotal' => $total,
             'total' => $total,
-            'type' =>  0,
+            'type' => 0,
             'currency' => 'NOK',
             'payment_status' => 0,
         ]);
@@ -130,167 +128,37 @@ Route::post('vCard/order', function (Request $request) {
 
         $product->decrement('quantity', count($request->persons));
 
-
         $order->save();
 
         $payment = (new Payment($order))->getUrl();
 
-        if ($payment['status'] == false) throw new Exception($payment['data']['message']);
+        if ($payment['status'] == false) {
+            throw new Exception($payment['data']['message']);
+        }
         $order->payment_id = $payment['data']['payment_id'];
         $order->payment_url = $payment['data']['url'];
 
-
-
         $order->save();
 
-
-        $message =  'Her er dine detaljer for din ordre plassert den ' . $order->created_at->format('M d, Y') . ' hos ' . $order->shop->name . ' Vennligst betal nå for å bekrefte din ordre';
-        Mail::to($order->email)->send(new   OrderPlaced($order, false, $message));
-        $message =  "A new order has been placed . Download details from here: <a href='" . route('order.managers-csv', $order->id) . "'>Download CSV</a>";
+        $message = 'Her er dine detaljer for din ordre plassert den '.$order->created_at->format('M d, Y').' hos '.$order->shop->name.' Vennligst betal nå for å bekrefte din ordre';
+        Mail::to($order->email)->send(new OrderPlaced($order, false, $message));
+        $message = "A new order has been placed . Download details from here: <a href='".route('order.managers-csv', $order->id)."'>Download CSV</a>";
         Mail::to($order->shop->user->email)->send(new OrderPlaced($order, $message));
+
         return OrdersResource::make($order);
     } catch (Exception $e) {
         return redirect()->back()->withErrors($e->getMessage());
     }
 });
 
-
-Route::prefix('enterprise')->group(function () {
-    Route::post('/create', function (Request $request) {
-        $request->validate([
-            'company' => 'required',
-            'domain' => 'required'
-        ]);
-
-        $enterprise = Enterprise::create([
-            'unqid' => uniqid(),
-            'enterprise_name' => $request->company,
-            'domain' => $request->domain
-        ]);
-
-        $subscription = (new Subscribe())->subscription()->getUrl(299);
-
-
-        $sub = $enterprise->subscription()->create([
-            'url' => $subscription['data']['url'],
-            'key' => $subscription['data']['payment_id'],
-            'fee' => 299,
-            'establishment_status' => 1
-        ]);
-        $enterprise->update([
-            'payment_url' => $sub->url,
-            'subscription_id' => $sub->subscription_id,
-            'subscription_fee' => 299,
-        ]);
-        return [
-            'enterprise' => $enterprise->unqid,
-            'url' => $subscription['data']['url']
-        ];
-    });
-    Route::get('/{uid}/end', function ($uid) {
-        $enterprise = Enterprise::where('unqid', $uid)->with('subscription')->firstOrFail();
-        $enterprise->status = 0;
-        $enterprise->save();
-        if ($enterprise->subscription) {
-            $enterprise->subscription->update(['status' => 0]);
-        }
-
-        return $enterprise->fresh(['subscription']);
-    });
-    Route::get('/{uid}/start', function ($uid) {
-        $enterprise = Enterprise::where('unqid', $uid)->firstOrFail();
-        $subModel = $enterprise->subscription;
-        if (! $subModel) {
-            abort(404, 'Subscription not found');
-        }
-
-        $hosted = new ElavonEnterpriseHostedSubscription($enterprise);
-        $subscription = $hosted->getPaymentLink(
-            $enterprise->fee(),
-            route('callback.enterprise.elavon.subscription.success', $subModel),
-            route('callback.enterprise.elavon.subscription.cancel', $subModel)
-        );
-
-        if (! $subscription['status']) {
-            return response()->json([
-                'message' => $subscription['data']['message'] ?? 'Payment link failed',
-            ], is_numeric($subscription['code'] ?? null) ? (int) $subscription['code'] : 502);
-        }
-
-        $subModel->update([
-            'url' => $subscription['data']['url'],
-            'key' => $subscription['data']['payment_id'],
-            'fee' => $enterprise->fee(),
-            'establishment_status' => 1,
-        ]);
-
-        $enterprise->refresh()->load('subscription');
-        $enterprise->update([
-            'payment_url' => $enterprise->subscription->url,
-            'subscription_id' => $enterprise->subscription->subscription_id,
-            'subscription_fee' => $enterprise->fee(),
-        ]);
-
-        return [
-            'enterprise' => $enterprise->unqid,
-            'url' => $subscription['data']['url'],
-        ];
-    });
-    Route::get('/{uid}', function ($uid) {
-        return Enterprise::where('unqid', $uid)->with('subscription')->first();
-    });
-    Route::get('/{uid}/subscription/charges', function ($uid) {
-        $enterprise = Enterprise::where('unqid', $uid)->with('subscription')->first();
-        return $enterprise->subscription->charges()->latest()->paginate(10);
-    });
-    Route::get('/{uid}/subscription/charges/{charge}', function ($uid, $charge) {
-        $enterprise = Enterprise::where('unqid', $uid)->with('subscription')->first();
-        return $enterprise->subscription->charges()->find($charge);
-    });
-    Route::get('/{uid}/subscription', function ($uid) {
-        $enterprise = Enterprise::where('unqid', $uid)->with('subscription')->first();
-        $sub =  (new Subscribe())->subscription($enterprise->subscription->key);
-        return $sub->subscription;
-    });
-
-    Route::post('/{uid}/charge', function (Request $request, $uid) {
-        $request->validate([
-            'amount' => 'required',
-            'details' => 'required',
-        ]);
-
-        $enterprise = Enterprise::where('unqid', $uid)->with('subscription')->first();
-        $sub =  (new Subscribe())->subscription($enterprise->subscription->key);
-
-        $charge = $sub->charge($request->amount);
-        if ($charge['status']) {
-            $payment = $sub->payment($charge['data']->id);
-            if ($payment['data']->state == 'processed') {
-                $enterprise->subscription->charges()->create([
-                    'amount' => $request->amount,
-                    'status' => true,
-                    'quickpay_order_id' => $charge['data']->order_id,
-                    'charge_details' => json_encode($charge['data']),
-                    'payment_details' => json_encode([
-                        'enterprise' => [
-                            'uid' => $enterprise->unqid,
-                            'name' => $enterprise->enterprise_name,
-                            'domain' => $enterprise->domain,
-                        ],
-                        'detials' => $request->details
-
-                    ]),
-
-                ]);
-            }
-        }
-
-        return $sub->payment($charge['data']->id);
-    });
-
-    Route::get('/{uid}/{id}/getcharge', function (Request $request, $uid, $id) {
-        $enterprise = Enterprise::where('unqid', $uid)->with('subscription')->first();
-        $sub =  (new Subscribe())->subscription($enterprise->subscription->key);
-        return $sub->payment($id);
-    });
+Route::prefix('enterprise')->controller(EnterpriseSubscriptionController::class)->group(function () {
+    Route::post('/create', 'create');
+    Route::get('/{uid}/end', 'end');
+    Route::get('/{uid}/start', 'start');
+    Route::get('/{uid}', 'show');
+    Route::get('/{uid}/subscription/charges', 'subscriptionCharges');
+    Route::get('/{uid}/subscription/charges/{charge}', 'subscriptionCharge');
+    Route::get('/{uid}/subscription', 'subscription');
+    Route::post('/{uid}/charge', 'charge');
+    Route::get('/{uid}/{id}/getcharge', 'getCharge');
 });

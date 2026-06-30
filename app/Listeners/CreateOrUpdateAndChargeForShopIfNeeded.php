@@ -2,14 +2,10 @@
 
 namespace App\Listeners;
 
-use App\Events\UserRoleChanged;
 use App\Models\Enterprise;
 use App\Models\RetailerType;
 use App\Models\User;
 use Exception;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Iziibuy;
@@ -42,7 +38,7 @@ class CreateOrUpdateAndChargeForShopIfNeeded
                 break;
 
             default:
-                # code...
+                // code...
                 $this->if_there_is_shop_disable_it_on_downgrade($event->user);
                 break;
         }
@@ -50,8 +46,6 @@ class CreateOrUpdateAndChargeForShopIfNeeded
 
     private function create_shop_if_there_is_no_shop(User $user)
     {
-
-
 
         if ($user->shop == null) {
             DB::beginTransaction();
@@ -61,28 +55,33 @@ class CreateOrUpdateAndChargeForShopIfNeeded
                 'terms' => setting('terms.no'),
                 'contract_signed' => true,
                 'establishment' => true,
-                'can_provide_service' => false
+                'can_provide_service' => false,
             ]);
 
-            if (!$user->retailer) {
+            if (! $user->retailer) {
                 $user->retailer()->create([
                     'parent_id' => $user->partner_id,
-                    'type' => $user->role_id == 5 ? RetailerType::where('rank', 0)->first()->id  : RetailerType::where('rank', 1)->first()->id
+                    'type' => $user->role_id == 5 ? RetailerType::where('rank', 0)->first()->id : RetailerType::where('rank', 1)->first()->id,
                 ]);
             }
             $enterprise = Enterprise::latest()->first();
-            $subscription =  (object) Http::acceptJson()->post('https://iziibuy.com/api/enterprise/' . $enterprise->subscription_id . '/charge', [
+            if (! $enterprise) {
+                DB::rollBack();
+                throw new Exception('Enterprise billing account is not configured.');
+            }
+
+            $chargeUrl = rtrim((string) config('app.url'), '/').'/api/enterprise/'.$enterprise->unqid.'/charge';
+            $subscription = (object) Http::acceptJson()->post($chargeUrl, [
                 'amount' => Iziibuy::needToCharge(123.75),
                 'details' => [
                     'shop_id' => $shop->id,
-                    'comment' => 'New shop'
-                ]
+                    'comment' => 'New shop',
+                ],
             ])->json();
 
-
-            if ($subscription->status) {
+            if (($subscription->status ?? false) === true) {
                 $shop->update([
-                    'status' => 1
+                    'status' => 1,
                 ]);
                 DB::commit();
             } else {
@@ -101,7 +100,7 @@ class CreateOrUpdateAndChargeForShopIfNeeded
     {
         if ($user->shop) {
             $user->shop->update([
-                'status' => 0
+                'status' => 0,
             ]);
         }
     }
