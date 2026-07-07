@@ -93,12 +93,7 @@ class DashboardController extends Controller
         try {
             DB::beginTransaction();
             $paymentMethodAccess = $subscription->subscribable;
-            $subscriptionFee = $this->resolveSubscriptionChargeAmount($subscription, $paymentMethodAccess);
-            if ($subscriptionFee <= 0) {
-                DB::rollBack();
-
-                return redirect()->back()->withErrors('Subscription fee is not configured. Please contact support.');
-            }
+            $subscriptionFee = (float) ($subscription->getAttributes()['fee'] ?? 0);
 
             $elavon = new ElavonExternalSubscription($paymentMethodAccess);
 
@@ -157,7 +152,7 @@ class DashboardController extends Controller
             $result = $elavon->finalizeHostedSubscriptionFromSession(
                 trim($sessionId),
                 $subscription,
-                $this->resolveSubscriptionChargeAmount($subscription, $paymentMethodAccess)
+                (float) ($subscription->getAttributes()['fee'] ?? 0)
             );
 
             if (! $result['status']) {
@@ -405,9 +400,6 @@ class DashboardController extends Controller
         ]);
 
         $subscription_fee = $paymentMethodAccess->fresh()->fee();
-        if ($subscription_fee <= 0) {
-            return redirect()->back()->withErrors('Subscription fee is not configured. Please contact support.');
-        }
 
         $subscription = $paymentMethodAccess->subscription()->create([
             'fee' => (int) round($subscription_fee),
@@ -554,20 +546,5 @@ class DashboardController extends Controller
         } else {
             return redirect()->route('external.dashboard')->withErrors('You already verified your information');
         }
-    }
-
-    protected function resolveSubscriptionChargeAmount(Subscription $subscription, PaymentMethodAccess $access): float
-    {
-        $calculated = (float) $access->fee();
-        if ($calculated > 0) {
-            return round($calculated, 2);
-        }
-
-        $stored = (float) ($subscription->getAttributes()['fee'] ?? 0);
-        if ($stored > 0) {
-            return round($stored, 2);
-        }
-
-        return 0.0;
     }
 }
