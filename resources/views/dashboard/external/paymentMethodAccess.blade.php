@@ -163,30 +163,22 @@
                             <div id="collapseOne" class="accordion-collapse collapse " aria-labelledby="headingOne"
                                 data-bs-parent="#accordionExample">
                                 <div class="accordion-body">
-                                    @if (@$subscriptionQuickpay?->metadata)
+                                    @if (! empty($billingStatus))
                                         <table class="table">
-
-                                            @foreach ($subscriptionQuickpay->metadata as $key => $value)
-                                                @if ($value)
-                                                    <tr>
-                                                        <th>
-                                                            {{ ucwords($key) }}
-                                                        </th>
-                                                        <td>
-                                                            @if (is_array($value))
-                                                                <ul>
-                                                                    @foreach ($value as $data)
-                                                                        <li>{{ $data }}</li>
-                                                                    @endforeach
-                                                                </ul>
-                                                            @else
-                                                                {{ $value }}
-                                                            @endif
-                                                        </td>
-                                                    </tr>
-                                                @endif
-                                            @endforeach
-
+                                            <tr>
+                                                <th>{{ __('words.provider') }}</th>
+                                                <td>{{ ucfirst($billingStatus['provider'] ?? 'elavon') }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>{{ __('words.status') }}</th>
+                                                <td>{{ ($billingStatus['active'] ?? false) ? __('words.active') : __('words.inactive') }}</td>
+                                            </tr>
+                                            @if (! empty($billingStatus['last_paid_at']))
+                                                <tr>
+                                                    <th>{{ __('words.last_paid') }}</th>
+                                                    <td>{{ $billingStatus['last_paid_at'] }}</td>
+                                                </tr>
+                                            @endif
                                         </table>
                                     @endif
                                 </div>
