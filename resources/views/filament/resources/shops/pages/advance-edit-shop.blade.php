@@ -42,28 +42,28 @@
 
                 <div class="forms" id="nav-tabContent">
                     <div id="store" role="tabpanel">
-                        @include('dashboard.shop.profile.tabs.store_info_forms', ['shop' => $shop])
+                        @include('dashboard.shop.profile.tabs.store_info_forms', ['shop' => $shop, 'editable' => true])
                     </div>
                     <div id="payment" hidden>
-                        @include('dashboard.shop.profile.tabs.payment_info_forms', ['shop' => $shop])
+                        @include('dashboard.shop.profile.tabs.payment_info_forms', ['shop' => $shop, 'editable' => true])
                     </div>
                     <div id="company" hidden>
-                        @include('dashboard.shop.profile.tabs.company_info_forms', ['shop' => $shop])
+                        @include('dashboard.shop.profile.tabs.company_info_forms', ['shop' => $shop, 'editable' => true])
                     </div>
                     <div id="general" role="tabpanel" hidden>
-                        @include('dashboard.shop.profile.tabs.general_info_forms', ['shop' => $shop])
+                        @include('dashboard.shop.profile.tabs.general_info_forms', ['shop' => $shop, 'editable' => true])
                     </div>
                     <div id="settings" role="tabpanel" hidden>
-                        @include('dashboard.shop.profile.tabs.settings', ['shop' => $shop])
+                        @include('dashboard.shop.profile.tabs.settings', ['shop' => $shop, 'editable' => true])
                     </div>
                     <div id="menus" role="tabpanel" hidden>
-                        @include('dashboard.shop.profile.tabs.menus', ['shop' => $shop])
+                        @include('dashboard.shop.profile.tabs.menus', ['shop' => $shop, 'editable' => true])
                     </div>
                     <div id="links" role="tabpanel" hidden>
                         <livewire:links :shop="$shop" />
                     </div>
                     <div id="colors" role="tabpanel" hidden>
-                        @include('dashboard.shop.profile.tabs.colors', ['shop' => $shop])
+                        @include('dashboard.shop.profile.tabs.colors', ['shop' => $shop, 'editable' => true])
                     </div>
 
                     <button class="shop-advance-edit-submit" type="submit">

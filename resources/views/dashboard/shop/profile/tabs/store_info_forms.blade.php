@@ -1,21 +1,30 @@
 <div class="row">
+    @php
+        $editable = $editable ?? false;
+    @endphp
+
     <div class="col-md-12">
-        <x-form.input type="select" label="{!! __('words.shop_default_language') !!}" value="{{old('meta.default_language',$user->shop->default_language ? $user->shop->default_language : 'no')}}" name="meta[default_language]" :options="['en'=>'English','no'=>'Norwegian','sv'=>'Swedish']" />
+        <x-form.input type="select" name="meta[default_language]" label="{!! __('words.shop_default_language') !!}" :value="old('meta.default_language', $shop->default_language ?: 'no')" :options="['en' => 'English', 'no' => 'Norwegian', 'sv' => 'Swedish']" />
     </div>
     <div class="col-md-4">
         <div class="form-group">
             <label for="sell_digital_product">{!! __('words.product_type') !!}</label>
-
-            <input type="text" readonly id="sell_digital_product" class="form-control"
-                value="{{ $user->shop->sell_digital_product == 1 ? __('words.digital') : __('words.physical') }}">
-
+            @if ($editable)
+                <select name="meta[sell_digital_product]" id="sell_digital_product" class="form-control">
+                    <option value="1" @selected($shop->sell_digital_product == 1)>{{ __('words.digital') }}</option>
+                    <option value="0" @selected($shop->sell_digital_product != 1)>{{ __('words.physical') }}</option>
+                </select>
+            @else
+                <input type="text" readonly id="sell_digital_product" class="form-control"
+                    value="{{ $shop->sell_digital_product == 1 ? __('words.digital') : __('words.physical') }}">
+            @endif
         </div>
     </div>
 
     <div class="col-md-6 col-8">
         <div class="form-group">
             <label for="">{!! __('words.shop_username') !!}</label>
-            <input name="user_name" type="text" class="form-control" value="{{ $shop->user_name }}" readonly>
+            <input name="user_name" type="text" class="form-control" value="{{ $shop->user_name }}" @readonly(! $editable)>
         </div>
     </div>
     <div class="col-md-6 col-12">
@@ -46,7 +55,7 @@
         <x-form.input type="file" name="meta[cover]" label="{!! __('words.shop_cover') !!}" />
     </div>
     <div class="col-md-12 col-12">
-        <x-form.input type="textarea" id="description" name="meta[description]" label="{!! __('words.shop_about') !!}" :value="old('description') ?? $user->shop->description" />
+        <x-form.input type="textarea" id="description" name="meta[description]" label="{!! __('words.shop_about') !!}" :value="old('meta.description', $shop->description)" />
     </div>
     <div class="col-md-6 col-12">
         <x-form.input type="select" name="meta[scanner_active]" label="{!! __('words.shop_scanner_status') !!}" :value="$shop->scanner_active"

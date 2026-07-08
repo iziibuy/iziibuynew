@@ -1,4 +1,7 @@
 @props(['admin' => false])
+@php
+    $admin = $admin || ($editable ?? false);
+@endphp
 <div class="row">
     <div class="col-md-6">
         <x-form.input type="text" name="meta[name]" label="{!! __('words.shop_username') !!}" :value="old('name', $shop->name)" />
@@ -35,7 +38,7 @@
         <label for="country">{{ __('words.invoice_country') }}</label>
         <select name="country" id="country" class="form-control">
             @foreach (App\Constants\Constants::COUNTRIES as $country)
-                <option @if ($country == $shop->country) selected @endif>{{ $country }}</option>
+                <option value="{{ $country }}" @selected($country == $shop->country)>{{ $country }}</option>
             @endforeach
         </select>
     </div>

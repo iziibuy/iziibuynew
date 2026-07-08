@@ -81,8 +81,11 @@ class DashboardController extends Controller
             'currencies' => json_encode($request->currencies),
             'selling_location_mode' => $request->selling_location_mode,
             'locations' => json_encode($request->locations),
+            ...(auth()->user()->role_id == 1 && $request->has('payment_method')
+                ? ['paymentMethod' => implode(',', $request->payment_method ?? [])]
+                : []),
         ]);
-        $data = $request->meta;
+        $data = $request->meta ?? [];
 
         $data['footerPaymentMethod'] = $request->meta['footerPaymentMethod'] ?? [];
         Iziibuy::resetShop($shop);

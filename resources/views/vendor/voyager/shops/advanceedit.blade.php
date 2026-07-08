@@ -86,33 +86,38 @@
                                         <div class="" style="display: block;" id="store" role="tabpanel"
                                             aria-labelledby="nav-profile-tab">
 
-                                            @include('dashboard.shop.profile.tabs.store_info_forms',[
+                                            @include('dashboard.shop.profile.tabs.store_info_forms', [
                                                 'shop' => $shop,
+                                                'editable' => true,
                                             ])
                                         </div>
                                         <div class="" style="display: none" id="payment">
-                                            @include('dashboard.shop.profile.tabs.payment_info_forms',[
+                                            @include('dashboard.shop.profile.tabs.payment_info_forms', [
                                                 'shop' => $shop,
+                                                'editable' => true,
                                             ])
                                         </div>
                                         <div class="" style="display: none" id="company">
 
                                             @include('dashboard.shop.profile.tabs.company_info_forms', [
                                                 'shop' => $shop,
+                                                'editable' => true,
                                             ])
                                         </div>
 
                                         <div class="" style="display: none" id="general" role="tabpanel"
                                             aria-labelledby="nav-contact-tab">
-                                            @include('dashboard.shop.profile.tabs.general_info_forms',[
+                                            @include('dashboard.shop.profile.tabs.general_info_forms', [
                                                 'shop' => $shop,
+                                                'editable' => true,
                                             ])
 
                                         </div>
                                         <div class="" style="display: none;padding:0 20px" id="settings"
                                             role="tabpanel" aria-labelledby="nav-contact-tab">
-                                            @include('dashboard.shop.profile.tabs.settings',[
+                                            @include('dashboard.shop.profile.tabs.settings', [
                                                 'shop' => $shop,
+                                                'editable' => true,
                                             ])
 
                                         </div>
@@ -120,6 +125,7 @@
                                             aria-labelledby="nav-contact-tab">
                                             @include('dashboard.shop.profile.tabs.menus', [
                                                 'shop' => $shop,
+                                                'editable' => true,
                                             ])
 
                                         </div>
@@ -132,6 +138,7 @@
                                             aria-labelledby="nav-contact-tab">
                                             @include('dashboard.shop.profile.tabs.colors', [
                                                 'shop' => $shop,
+                                                'editable' => true,
                                             ])
 
                                         </div>

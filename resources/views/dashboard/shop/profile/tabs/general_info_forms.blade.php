@@ -25,7 +25,7 @@
                     $locations = is_array($shop->locations) ? $shop->locations : [];
                 @endphp
                 @foreach (App\Constants\Constants::COUNTRIES as $country)
-                    <option @if (in_array($country, $locations)) selected @endif>{{ $country }}</option>
+                    <option value="{{ $country }}" @selected(in_array($country, $locations))>{{ $country }}</option>
                 @endforeach
             </select>
         </div>
