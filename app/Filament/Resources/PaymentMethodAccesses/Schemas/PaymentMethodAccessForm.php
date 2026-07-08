@@ -9,10 +9,26 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 
 class PaymentMethodAccessForm
 {
+    /**
+     * @return array<int, string>
+     */
+    public static function metaFieldNames(): array
+    {
+        return [
+            'elavon_merchant_alias',
+            'elavon_public_key',
+            'elavon_secret_key',
+            'surfboard_terminalId',
+            'surfboard_merchantId',
+            'surfboard_storeId',
+        ];
+    }
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -34,21 +50,25 @@ class PaymentMethodAccessForm
                         TextInput::make('company_registration')
                             ->required()
                             ->maxLength(255),
-                    ]),
-                Section::make(__('Address'))
-                    ->columns(2)
-                    ->schema([
-                        TextInput::make('company_address.street')
-                            ->label(__('words.company_address_street'))
-                            ->required()
+                        TextInput::make('contract_url')
+                            ->label(__('Contract URL'))
+                            ->url()
                             ->maxLength(255)
                             ->columnSpanFull(),
+                    ]),
+                Section::make(__('Address'))
+                    ->columns(3)
+                    ->schema([
                         TextInput::make('company_address.city')
-                            ->label(__('words.company_address_city'))
+                            ->label(__('City'))
+                            ->required()
+                            ->maxLength(255),
+                        TextInput::make('company_address.street')
+                            ->label(__('Street'))
                             ->required()
                             ->maxLength(255),
                         TextInput::make('company_address.zip')
-                            ->label(__('words.company_address_zip'))
+                            ->label(__('Zip'))
                             ->required()
                             ->maxLength(255),
                         TextInput::make('company_address.contact_number')
@@ -59,8 +79,7 @@ class PaymentMethodAccessForm
                             ->label(__('words.invoice_country'))
                             ->options(array_combine(Constants::COUNTRIES, Constants::COUNTRIES))
                             ->searchable()
-                            ->required()
-                            ->columnSpanFull(),
+                            ->columnSpan(2),
                     ]),
                 Section::make(__('Subscription'))
                     ->columns(2)
@@ -80,6 +99,13 @@ class PaymentMethodAccessForm
                         TextInput::make('fee')
                             ->numeric()
                             ->default(0),
+                        Select::make('site_mode')
+                            ->label(__('words.site_mode'))
+                            ->options([
+                                'live' => 'live',
+                                'test' => 'test',
+                            ])
+                            ->default('live'),
                         Select::make('paymentMethod')
                             ->label(__('Payment method'))
                             ->options([
@@ -87,7 +113,8 @@ class PaymentMethodAccessForm
                                 'elavon' => 'Elavon',
                                 'surfboard' => 'Surfboard',
                             ])
-                            ->required(),
+                            ->required()
+                            ->live(),
                         Select::make('subscriptionMethod')
                             ->label(__('Subscription method'))
                             ->options([
@@ -96,9 +123,56 @@ class PaymentMethodAccessForm
                                 'surfboard' => 'Surfboard',
                             ])
                             ->required(),
+                        TextInput::make('shopperId')
+                            ->label(__('Shopper ID'))
+                            ->maxLength(255),
                         DateTimePicker::make('last_paid_at')
                             ->label(__('Last paid at'))
                             ->native(false),
+                    ]),
+                Section::make(__('QuickPay API Keys'))
+                    ->columns(2)
+                    ->visible(fn (Get $get): bool => $get('paymentMethod') === 'quickpay')
+                    ->schema([
+                        TextInput::make('quickpay_api_key')
+                            ->label(__('words.shop_api_kay'))
+                            ->maxLength(255)
+                            ->copyable(),
+                        TextInput::make('quickpay_secret_key')
+                            ->label(__('words.shop_secrate_key'))
+                            ->maxLength(255)
+                            ->copyable(),
+                    ]),
+                Section::make(__('Elavon API Keys'))
+                    ->columns(2)
+                    ->visible(fn (Get $get): bool => $get('paymentMethod') === 'elavon')
+                    ->schema([
+                        TextInput::make('elavon_merchant_alias')
+                            ->label(__('words.elavon_merchant_alias'))
+                            ->maxLength(255),
+                        TextInput::make('elavon_public_key')
+                            ->label(__('words.elavon_public_key'))
+                            ->maxLength(255)
+                            ->copyable(),
+                        TextInput::make('elavon_secret_key')
+                            ->label(__('words.elavon_secret_key'))
+                            ->maxLength(255)
+                            ->copyable()
+                            ->columnSpanFull(),
+                    ]),
+                Section::make(__('Surfboard API Keys'))
+                    ->columns(2)
+                    ->visible(fn (Get $get): bool => $get('paymentMethod') === 'surfboard')
+                    ->schema([
+                        TextInput::make('surfboard_terminalId')
+                            ->label(__('words.surfboard_terminalId'))
+                            ->maxLength(255),
+                        TextInput::make('surfboard_merchantId')
+                            ->label(__('words.surfboard_merchantId'))
+                            ->maxLength(255),
+                        TextInput::make('surfboard_storeId')
+                            ->label(__('words.surfboard_storeId'))
+                            ->maxLength(255),
                     ]),
                 Section::make(__('Status'))
                     ->columns(3)
