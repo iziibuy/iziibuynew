@@ -176,7 +176,6 @@ class PaymentMethodAccess extends Model
 
     public function update(array $attributes = [], array $options = [])
     {
-        unset($attributes['key']);
         if (! $this->exists) {
             return false;
         }

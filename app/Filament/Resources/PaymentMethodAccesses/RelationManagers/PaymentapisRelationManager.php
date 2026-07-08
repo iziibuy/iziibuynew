@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\PaymentMethodAccesses\RelationManagers;
 
 use App\Models\PaymentApi;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -10,12 +11,12 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Support\Str;
 
 class PaymentapisRelationManager extends RelationManager
 {
@@ -29,11 +30,10 @@ class PaymentapisRelationManager extends RelationManager
             ->components([
                 TextInput::make('key')
                     ->label(__('Source key'))
-                    ->disabled()
-                    ->dehydrated()
-                    ->copyable()
+                    ->required()
                     ->maxLength(255)
-                    ->visible(fn (?PaymentApi $record): bool => filled($record))
+                    ->unique(PaymentApi::class, 'key', ignoreRecord: true)
+                    ->copyable()
                     ->helperText(__('Used as source_key in the Iziipay JavaScript SDK and API requests.')),
                 TextInput::make('domain')
                     ->label(__('Domain'))
@@ -91,7 +91,9 @@ class PaymentapisRelationManager extends RelationManager
                 CreateAction::make()
                     ->label(__('Create Iziipay API'))
                     ->mutateFormDataUsing(function (array $data): array {
-                        $data['key'] = (string) Str::ulid();
+                        $data['key'] = filled($data['key'] ?? null)
+                            ? $data['key']
+                            : PaymentApi::generateKey();
                         $data['status'] = $data['status'] ?? true;
 
                         return $data;
@@ -99,6 +101,21 @@ class PaymentapisRelationManager extends RelationManager
             ])
             ->recordActions([
                 EditAction::make(),
+                Action::make('regenerateKey')
+                    ->label(__('Regenerate key'))
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalHeading(__('Regenerate source key?'))
+                    ->modalDescription(__('Integrations using the current source_key must be updated after regeneration.'))
+                    ->action(function (PaymentApi $record): void {
+                        $record->update(['key' => PaymentApi::generateKey()]);
+
+                        Notification::make()
+                            ->title(__('Source key regenerated'))
+                            ->success()
+                            ->send();
+                    }),
                 DeleteAction::make(),
             ])
             ->toolbarActions([

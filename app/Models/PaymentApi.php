@@ -20,11 +20,16 @@ class PaymentApi extends Model
         ];
     }
 
+    public static function generateKey(): string
+    {
+        return (string) Str::ulid();
+    }
+
     protected static function booted(): void
     {
         static::creating(function (PaymentApi $paymentApi): void {
             if (blank($paymentApi->key)) {
-                $paymentApi->key = (string) Str::ulid();
+                $paymentApi->key = self::generateKey();
             }
 
             if ($paymentApi->status === null) {

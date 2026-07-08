@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\PaymentMethodAccesses\Schemas;
 
 use App\Constants\Constants;
+use App\Models\PaymentMethodAccess;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -71,7 +72,11 @@ class PaymentMethodAccessForm
                             ->required(),
                         TextInput::make('key')
                             ->label(__('Plugin key'))
-                            ->maxLength(255),
+                            ->required()
+                            ->maxLength(255)
+                            ->unique(PaymentMethodAccess::class, 'key', ignoreRecord: true)
+                            ->copyable()
+                            ->helperText(__('Used in Iziipay API URLs: /api/iziipay/create-payment/{plugin_key}')),
                         TextInput::make('fee')
                             ->numeric()
                             ->default(0),
