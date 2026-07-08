@@ -5,6 +5,7 @@ namespace App\Filament\Resources\PaymentMethodAccesses;
 use App\Filament\Resources\PaymentMethodAccesses\Pages\CreatePaymentMethodAccess;
 use App\Filament\Resources\PaymentMethodAccesses\Pages\EditPaymentMethodAccess;
 use App\Filament\Resources\PaymentMethodAccesses\Pages\ListPaymentMethodAccesses;
+use App\Filament\Resources\PaymentMethodAccesses\RelationManagers\PaymentapisRelationManager;
 use App\Filament\Resources\PaymentMethodAccesses\Schemas\PaymentMethodAccessForm;
 use App\Filament\Resources\PaymentMethodAccesses\Tables\PaymentMethodAccessesTable;
 use App\Models\PaymentMethodAccess;
@@ -48,7 +49,7 @@ class PaymentMethodAccessResource extends Resource
      */
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with('user');
+        return parent::getEloquentQuery()->with(['user', 'paymentapis']);
     }
 
     public static function form(Schema $schema): Schema
@@ -63,7 +64,9 @@ class PaymentMethodAccessResource extends Resource
 
     public static function getRelations(): array
     {
-        return [];
+        return [
+            PaymentapisRelationManager::class,
+        ];
     }
 
     public static function getPages(): array
