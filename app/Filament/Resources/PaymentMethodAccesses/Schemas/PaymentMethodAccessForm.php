@@ -81,7 +81,67 @@ class PaymentMethodAccessForm
                             ->searchable()
                             ->columnSpan(2),
                     ]),
-                Section::make(__('Subscription'))
+                Section::make(__('Payment & gateway'))
+                    ->description(__('Choose the gateway and enter its API credentials below.'))
+                    ->columns(2)
+                    ->schema([
+                        Select::make('paymentMethod')
+                            ->label(__('Payment method'))
+                            ->options([
+                                'quickpay' => 'QuickPay',
+                                'elavon' => 'Elavon',
+                                'surfboard' => 'Surfboard',
+                            ])
+                            ->required()
+                            ->live()
+                            ->columnSpanFull(),
+                        Select::make('site_mode')
+                            ->label(__('words.site_mode'))
+                            ->options([
+                                'live' => 'live',
+                                'test' => 'test',
+                            ])
+                            ->default('live'),
+                        TextInput::make('quickpay_api_key')
+                            ->label(__('words.shop_api_kay'))
+                            ->maxLength(255)
+                            ->copyable()
+                            ->visible(fn (Get $get): bool => $get('paymentMethod') === 'quickpay'),
+                        TextInput::make('quickpay_secret_key')
+                            ->label(__('words.shop_secrate_key'))
+                            ->maxLength(255)
+                            ->copyable()
+                            ->visible(fn (Get $get): bool => $get('paymentMethod') === 'quickpay'),
+                        TextInput::make('elavon_merchant_alias')
+                            ->label(__('words.elavon_merchant_alias'))
+                            ->maxLength(255)
+                            ->visible(fn (Get $get): bool => $get('paymentMethod') === 'elavon'),
+                        TextInput::make('elavon_public_key')
+                            ->label(__('words.elavon_public_key'))
+                            ->maxLength(255)
+                            ->copyable()
+                            ->visible(fn (Get $get): bool => $get('paymentMethod') === 'elavon'),
+                        TextInput::make('elavon_secret_key')
+                            ->label(__('words.elavon_secret_key'))
+                            ->maxLength(255)
+                            ->copyable()
+                            ->columnSpanFull()
+                            ->visible(fn (Get $get): bool => $get('paymentMethod') === 'elavon'),
+                        TextInput::make('surfboard_terminalId')
+                            ->label(__('words.surfboard_terminalId'))
+                            ->maxLength(255)
+                            ->visible(fn (Get $get): bool => $get('paymentMethod') === 'surfboard'),
+                        TextInput::make('surfboard_merchantId')
+                            ->label(__('words.surfboard_merchantId'))
+                            ->maxLength(255)
+                            ->visible(fn (Get $get): bool => $get('paymentMethod') === 'surfboard'),
+                        TextInput::make('surfboard_storeId')
+                            ->label(__('words.surfboard_storeId'))
+                            ->maxLength(255)
+                            ->visible(fn (Get $get): bool => $get('paymentMethod') === 'surfboard'),
+                    ]),
+                Section::make(__('Subscription & plugin'))
+                    ->description(__('Plugin access, billing, and subscription settings.'))
                     ->columns(2)
                     ->schema([
                         Select::make('user_id')
@@ -96,25 +156,6 @@ class PaymentMethodAccessForm
                             ->unique(PaymentMethodAccess::class, 'key', ignoreRecord: true)
                             ->copyable()
                             ->helperText(__('Used in Iziipay API URLs: /api/iziipay/create-payment/{plugin_key}')),
-                        TextInput::make('fee')
-                            ->numeric()
-                            ->default(0),
-                        Select::make('site_mode')
-                            ->label(__('words.site_mode'))
-                            ->options([
-                                'live' => 'live',
-                                'test' => 'test',
-                            ])
-                            ->default('live'),
-                        Select::make('paymentMethod')
-                            ->label(__('Payment method'))
-                            ->options([
-                                'quickpay' => 'QuickPay',
-                                'elavon' => 'Elavon',
-                                'surfboard' => 'Surfboard',
-                            ])
-                            ->required()
-                            ->live(),
                         Select::make('subscriptionMethod')
                             ->label(__('Subscription method'))
                             ->options([
@@ -123,6 +164,9 @@ class PaymentMethodAccessForm
                                 'surfboard' => 'Surfboard',
                             ])
                             ->required(),
+                        TextInput::make('fee')
+                            ->numeric()
+                            ->default(0),
                         TextInput::make('shopperId')
                             ->label(__('Shopper ID'))
                             ->maxLength(255),
@@ -130,52 +174,8 @@ class PaymentMethodAccessForm
                             ->label(__('Last paid at'))
                             ->native(false),
                     ]),
-                Section::make(__('QuickPay API Keys'))
-                    ->columns(2)
-                    ->visible(fn (Get $get): bool => $get('paymentMethod') === 'quickpay')
-                    ->schema([
-                        TextInput::make('quickpay_api_key')
-                            ->label(__('words.shop_api_kay'))
-                            ->maxLength(255)
-                            ->copyable(),
-                        TextInput::make('quickpay_secret_key')
-                            ->label(__('words.shop_secrate_key'))
-                            ->maxLength(255)
-                            ->copyable(),
-                    ]),
-                Section::make(__('Elavon API Keys'))
-                    ->columns(2)
-                    ->visible(fn (Get $get): bool => $get('paymentMethod') === 'elavon')
-                    ->schema([
-                        TextInput::make('elavon_merchant_alias')
-                            ->label(__('words.elavon_merchant_alias'))
-                            ->maxLength(255),
-                        TextInput::make('elavon_public_key')
-                            ->label(__('words.elavon_public_key'))
-                            ->maxLength(255)
-                            ->copyable(),
-                        TextInput::make('elavon_secret_key')
-                            ->label(__('words.elavon_secret_key'))
-                            ->maxLength(255)
-                            ->copyable()
-                            ->columnSpanFull(),
-                    ]),
-                Section::make(__('Surfboard API Keys'))
-                    ->columns(2)
-                    ->visible(fn (Get $get): bool => $get('paymentMethod') === 'surfboard')
-                    ->schema([
-                        TextInput::make('surfboard_terminalId')
-                            ->label(__('words.surfboard_terminalId'))
-                            ->maxLength(255),
-                        TextInput::make('surfboard_merchantId')
-                            ->label(__('words.surfboard_merchantId'))
-                            ->maxLength(255),
-                        TextInput::make('surfboard_storeId')
-                            ->label(__('words.surfboard_storeId'))
-                            ->maxLength(255),
-                    ]),
                 Section::make(__('Status'))
-                    ->columns(3)
+                    ->columns(4)
                     ->schema([
                         Toggle::make('status')
                             ->label(__('Active')),
