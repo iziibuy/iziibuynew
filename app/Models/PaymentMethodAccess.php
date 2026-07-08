@@ -103,9 +103,75 @@ class PaymentMethodAccess extends Model
     public function companyAddress(): Attribute
     {
         return Attribute::make(
-            get: fn ($value) => json_decode($value),
-            set: fn ($value) => json_encode($value)
+            get: function (?string $value): ?object {
+                if ($value === null || $value === '') {
+                    return null;
+                }
+
+                $decoded = json_decode($value);
+
+                return is_object($decoded) ? $decoded : null;
+            },
+            set: fn ($value) => $value === null ? null : json_encode($value)
         );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function companyAddressToFormState(mixed $address): array
+    {
+        if ($address === null) {
+            return [];
+        }
+
+        if (is_string($address)) {
+            $decoded = json_decode($address, true);
+
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        if (is_object($address)) {
+            return (array) $address;
+        }
+
+        return is_array($address) ? $address : [];
+    }
+
+    public static function companyAddressAsString(mixed $address): string
+    {
+        if ($address === null || $address === '') {
+            return '';
+        }
+
+        if (is_string($address)) {
+            $decoded = json_decode($address);
+
+            if (is_object($decoded)) {
+                $address = $decoded;
+            } else {
+                return $address;
+            }
+        }
+
+        if (is_array($address)) {
+            $address = (object) $address;
+        }
+
+        if (! is_object($address)) {
+            return '';
+        }
+
+        $line1 = (string) ($address->street ?? '');
+        $zipCity = trim(implode(' ', array_filter([
+            isset($address->zip) ? (string) $address->zip : '',
+            isset($address->city) ? (string) $address->city : '',
+        ], fn (string $part): bool => $part !== '')));
+        $country = isset($address->country) ? (string) $address->country : '';
+
+        $parts = array_filter([$line1, $zipCity, $country], fn (string $part): bool => $part !== '');
+
+        return implode(', ', $parts);
     }
 
     public function update(array $attributes = [], array $options = [])
@@ -120,7 +186,7 @@ class PaymentMethodAccess extends Model
 
     public function addressFull(): Attribute
     {
-        return Attribute::make(get: fn () => $this->company_address->street.' '.$this->company_address->zip.' '.$this->company_address->city);
+        return Attribute::make(get: fn () => self::companyAddressAsString($this->company_address));
     }
 
     public function fee(): float

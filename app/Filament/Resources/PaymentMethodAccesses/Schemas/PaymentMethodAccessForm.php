@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PaymentMethodAccesses\Schemas;
 
+use App\Constants\Constants;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -32,9 +33,33 @@ class PaymentMethodAccessForm
                         TextInput::make('company_registration')
                             ->required()
                             ->maxLength(255),
-                        TextInput::make('company_address')
+                    ]),
+                Section::make(__('Address'))
+                    ->columns(2)
+                    ->schema([
+                        TextInput::make('company_address.street')
+                            ->label(__('words.company_address_street'))
+                            ->required()
+                            ->maxLength(255)
+                            ->columnSpanFull(),
+                        TextInput::make('company_address.city')
+                            ->label(__('words.company_address_city'))
                             ->required()
                             ->maxLength(255),
+                        TextInput::make('company_address.zip')
+                            ->label(__('words.company_address_zip'))
+                            ->required()
+                            ->maxLength(255),
+                        TextInput::make('company_address.contact_number')
+                            ->label(__('words.company_phone'))
+                            ->tel()
+                            ->maxLength(255),
+                        Select::make('company_address.country')
+                            ->label(__('words.invoice_country'))
+                            ->options(array_combine(Constants::COUNTRIES, Constants::COUNTRIES))
+                            ->searchable()
+                            ->required()
+                            ->columnSpanFull(),
                     ]),
                 Section::make(__('Subscription'))
                     ->columns(2)
