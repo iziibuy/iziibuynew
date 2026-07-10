@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/complete-registration', [DashboardController::class, 'completeProfile'])->name('completeProfile');
 Route::post('/complete-registration', [DashboardController::class, 'completeProfileStore'])->name('completeProfileStore');
+Route::get('subscription', [DashboardController::class, 'subscriptionIndex'])->name('subscription.payment');
 Route::get('subscription/callback/{subscription}/success', [DashboardController::class, 'subscriptionSuccess'])->name('subscription.success');
 Route::get('subscription/callback/{subscription}/cancel', [DashboardController::class, 'subscriptionCancel'])->name('subscription.cancel');
 Route::get('subscription/{subscription}/start', [DashboardController::class, 'startSubscription'])->name('start-subscription');

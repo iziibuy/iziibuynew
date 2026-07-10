@@ -1,0 +1,52 @@
+<x-dashboard.external>
+    <div class="container">
+        <div class="row justify-content-center my-5">
+            <div class="col-12 col-md-8 col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title">{{ __('words.subscription_sec_title') }}</h4>
+                    </div>
+                    <div class="card-content">
+                        <div class="card-body">
+                            @if ($paymentMethodAccess->needs_elavon_resubscription)
+                                <div class="alert alert-warning" role="alert">
+                                    {{ $paymentMethodAccess->elavon_resubscription_message }}
+                                </div>
+                            @endif
+
+                            @if ($errors->any())
+                                <div class="alert alert-danger">
+                                    <ul>
+                                        @foreach ($errors->all() as $error)
+                                            <li>{{ $error }}</li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
+
+                            <p>
+                                <b>{{ __('words.subscription_pera_1') }}</b>
+                                <br>
+                                {{ __('words.total') }}: {{ Iziibuy::price($subscription->fee) }}
+                            </p>
+
+                            <div class="text-center">
+                                <a href="{{ route('external.start-subscription', $subscription) }}"
+                                    class="btn btn-primary">{{ __('words.start_running_subs_btn') }}</a>
+                                <a class="btn btn-danger" href="{{ route('logout') }}"
+                                    onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+                                    {{ __('words.shop_logout') }}
+                                </a>
+
+                                <form id="logout-form" action="{{ route('logout') }}" method="POST"
+                                    style="display: none;">
+                                    @csrf
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</x-dashboard.external>

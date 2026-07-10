@@ -34,10 +34,10 @@ class ExternalPaid
             return redirect(route('external.completeProfile'))->with('success', 'Please finish your profile before proceeding.');
         }
 
-        $subscription = $paymentMethodAccess->subscription()->firstOrCreate([], [
+        $paymentMethodAccess->subscription()->firstOrCreate([], [
             'fee' => (int) round($paymentMethodAccess->fee()),
         ]);
 
-        return redirect()->route('external.start-subscription', $subscription);
+        return redirect()->route('external.subscription.payment');
     }
 }

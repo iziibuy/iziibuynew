@@ -234,6 +234,16 @@ class DashboardController extends Controller
         return view('dashboard.external.paymentMethodAccess', compact('paymentMethodAccess', 'billingStatus'));
     }
 
+    public function subscriptionIndex()
+    {
+        $paymentMethodAccess = auth()->user()->paymentMethodAccess;
+        $subscription = $paymentMethodAccess->subscription()->firstOrCreate([], [
+            'fee' => (int) round($paymentMethodAccess->fee()),
+        ]);
+
+        return view('dashboard.external.subscription', compact('paymentMethodAccess', 'subscription'));
+    }
+
     public function charges()
     {
 
@@ -399,30 +409,13 @@ class DashboardController extends Controller
             'company_registration' => $request->company_registration,
         ]);
 
-        $subscription_fee = $paymentMethodAccess->fresh()->fee();
+        $subscriptionFee = $paymentMethodAccess->fresh()->fee();
 
-        $subscription = $paymentMethodAccess->subscription()->create([
-            'fee' => (int) round($subscription_fee),
+        $paymentMethodAccess->subscription()->firstOrCreate([], [
+            'fee' => (int) round($subscriptionFee),
         ]);
 
-        $elavon = new ElavonExternalSubscription($paymentMethodAccess);
-        $result = $elavon->getPaymentLink(
-            $subscription_fee,
-            route('external.subscription.success', $subscription),
-            route('external.subscription.cancel', $subscription)
-        );
-
-        if (! $result['status']) {
-            return redirect()->back()->withErrors($result['data']['message'] ?? 'Payment link failed');
-        }
-
-        $subscription->update([
-            'key' => $result['data']['payment_id'],
-            'url' => $result['data']['url'],
-            'fee' => (int) round($subscription_fee),
-        ]);
-
-        return redirect($subscription->url);
+        return redirect()->route('external.subscription.payment');
     }
 
     public function setup_surfboard_payment()
