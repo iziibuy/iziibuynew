@@ -12,6 +12,10 @@ class PaymentMethodAccess extends Model
 {
     use HasFactory, HasMeta;
 
+    public const SUBSCRIPTION_METHOD_ELAVON = 'elavon';
+
+    public const ELAVON_RESUBSCRIPTION_MESSAGE = 'Please resubscribe with Elavon to reactivate this payment method.';
+
     protected $guarded = [];
 
     protected $casts = ['last_paid_at' => 'datetime'];
@@ -99,6 +103,44 @@ class PaymentMethodAccess extends Model
         'currency',
         'booking_phone_prefix',
     ];
+
+    public function status(): Attribute
+    {
+        return Attribute::make(
+            get: fn ($value): bool => $this->requiresElavonResubscription() ? false : (bool) $value
+        );
+    }
+
+    public function needsElavonResubscription(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): bool => $this->requiresElavonResubscription()
+        );
+    }
+
+    public function elavonResubscriptionMessage(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): ?string => $this->requiresElavonResubscription()
+                ? self::ELAVON_RESUBSCRIPTION_MESSAGE
+                : null
+        );
+    }
+
+    public function requiresElavonResubscription(): bool
+    {
+        return ! $this->hasElavonSubscriptionMethod();
+    }
+
+    public function hasElavonSubscriptionMethod(): bool
+    {
+        return strtolower((string) ($this->attributes['subscriptionMethod'] ?? '')) === self::SUBSCRIPTION_METHOD_ELAVON;
+    }
+
+    public function canProcessPayments(): bool
+    {
+        return ! $this->requiresElavonResubscription() && (bool) ($this->attributes['status'] ?? false);
+    }
 
     public function companyAddress(): Attribute
     {

@@ -21,6 +21,12 @@ class MonthlyChargePaymentMethodAccess extends Command
         ])->where('status', 1)->get();
 
         foreach ($paymentMethods as $data) {
+            if ($data->requiresElavonResubscription()) {
+                $data->update(['status' => 0]);
+
+                continue;
+            }
+
             if ($data->subscription?->status != 1) {
                 $data->update(['status' => 0]);
 

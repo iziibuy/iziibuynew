@@ -9,6 +9,12 @@
                     </div>
                     <div class="card-content">
                         <div class="card-body">
+                            @if (auth()->user()->shop->needs_elavon_resubscription)
+                                <div class="alert alert-warning" role="alert">
+                                    {{ auth()->user()->shop->elavon_resubscription_message }}
+                                </div>
+                            @endif
+
                             @if (auth()->user()->shop->establishment == 1)
                                 <p>{{ __('words.subscription_you_pay') }} NOK
                                     {{ auth()->user()->shop->subscriptionFee() }}

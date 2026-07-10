@@ -27,6 +27,11 @@
                         <td>
                             {{ $paymentMethodAccess->company_domain }} <span
                                 class="badge badge-{{ $paymentMethodAccess->status ? 'success' : 'danger' }}">{{ $paymentMethodAccess->status ? 'On' : 'Off' }}</span>
+                            @if ($paymentMethodAccess->needs_elavon_resubscription)
+                                <div class="small text-warning">
+                                    {{ $paymentMethodAccess->elavon_resubscription_message }}
+                                </div>
+                            @endif
 
                         </td>
                         <td>

@@ -56,6 +56,14 @@ class MonthlyCharge extends Command
 
         foreach ($shops as $shop) {
             try {
+                if ($shop->requiresElavonResubscription()) {
+                    $shop->update([
+                        'status' => 0,
+                    ]);
+
+                    continue;
+                }
+
                 if ($shop->subscriptionMethod === 'elavon' && $shop->usesElavonNativeSubscription()) {
                     continue;
                 }

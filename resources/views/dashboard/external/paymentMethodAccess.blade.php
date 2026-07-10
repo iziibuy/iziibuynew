@@ -13,6 +13,12 @@
         <div class="col-md-12">
             <div class="card">
                 <div class="card-body">
+                    @if ($paymentMethodAccess->needs_elavon_resubscription)
+                        <div class="alert alert-warning" role="alert">
+                            {{ $paymentMethodAccess->elavon_resubscription_message }}
+                        </div>
+                    @endif
+
                     <table class="table">
 
                         <tr>

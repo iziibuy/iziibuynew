@@ -18,6 +18,10 @@ class Shop extends Model
 {
     use HasFactory, HasMeta, HasTranslations, LegacyVoyagerGetsTranslatedAttribute;
 
+    public const SUBSCRIPTION_METHOD_ELAVON = 'elavon';
+
+    public const ELAVON_RESUBSCRIPTION_MESSAGE = 'Please resubscribe with Elavon to reactivate this account.';
+
     protected $guarded = [];
 
     protected $translatable = ['terms'];
@@ -149,6 +153,48 @@ class Shop extends Model
         'dintero_onboarding_url',
         'dintero_onboarding_status',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (Shop $shop): void {
+            if (filled($shop->elavon_plan_id) || filled($shop->elavon_subscription_id)) {
+                $shop->subscriptionMethod = self::SUBSCRIPTION_METHOD_ELAVON;
+            }
+        });
+    }
+
+    public function status(): Attribute
+    {
+        return Attribute::make(
+            get: fn ($value): bool => $this->requiresElavonResubscription() ? false : (bool) $value
+        );
+    }
+
+    public function needsElavonResubscription(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): bool => $this->requiresElavonResubscription()
+        );
+    }
+
+    public function elavonResubscriptionMessage(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): ?string => $this->requiresElavonResubscription()
+                ? self::ELAVON_RESUBSCRIPTION_MESSAGE
+                : null
+        );
+    }
+
+    public function requiresElavonResubscription(): bool
+    {
+        return ! $this->hasElavonSubscriptionMethod();
+    }
+
+    public function hasElavonSubscriptionMethod(): bool
+    {
+        return strtolower((string) ($this->attributes['subscriptionMethod'] ?? '')) === self::SUBSCRIPTION_METHOD_ELAVON;
+    }
 
     public function hasArea()
     {
@@ -554,7 +600,7 @@ class Shop extends Model
 
     public function usesElavonNativeSubscription(): bool
     {
-        return $this->subscriptionMethod === 'elavon' && filled($this->elavon_subscription_id);
+        return $this->hasElavonSubscriptionMethod() && filled($this->elavon_subscription_id);
     }
 
     public function subscriptionFee()
@@ -700,6 +746,10 @@ class Shop extends Model
     public function checkout_payment_methods()
     {
 
+        if ($this->requiresElavonResubscription()) {
+            return [];
+        }
+
         if ($this->selected_payment_methods) {
             return json_decode($this->selected_payment_methods, true);
         }
@@ -741,6 +791,10 @@ class Shop extends Model
 
     public function hasPaymentGateway($gateway)
     {
+        if ($this->requiresElavonResubscription()) {
+            return false;
+        }
+
         if (in_array($gateway, explode(',', $this->paymentMethod))) {
             return true;
         }
