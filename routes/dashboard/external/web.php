@@ -10,11 +10,12 @@ Route::get('/complete-registration', [DashboardController::class, 'completeProfi
 Route::post('/complete-registration', [DashboardController::class, 'completeProfileStore'])->name('completeProfileStore');
 Route::get('subscription/callback/{subscription}/success', [DashboardController::class, 'subscriptionSuccess'])->name('subscription.success');
 Route::get('subscription/callback/{subscription}/cancel', [DashboardController::class, 'subscriptionCancel'])->name('subscription.cancel');
+Route::get('subscription/{subscription}/start', [DashboardController::class, 'startSubscription'])->name('start-subscription');
 Route::get('/contraact', [DashboardController::class, 'contract'])->name('contract');
 Route::post('payment-method-access/{paymentMethodAccess}/sign-contract', [DashboardController::class, 'signContract'])->name('paymentMethodAccess.signContract');
 
 Route::middleware('ExternalPaid')->group(function () {
-Route::get('/', [DashboardController::class, 'paymentMethodAccess'])->name('dashboard');
+    Route::get('/', [DashboardController::class, 'paymentMethodAccess'])->name('dashboard');
     Route::get('/charges', [DashboardController::class, 'charges'])->name('charges');
     Route::get('/edit', [DashboardController::class, 'edit'])->name('edit');
     Route::post('/update', [DashboardController::class, 'update'])->name('update');
@@ -22,7 +23,6 @@ Route::get('/', [DashboardController::class, 'paymentMethodAccess'])->name('dash
     // Route::get('payment-method-access/{paymentMethodAccess}', [DashboardController::class, 'paymentMethodAccess'])->name('paymentMethodAccess');
     Route::get('/charges/{charge}/invoice/pdf', [DashboardController::class, 'downloadInvoice'])->name('download.invoice');
     Route::get('subscription/{subscription}/cancel', [DashboardController::class, 'cancelSubscription'])->name('cancel-subscription');
-    Route::get('subscription/{subscription}/start', [DashboardController::class, 'startSubscription'])->name('start-subscription');
 
     Route::resource('tickets', TicketController::class);
     Route::post('ticket/reply/{ticket}', [TicketController::class, 'reply'])->name('ticket.reply');
@@ -44,20 +44,20 @@ Route::get('/', [DashboardController::class, 'paymentMethodAccess'])->name('dash
     Route::post('/setup/payment/elavon', [DashboardController::class, 'store_setup_elavon_payment'])->name('store_setup_elavon_payment');
     Route::get('/verify/payment/elavon', [DashboardController::class, 'verifyElavonPayment'])->name('verify_elavon_payment_information');
 
-    Route::group(['prefix' => 'booking','as' => 'booking.','middleware' => ['BlockAccess']], function () {
+    Route::group(['prefix' => 'booking', 'as' => 'booking.', 'middleware' => ['BlockAccess']], function () {
         Route::get('/', [ExternalBookingController::class, 'index'])->name('index');
         Route::get('create', [ExternalBookingController::class, 'create'])->name('create');
         Route::post('store', [ExternalBookingController::class, 'store'])->name('store');
-    
+
         Route::delete('{externalBooking}', [ExternalBookingController::class, 'destroy'])->name('destroy');
         Route::get('{externalBooking}/invoice', [ExternalBookingController::class, 'invoice'])->name('invoice');
 
         Route::get('/external/bookings/export', [ExternalBookingController::class, 'exportBookings'])->name('export');
     });
 
-    
     Route::get('disablekyc', function () {
         auth()->user()->paymentMethodAccess->createMeta('needKYC', false);
+
         return redirect()->back();
     })->name('disablekyc');
 
