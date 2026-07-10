@@ -2,15 +2,10 @@
 
 namespace App\Http\Controllers\Dashboard\Enterprise;
 
-
 use App\Http\Controllers\Controller;
 use App\Mail\ElavonPaymentDetails;
-use App\Mail\ExternalWelcomeEmail;
-use App\Mail\NotificationEmail;
 use App\Mail\paymentCapture;
 use App\Mail\PaymentMethodAccessMail;
-use App\Mail\WelcomeEmail;
-use App\Models\Charge;
 use App\Models\Enterprise;
 use App\Models\EnterpriseOnboarding;
 use App\Models\PaymentMethodAccess;
@@ -27,33 +22,27 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
-use Spatie\Permission\Models\Role;
 use Iziibuy;
 
 class DashboardController extends Controller
 {
-
-
-
     public function startSubscription(Subscription $subscription)
     {
-        if ($subscription->subscribable->user_id != auth()->id())
+        if ($subscription->subscribable->user_id != auth()->id()) {
             return abort(403);
+        }
         try {
 
             DB::beginTransaction();
             $subscription_fee = $subscription->fee;
-            $subscribe = (new Subscribe())->subscription();
+            $subscribe = (new Subscribe)->subscription();
 
             $subscribe = $subscribe->getUrl($subscription_fee, false, [
                 'continueurl' => route('enterprise.subscription.success', $subscribe->subscription->id),
-                'cancelurl' => route('enterprise.subscription.cancel', $subscribe->subscription->id)
+                'cancelurl' => route('enterprise.subscription.cancel', $subscribe->subscription->id),
             ]);
 
             $subscription->update([
@@ -61,25 +50,26 @@ class DashboardController extends Controller
                 'url' => $subscribe['data']['url'],
             ]);
             DB::commit();
+
             return redirect($subscription->url);
         } catch (Exception $e) {
             DB::rollBack();
+
             return redirect()->back()->withErrors($e->getMessage());
         } catch (Error $e) {
             return redirect()->back()->withErrors($e->getMessage());
         }
     }
+
     public function subscriptionSuccess($subscription = null)
     {
-
-
 
         try {
             DB::beginTransaction();
             $subscriptionDatabase = Subscription::where('key', $subscription)->first();
-            $subscriptionQuickpay = (new Subscribe())->subscription($subscription);
+            $subscriptionQuickpay = (new Subscribe)->subscription($subscription);
 
-            if ($subscriptionQuickpay->subscription->state == "active") {
+            if ($subscriptionQuickpay->subscription->state == 'active') {
 
                 $create_charge = $subscriptionQuickpay->charge($subscriptionDatabase->fee);
 
@@ -94,7 +84,7 @@ class DashboardController extends Controller
 
                         $subscriptionDatabase->charges()->create([
                             'amount' => $subscriptionDatabase->fee,
-                            'status' => true
+                            'status' => true,
                         ]);
 
                         $enterpriseOnboarding = $subscriptionDatabase->subscribable;
@@ -104,7 +94,7 @@ class DashboardController extends Controller
                         $enterpriseOnboarding->save();
                     }
                 }
-            };
+            }
             DB::commit();
             Mail::to($enterpriseOnboarding->user->email)->send(new PaymentMethodAccessMail($enterpriseOnboarding));
             Mail::to(setting('site.email'))->send(new PaymentMethodAccessMail($enterpriseOnboarding));
@@ -112,9 +102,11 @@ class DashboardController extends Controller
             return redirect()->route('enterprise.contract')->with('success', 'Subscription completed');
         } catch (Exception $e) {
             DB::rollBack();
+
             return redirect()->route('enterprise.contract')->withErrors($e->getMessage());
         } catch (Error $e) {
             DB::rollBack();
+
             return redirect()->route('enterprise.contract')->withErrors($e->getMessage());
         }
     }
@@ -122,14 +114,18 @@ class DashboardController extends Controller
     public function dashboard()
     {
         $paymentMethodAccesses = PaymentMethodAccess::where('user_id', auth()->id())->get();
+
         return view('dashboard.enterprise.index', compact('paymentMethodAccesses'));
     }
+
     public function edit()
     {
 
         $enterprise = auth()->user()->enterpriseOnboarding;
+
         return view('dashboard.enterprise.edit', compact('enterprise'));
     }
+
     public function update(Request $request)
     {
 
@@ -158,27 +154,27 @@ class DashboardController extends Controller
     public function enterprise()
     {
 
-
         $enterprise = auth()->user()->enterpriseOnboarding;
 
         if ($enterprise && $enterprise->last_paid_at == null) {
             return redirect(auth()->user()->enterpriseOnboarding->subscription->url);
         }
-        if ($enterprise->user_id != auth()->id()) abort(403);
+        if ($enterprise->user_id != auth()->id()) {
+            abort(403);
+        }
         $subscription = $enterprise->subscription->key;
-        $subscriptionQuickpay = (new Subscribe())->subscription($subscription)->subscription;
-
+        $subscriptionQuickpay = (new Subscribe)->subscription($subscription)->subscription;
 
         return view('dashboard.enterprise.index', compact('enterprise', 'subscriptionQuickpay'));
     }
-
 
     public function charges()
     {
 
         $paymentMethodAccess = auth()->user()->enterpriseOnboarding;
-        if ($paymentMethodAccess->user_id != auth()->id())
+        if ($paymentMethodAccess->user_id != auth()->id()) {
             abort(403);
+        }
         $charges = $paymentMethodAccess->subscription->charges()->latest()->paginate(10);
 
         return view('dashboard.enterprise.charges', compact('paymentMethodAccess', 'charges'));
@@ -188,19 +184,22 @@ class DashboardController extends Controller
     {
 
         $enterprise = auth()->user()->enterpriseOnboarding;
-        if ($enterprise->user_id != auth()->id())
+        if ($enterprise->user_id != auth()->id()) {
             abort(403);
+        }
 
         return view('dashboard.enterprise.contract', compact('enterprise'));
     }
 
     public function cancelSubscription(Subscription $subscription)
     {
-        if ($subscription->subscribable->user_id != auth()->id())
+        if ($subscription->subscribable->user_id != auth()->id()) {
             return abort(403);
-        $quickPay = new Subscribe();
+        }
+        $quickPay = new Subscribe;
         $response = $quickPay->stopsubscription($subscription);
-        return redirect()->back()->with('success', "Subscription cancelled for this account");
+
+        return redirect()->back()->with('success', 'Subscription cancelled for this account');
     }
 
     public function downloadInvoice(SubscriptionCharge $charge)
@@ -211,10 +210,10 @@ class DashboardController extends Controller
         $base_price = ($amount * 100) / (100 + $reg_tax);
         $tax = $amount - $base_price;
         $pdf = Pdf::loadView('dashboard.enterprise.pdf.invoice', ['charge' => $charge, 'tax' => $tax, 'base_price' => $base_price]);
-        $fileName = 'invoice/invoice' . uniqid() . '.pdf';
+        $fileName = 'invoice-'.uniqid().'.pdf';
         try {
             return $pdf->download($fileName);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return redirect()->back()->withErrors($e->getMessage());
         }
     }
@@ -222,20 +221,19 @@ class DashboardController extends Controller
     public function signContract(Request $request, EnterpriseOnboarding $enterpriseOnboarding)
     {
 
-
         $gateways = [];
         $paymentMethod = [];
 
         if (Iziibuy::isSubset(['mastercard', 'visa', 'amex'], $request->paymentMethods)) {
             $gateways['elavon'] = 0;
             array_push($paymentMethod, 'elavon');
-        };
+        }
 
-        //surfboard
+        // surfboard
         if (Iziibuy::isSubset(['googlepay', 'applepay', 'vipps'], $request->paymentMethods)) {
             $gateways['surfboard'] = 0;
             array_push($paymentMethod, 'surfboard');
-        };
+        }
 
         $enterpriseOnboarding->createMetas([
             'gateway_contract_signed' => $gateways,
@@ -244,17 +242,18 @@ class DashboardController extends Controller
 
         $enterpriseOnboarding->update([
             'paymentMethod' => implode(',', $paymentMethod),
-            'contract_signed' => 1
+            'contract_signed' => 1,
         ]);
-
 
         return back();
     }
+
     public function settings()
     {
 
         return view('dashboard.enterprise.settings');
     }
+
     public function passwordUpdate(Request $request)
     {
         // Validate the form data
@@ -263,7 +262,7 @@ class DashboardController extends Controller
             'new_pass' => 'required|min:8',
         ]);
         $user = Auth::user();
-        if (!Hash::check($request->old_pass, $user->password)) {
+        if (! Hash::check($request->old_pass, $user->password)) {
             return redirect()->route('enterprise.settings')->withErrors('The old password is incorrect.');
         }
 
@@ -273,6 +272,7 @@ class DashboardController extends Controller
 
         return redirect()->route('enterprise.dashboard')->with('success', 'Password changed successfully.');
     }
+
     public function settingsUpdate(Request $request)
     {
         $request->validate([
@@ -293,8 +293,6 @@ class DashboardController extends Controller
 
         ]);
 
-       
-
         auth()->user()->enterpriseOnboarding->update([
             'company_name' => $request->company_name,
             'company_email' => $request->company_email,
@@ -305,10 +303,12 @@ class DashboardController extends Controller
 
         return redirect()->back()->with('success', 'settings update successfully.');
     }
+
     public function completeProfile()
     {
         return view('dashboard.enterprise.complete');
     }
+
     public function completeProfileStore(Request $request)
     {
         $request->validate([
@@ -332,40 +332,40 @@ class DashboardController extends Controller
         $enterprise = auth()->user()->enterpriseOnboarding;
 
         $subscription_fee = $enterprise->getSubscriptionFee();
-        $subscribe = (new Subscribe())->subscription();
+        $subscribe = (new Subscribe)->subscription();
 
         $subscribe = $subscribe->getUrl($subscription_fee, false, [
             'continueurl' => route('enterprise.subscription.success', $subscribe->subscription->id),
-            'cancelurl' => route('enterprise.subscription.cancel', $subscribe->subscription->id)
+            'cancelurl' => route('enterprise.subscription.cancel', $subscribe->subscription->id),
         ]);
 
         $subscription = $enterprise->subscription()->create([
             'key' => $subscribe['data']['payment_id'],
             'url' => $subscribe['data']['url'],
-            'fee' => $subscription_fee
+            'fee' => $subscription_fee,
         ]);
 
         return redirect($subscription->url);
     }
-
 
     public function setup_surfboard_payment()
     {
         $enterprise = auth()->user()->enterpriseOnboarding;
         $createMarchant = (new EnterpriseSurfboardMarchant($enterprise))->createMarchant();
 
-        if ($createMarchant['status'] == "SUCCESS") {
+        if ($createMarchant['status'] == 'SUCCESS') {
 
             $enterprise->createMetas([
                 'surfboard_webKybUrl' => $createMarchant['data']['webKybUrl'],
                 'surfboard_application_id' => $createMarchant['data']['applicationId'],
-                'surfboard_application_status' => @$createMarchant['data']['applicationStatus'] ?? false
+                'surfboard_application_status' => @$createMarchant['data']['applicationStatus'] ?? false,
             ]);
 
             $contracts = json_decode($enterprise->gateway_contract_signed, true);
             $contracts['surfboard'] = 1;
 
             $enterprise->createMetas(['gateway_contract_signed' => $contracts]);
+
             return redirect($createMarchant['data']['webKybUrl']);
         } else {
 
@@ -378,7 +378,10 @@ class DashboardController extends Controller
 
         $enterprise = auth()->user()->enterpriseOnboarding;
 
-        if ($enterprise->paymentMethod == 'elavon' && $enterprise->elavon_payment_setup == true || $enterprise->elavon_details_verified_by_shop == true) return redirect()->route('shop.dashboard');
+        if ($enterprise->paymentMethod == 'elavon' && $enterprise->elavon_payment_setup == true || $enterprise->elavon_details_verified_by_shop == true) {
+            return redirect()->route('shop.dashboard');
+        }
+
         return view('dashboard.enterprise.payments.elavon_setup', compact('enterprise'));
     }
 
@@ -386,8 +389,9 @@ class DashboardController extends Controller
     {
         $enterprise = auth()->user()->enterpriseOnboarding;
 
-
-        if ($enterprise->paymentMethod == 'elavon' && $enterprise->elavon_payment_setup == true || $enterprise->elavon_details_verified_by_shop == true) return redirect()->route('shop.dashboard');
+        if ($enterprise->paymentMethod == 'elavon' && $enterprise->elavon_payment_setup == true || $enterprise->elavon_details_verified_by_shop == true) {
+            return redirect()->route('shop.dashboard');
+        }
 
         // $request->validate([
         // 'meta.name' => 'required',
@@ -431,14 +435,12 @@ class DashboardController extends Controller
         // 'meta.fullNameTitle' => 'required',
         // 'meta.date' => 'required',
 
-
         // ]);
-
 
         $imageData = $request->input('signature');
         $imageData = substr($imageData, strpos($imageData, ',') + 1);
         $imageData = base64_decode($imageData);
-        $filename = 'signature/signature_' . uniqid() . '.png';
+        $filename = 'signature/signature_'.uniqid().'.png';
 
         Storage::disk('s3')->put($filename, $imageData);
         $meta = $request->meta;
@@ -459,7 +461,7 @@ class DashboardController extends Controller
         $protectedLink = ProtectedLink::updateOrCreate(['link' => route('view_payment_data', ['id' => $enterprise->id, 'type' => 'enterprise'])], [
             'link' => route('view_payment_data', ['id' => $enterprise->id, 'type' => 'enterprise']),
             'uid' => uniqid(),
-            'password' => uniqid()
+            'password' => uniqid(),
         ]);
 
         $enterprise->createMeta('elavon_details_verified_by_shop', false);
@@ -475,6 +477,7 @@ class DashboardController extends Controller
             $contracts = json_decode($enterprise->gateway_contract_signed, true);
             $contracts['elavon'] = 1;
             $enterprise->createMetas(['gateway_contract_signed' => $contracts]);
+
             return redirect()->route('enterprise.dashboard');
         } else {
             return redirect()->route('enterprise.dashboard')->withErrors('You already verified your information');
@@ -489,10 +492,10 @@ class DashboardController extends Controller
         // }
         // return redirect()->route('enterprise.dashboard')->with('success', 'Your details have been successfully submitted. Please check your email for confirmation . Thank you .');
     }
+
     public function viewPaymentData($id)
     {
         $external = PaymentMethodAccess::fid($id);
-
 
         // $external = auth()->user()->shop;
         if ($external->elavon_details_verified_by_shop != true) {
@@ -505,7 +508,6 @@ class DashboardController extends Controller
     public function verifyElavonPayment(Request $request)
     {
 
-
         $enterprise = auth()->user()->enterpriseOnboarding;
         $shop = $enterprise;
         if ($enterprise->elavon_details_verified_by_shop != true) {
@@ -516,6 +518,7 @@ class DashboardController extends Controller
             $contracts = json_decode($enterprise->gateway_contract_signed, true);
             $contracts['elavon'] = 1;
             $enterprise->createMetas(['gateway_contract_signed' => $contracts]);
+
             return redirect()->route('enterprise.dashboard');
         } else {
             return redirect()->route('enterprise.dashboard')->withErrors('You already verified your information');

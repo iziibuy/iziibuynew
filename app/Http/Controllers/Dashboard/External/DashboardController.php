@@ -276,7 +276,7 @@ class DashboardController extends Controller
         $base_price = ($amount * 100) / (100 + $reg_tax);
         $tax = $amount - $base_price;
         $pdf = Pdf::loadView('dashboard.external.pdf.invoice', ['charge' => $charge, 'tax' => $tax, 'base_price' => $base_price]);
-        $fileName = 'invoice/invoice'.uniqid().'.pdf';
+        $fileName = 'invoice-'.uniqid().'.pdf';
         try {
             return $pdf->download($fileName);
         } catch (Exception $e) {

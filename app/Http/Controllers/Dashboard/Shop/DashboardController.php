@@ -175,7 +175,11 @@ class DashboardController extends Controller
     public function chargesInvoice(Charge $charge)
     {
 
-        $datas = (new Clearhaus)->get_transaction($charge->order_id);
+        try {
+            $datas = (new Clearhaus)->get_transaction($charge->order_id);
+        } catch (Exception) {
+            $datas = [];
+        }
 
         if (count($datas)) {
 
@@ -201,7 +205,7 @@ class DashboardController extends Controller
         $tax = $amount - $base_price;
         $pdf = Pdf::loadView('dashboard.shop.pdf.invoice', ['charge' => $charge, 'tax' => $tax, 'base_price' => $base_price]);
 
-        $fileName = 'invoice/invoice-'.uniqid().'.pdf';
+        $fileName = 'invoice-'.uniqid().'.pdf';
 
         try {
             return $pdf->download($fileName);
