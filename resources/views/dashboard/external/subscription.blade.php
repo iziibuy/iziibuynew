@@ -14,6 +14,12 @@
                                 ])
                             @endif
 
+                            @if (\App\Services\Elavon\ElavonOnboardingPromo::isFreeSubscriptionPeriod())
+                                <div class="alert alert-success" role="alert">
+                                    Subscription is free until 19 July 2026. You only need to register your payment card.
+                                </div>
+                            @endif
+
                             @if ($errors->any())
                                 <div class="alert alert-danger">
                                     <ul>
@@ -27,7 +33,11 @@
                             <p>
                                 <b>{{ __('words.subscription_pera_1') }}</b>
                                 <br>
-                                {{ __('words.total') }}: {{ Iziibuy::price($subscription->fee) }}
+                                @if (\App\Services\Elavon\ElavonOnboardingPromo::isFreeSubscriptionPeriod())
+                                    {{ __('words.total') }}: {{ Iziibuy::price(0) }}
+                                @else
+                                    {{ __('words.total') }}: {{ Iziibuy::price($paymentMethodAccess->fee()) }}
+                                @endif
                             </p>
 
                             <div class="text-center">

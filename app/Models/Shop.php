@@ -6,6 +6,7 @@ use App\Constants\Constants;
 use App\Enterprise\Permissions;
 use App\Models\Traits\HasMeta;
 use App\Models\Traits\LegacyVoyagerGetsTranslatedAttribute;
+use App\Services\Elavon\ElavonOnboardingPromo;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -605,6 +606,10 @@ class Shop extends Model
 
     public function subscriptionFee()
     {
+        if (ElavonOnboardingPromo::isFreeSubscriptionPeriod()) {
+            return 0;
+        }
+
         if ($this->paid_at == null && @$this->paid_at?->isCurrentMonth() == false) {
 
             if ($this->establishment == 1) {

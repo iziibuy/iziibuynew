@@ -93,7 +93,7 @@ class DashboardController extends Controller
         try {
             DB::beginTransaction();
             $paymentMethodAccess = $subscription->subscribable;
-            $subscriptionFee = (float) ($subscription->getAttributes()['fee'] ?? 0);
+            $subscriptionFee = $paymentMethodAccess->fresh()->fee();
 
             $elavon = new ElavonExternalSubscription($paymentMethodAccess);
 
@@ -152,7 +152,7 @@ class DashboardController extends Controller
             $result = $elavon->finalizeHostedSubscriptionFromSession(
                 trim($sessionId),
                 $subscription,
-                (float) ($subscription->getAttributes()['fee'] ?? 0)
+                $paymentMethodAccess->fresh()->fee()
             );
 
             if (! $result['status']) {

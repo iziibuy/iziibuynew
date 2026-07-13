@@ -349,7 +349,7 @@ class ElavonShopSubscription
 
         $transactionId = $this->resolveTransactionIdFromPaymentSession($session);
 
-        if ($transactionId === '') {
+        if ($transactionId === '' && $amount > 0) {
             if ($cardId !== '') {
                 $chargeResult = $hosted->chargeSignupFeeWithStoredCard($session, $amount, $cardId);
             } elseif ($hosted->chargesOnServer()) {
@@ -369,7 +369,7 @@ class ElavonShopSubscription
             }
 
             $transactionId = (string) ($chargeResult['data']['transactionId'] ?? '');
-        } else {
+        } elseif ($transactionId !== '' && $amount > 0) {
             $transaction = $this->elavon->getTransaction($transactionId);
             if (! $transaction->isSuccess() || ! $hosted->transactionIsApproved($transaction)) {
                 $message = 'Payment was not approved.';

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Traits\HasMeta;
+use App\Services\Elavon\ElavonOnboardingPromo;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -232,6 +233,10 @@ class PaymentMethodAccess extends Model
 
     public function fee(): float
     {
+        if (ElavonOnboardingPromo::isFreeSubscriptionPeriod()) {
+            return 0.0;
+        }
+
         $base = (float) ($this->attributes['fee'] ?? 0);
         if ($base <= 0) {
             $base = (float) setting('payment.payment_method_fee', 0);

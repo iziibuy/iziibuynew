@@ -239,14 +239,6 @@ class ElavonExternalHostedSubscription
 
         $amountNok = round($amountNok, 2);
 
-        if ($amountNok <= 0) {
-            return [
-                'status' => false,
-                'code' => 422,
-                'data' => ['message' => 'Subscription amount must be greater than 0.'],
-            ];
-        }
-
         $order_create_response = $this->elavon->createOrder($this->makeOrderCreateBody($amountNok));
         if (! $order_create_response->isSuccess()) {
             return $this->failureFromResponse($order_create_response);

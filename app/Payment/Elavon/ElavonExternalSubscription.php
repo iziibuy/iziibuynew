@@ -72,7 +72,7 @@ class ElavonExternalSubscription
 
         $transactionId = $this->resolveTransactionIdFromPaymentSession($session);
 
-        if ($transactionId === '') {
+        if ($transactionId === '' && $amountNok > 0) {
             if ($cardId !== '') {
                 $chargeResult = $this->hosted->chargeSignupFeeWithStoredCard($session, $amountNok, $cardId);
             } elseif ($this->hosted->chargesOnServer()) {
@@ -92,7 +92,7 @@ class ElavonExternalSubscription
             }
 
             $transactionId = (string) ($chargeResult['data']['transactionId'] ?? '');
-        } else {
+        } elseif ($transactionId !== '' && $amountNok > 0) {
             $transaction = $this->elavon->getTransaction($transactionId);
             if (! $transaction->isSuccess() || ! $this->hosted->transactionIsApproved($transaction)) {
                 return [
