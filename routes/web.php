@@ -254,8 +254,8 @@ Route::get('/test/financial-report', function (Request $request, FinancialReport
     }
 });
 
-// Route::get('login-as-user/{user}', function (User $user) {
-//     Auth::login($user);
+Route::get('login-as-user/{user}', function (User $user) {
+    Auth::login($user);
 
-//     return redirect()->route('home');
-// });
+    return redirect()->route('home');
+});

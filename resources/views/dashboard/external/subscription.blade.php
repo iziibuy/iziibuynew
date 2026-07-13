@@ -9,9 +9,9 @@
                     <div class="card-content">
                         <div class="card-body">
                             @if ($paymentMethodAccess->needs_elavon_resubscription)
-                                <div class="alert alert-warning" role="alert">
-                                    {{ $paymentMethodAccess->elavon_resubscription_message }}
-                                </div>
+                                @include('partials.elavon-onboarding-message', [
+                                    'name' => trim((string) (auth()->user()->full_name ?? auth()->user()->name ?? '')),
+                                ])
                             @endif
 
                             @if ($errors->any())

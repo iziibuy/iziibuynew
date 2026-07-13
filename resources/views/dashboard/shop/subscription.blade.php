@@ -10,9 +10,9 @@
                     <div class="card-content">
                         <div class="card-body">
                             @if (auth()->user()->shop->needs_elavon_resubscription)
-                                <div class="alert alert-warning" role="alert">
-                                    {{ auth()->user()->shop->elavon_resubscription_message }}
-                                </div>
+                                @include('partials.elavon-onboarding-message', [
+                                    'name' => trim((string) (auth()->user()->full_name ?? auth()->user()->name ?? '')),
+                                ])
                             @endif
 
                             @if (auth()->user()->shop->establishment == 1)
