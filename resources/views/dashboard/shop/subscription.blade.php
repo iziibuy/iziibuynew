@@ -10,9 +10,7 @@
                     <div class="card-content">
                         <div class="card-body">
                             @if (auth()->user()->shop->needs_elavon_resubscription)
-                                @include('partials.elavon-onboarding-message', [
-                                    'name' => trim((string) (auth()->user()->full_name ?? auth()->user()->name ?? '')),
-                                ])
+                                @include('partials.elavon-onboarding-message')
                             @endif
 
                             @include('partials.elavon-free-registration-notice')

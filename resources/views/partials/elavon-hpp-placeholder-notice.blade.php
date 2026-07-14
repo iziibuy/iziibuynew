@@ -1,9 +1,9 @@
 @if (\App\Services\Elavon\ElavonOnboardingPromo::shouldShowHppPlaceholderNotice($signupAmountNok ?? 0))
     <div class="alert alert-info" role="alert">
-        <strong>Note about Elavon's payment page:</strong>
-        You may see
+        <strong>Merknad om Elavons betalingsside:</strong>
+        Du kan se
         {{ number_format(\App\Services\Elavon\ElavonOnboardingPromo::HPP_PLACEHOLDER_ORDER_AMOUNT, 0) }}
-        NOK displayed on Elavon's secure payment page. This is a technical placeholder required by the payment gateway
-        for card verification. You will <strong>not</strong> be charged during the free registration period.
+        NOK vist på Elavons sikre betalingsside. Dette er en teknisk plassholder som kreves av betalingsgatewayen for
+        kortverifisering. Du vil ikke bli belastet i løpet av den gratis registreringsperioden.
     </div>
 @endif
