@@ -14,11 +14,11 @@
                                 ])
                             @endif
 
-                            @if (\App\Services\Elavon\ElavonOnboardingPromo::isFreeSubscriptionPeriod())
-                                <div class="alert alert-success" role="alert">
-                                    Subscription is free until 19 July 2026. You only need to register your payment card. No charge will be made during registration.
-                                </div>
-                            @endif
+                            @include('partials.elavon-free-registration-notice')
+
+                            @include('partials.elavon-hpp-placeholder-notice', [
+                                'signupAmountNok' => $paymentMethodAccess->fee(),
+                            ])
 
                             @if ($errors->any())
                                 <div class="alert alert-danger">

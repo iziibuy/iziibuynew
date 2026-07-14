@@ -39,6 +39,18 @@
                                 registered by the deadline above. Otherwise, the entire month of June will be charged as
                                 normal.</p>
 
+                            <p style="margin: 0 0 18px; padding: 16px; background-color: #e8f5e9; border-radius: 8px;">
+                                <strong>Free registration until 19 July 2026:</strong> You only need to register your
+                                payment card. No charge will be made during registration. Monthly billing starts from
+                                August 2026.
+                            </p>
+
+                            <p style="margin: 0 0 24px; padding: 16px; background-color: #e3f2fd; border-radius: 8px;">
+                                <strong>Note about Elavon's payment page:</strong> You may see 1 NOK displayed on
+                                Elavon's secure payment page. This is a technical placeholder for card verification.
+                                You will not be charged during the free registration period.
+                            </p>
+
                             <table border="0" cellpadding="0" cellspacing="0" role="presentation"
                                 style="margin: 0 auto 24px;">
                                 <tr>

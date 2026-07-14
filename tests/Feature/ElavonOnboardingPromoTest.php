@@ -34,6 +34,8 @@ it('uses vault-only signup when promo fee is zero', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-07-19 12:00:00'));
 
     expect(ElavonOnboardingPromo::usesVaultOnlySignup(0))->toBeTrue()
+        ->and(ElavonOnboardingPromo::shouldShowHppPlaceholderNotice(0))->toBeTrue()
+        ->and(ElavonOnboardingPromo::shouldShowHppPlaceholderNotice(100))->toBeFalse()
         ->and(ElavonVaultOnlyPaymentSession::isVaultOnlyAmount(0))->toBeTrue()
         ->and(ElavonVaultOnlyPaymentSession::isVaultOnlyAmount(100))->toBeFalse()
         ->and(ElavonOnboardingPromo::hppOrderAmount(0))->toBe(1.0)

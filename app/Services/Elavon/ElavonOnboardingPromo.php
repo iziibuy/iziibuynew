@@ -28,6 +28,11 @@ class ElavonOnboardingPromo
         return self::isFreeSubscriptionPeriod() && round($amountNok, 2) <= 0;
     }
 
+    public static function shouldShowHppPlaceholderNotice(float $signupAmountNok): bool
+    {
+        return self::usesVaultOnlySignup($signupAmountNok);
+    }
+
     public static function hppOrderAmount(float $signupAmountNok): float
     {
         if (round($signupAmountNok, 2) <= 0) {
