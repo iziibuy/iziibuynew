@@ -10,6 +10,7 @@ use App\Elavon\Converge2\Response\PlanResponse;
 use App\Elavon\Converge2\Response\ShopperResponse;
 use App\Elavon\Converge2\Response\StoredCardResponse;
 use App\Models\Shop;
+use App\Services\Elavon\ElavonRecurringTransaction;
 use Illuminate\Support\Facades\Log;
 use Iziibuy;
 
@@ -145,14 +146,13 @@ class ElavonShopSubscription
 
     protected function getTransactionCreateReqBody(float $amount): array
     {
-        return [
+        $body = [
             'type' => 'sale',
             'total' => [
-                'amount' => $amount,
+                'amount' => round($amount, 2),
                 'currencyCode' => 'NOK',
             ],
             'doCapture' => 1,
-            'shopperInteraction' => 'ecommerce',
             'shipTo' => [
                 'fullName' => $this->shop->user->fullName,
                 'company' => $this->shop->company_name,
@@ -177,15 +177,39 @@ class ElavonShopSubscription
             'shopperLanguageTag' => app()->getLocale(),
             'shopperTimeZone' => config('app.timezone'),
             'customFields' => [
-                'vendor_id' => env('APP_NAME'),
-                'vendor_app_name' => env('APP_NAME'),
+                'vendor_id' => config('app.name'),
+                'vendor_app_name' => config('app.name'),
                 'vendor_app_version' => '1.0.0',
-                'php_version' => phpversion(),
+                'shop_id' => (string) $this->shop->id,
             ],
-            'createdBy' => env('APP_NAME'),
-            'orderReference' => uniqid(),
+            'createdBy' => config('app.name'),
+            'orderReference' => uniqid('shop_', true),
             'storedCard' => $this->convergeResourceUrl(Endpoint::STORED_CARD, (string) $this->shop->subscription_id),
         ];
+
+        return ElavonRecurringTransaction::applySubsequentMerchantInitiated(
+            $body,
+            $this->apiBase,
+            (string) ($this->shop->elavon_initial_transaction_id ?: $this->shop->payment_order_id ?: '')
+        );
+    }
+
+    /**
+     * Merchant-initiated monthly subscription charge using vaulted card.
+     *
+     * @return array{status: bool, code?: int, data: array<string, mixed>}
+     */
+    public function chargeMonthly(float $amount): array
+    {
+        if (! filled($this->shop->subscription_id)) {
+            return [
+                'status' => false,
+                'code' => 400,
+                'data' => ['message' => 'No stored card on file for this shop.'],
+            ];
+        }
+
+        return $this->chargeViaCard($amount);
     }
 
     protected function makeNewShopper(): ShopperResponse
@@ -411,6 +435,7 @@ class ElavonShopSubscription
 
         if ($transactionId !== '') {
             $this->shop->payment_order_id = $transactionId;
+            $this->shop->elavon_initial_transaction_id = $transactionId;
         }
 
         $this->shop->subscription_id = $cardId;

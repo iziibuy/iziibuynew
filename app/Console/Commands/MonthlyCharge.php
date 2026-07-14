@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Charge;
 use App\Models\Shop;
+use App\Payment\Elavon\ElavonShopSubscription;
 use App\Services\RetailerCommission;
 use Error;
 use Exception;
@@ -65,6 +66,41 @@ class MonthlyCharge extends Command
                 }
 
                 if ($shop->subscriptionMethod === 'elavon' && $shop->usesElavonNativeSubscription()) {
+                    continue;
+                }
+
+                if ($shop->usesElavonAppManagedSubscription()) {
+                    $shop->update([
+                        'status' => 0,
+                    ]);
+
+                    $elavon = new ElavonShopSubscription($shop);
+                    $result = $elavon->chargeMonthly((float) $shop->subscriptionFeeFull());
+
+                    if ($result['status']) {
+                        Charge::create([
+                            'shop_id' => $shop->id,
+                            'order_id' => (string) ($result['data']['id'] ?? uniqid('elavon_', true)),
+                            'amount' => $shop->subscriptionFeeFull(),
+                            'status' => 1,
+                            'comment' => 'Monthly subscription fee',
+                        ]);
+
+                        $shop->update([
+                            'status' => 1,
+                            'paid_at' => now(),
+                        ]);
+
+                        if ($shop->retailer_id) {
+                            RetailerCommission::commission_from_recurring_payments($shop)->pay();
+                        }
+                    } else {
+                        $shop->update([
+                            'status' => $this->argument('status'),
+                            'subscription_id' => $this->argument('status') ? $shop->subscription_id : null,
+                        ]);
+                    }
+
                     continue;
                 }
 

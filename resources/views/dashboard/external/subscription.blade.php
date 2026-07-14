@@ -16,7 +16,7 @@
 
                             @if (\App\Services\Elavon\ElavonOnboardingPromo::isFreeSubscriptionPeriod())
                                 <div class="alert alert-success" role="alert">
-                                    Subscription is free until 19 July 2026. You only need to register your payment card.
+                                    Subscription is free until 19 July 2026. You only need to register your payment card. No charge will be made during registration.
                                 </div>
                             @endif
 
@@ -34,7 +34,7 @@
                                 <b>{{ __('words.subscription_pera_1') }}</b>
                                 <br>
                                 @if (\App\Services\Elavon\ElavonOnboardingPromo::isFreeSubscriptionPeriod())
-                                    {{ __('words.total') }}: {{ Iziibuy::price(0) }}
+                                    {{ __('words.total') }}: {{ __('Free') }}
                                 @else
                                     {{ __('words.total') }}: {{ Iziibuy::price($paymentMethodAccess->fee()) }}
                                 @endif

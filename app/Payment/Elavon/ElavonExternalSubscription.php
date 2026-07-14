@@ -11,6 +11,7 @@ use App\Elavon\Converge2\Response\ResponseInterface;
 use App\Elavon\Converge2\Response\StoredCardResponse;
 use App\Models\PaymentMethodAccess;
 use App\Models\Subscription;
+use App\Services\Elavon\ElavonRecurringTransaction;
 use Illuminate\Support\Facades\Log;
 
 class ElavonExternalSubscription
@@ -141,6 +142,28 @@ class ElavonExternalSubscription
             $this->recordCharge($subscription, $amountNok, $transactionId, [
                 'type' => 'signup',
                 'session_id' => $sessionId,
+                'recurring_setup' => true,
+            ]);
+        } else {
+            $subscription->charges()->create([
+                'amount' => 0,
+                'status' => true,
+                'elavon_transaction_id' => null,
+                'charge_details' => json_encode([
+                    'provider' => 'elavon',
+                    'type' => 'vault_only_signup',
+                    'session_id' => $sessionId,
+                ]),
+                'payment_details' => json_encode([
+                    'type' => 'signup',
+                    'session_id' => $sessionId,
+                    'vault_only' => true,
+                    'payment_method_access' => [
+                        'id' => $this->access->id,
+                        'company' => $this->access->company_name,
+                        'domain' => $this->access->company_domain,
+                    ],
+                ]),
             ]);
         }
 
@@ -169,7 +192,7 @@ class ElavonExternalSubscription
         }
 
         $amountNok = round($amountNok, 2);
-        $response = $this->elavon->createSaleTransaction($this->makeMitTransactionBody($amountNok, $storedCardId));
+        $response = $this->elavon->createSaleTransaction($this->makeMitTransactionBody($amountNok, $storedCardId, $subscription));
 
         if (! $response->isSuccess() || ! $this->hosted->transactionIsApproved($response)) {
             return [
@@ -216,20 +239,19 @@ class ElavonExternalSubscription
     }
 
     /** @return array<string, mixed> */
-    protected function makeMitTransactionBody(float $amountNok, string $storedCardId): array
+    protected function makeMitTransactionBody(float $amountNok, string $storedCardId, ?Subscription $subscription = null): array
     {
         $email = $this->accessShopperEmail();
         $addr = $this->access->company_address;
         $user = $this->access->user;
 
-        return [
+        $body = [
             'type' => 'sale',
             'total' => [
                 'amount' => $amountNok,
                 'currencyCode' => 'NOK',
             ],
             'doCapture' => 1,
-            'shopperInteraction' => 'ecommerce',
             'shipTo' => [
                 'fullName' => trim(($user?->name ?? '').' '.($user?->last_name ?? '')) ?: ($this->access->company_name ?? 'External'),
                 'company' => $this->access->company_name ?? '',
@@ -261,6 +283,32 @@ class ElavonExternalSubscription
             'orderReference' => uniqid('ext_', true),
             'storedCard' => $this->convergeResourceUrl(Endpoint::STORED_CARD, $storedCardId),
         ];
+
+        return ElavonRecurringTransaction::applySubsequentMerchantInitiated(
+            $body,
+            $this->apiBase,
+            $this->resolveInitialRecurringTransactionId($subscription)
+        );
+    }
+
+    protected function resolveInitialRecurringTransactionId(?Subscription $subscription): ?string
+    {
+        if ($subscription === null) {
+            $subscription = $this->access->subscription;
+        }
+
+        if ($subscription === null) {
+            return null;
+        }
+
+        $initialCharge = $subscription->charges()
+            ->whereNotNull('elavon_transaction_id')
+            ->orderBy('id')
+            ->first();
+
+        $transactionId = $initialCharge?->elavon_transaction_id;
+
+        return filled($transactionId) ? (string) $transactionId : null;
     }
 
     protected function recordCharge(Subscription $subscription, float $amountNok, string $transactionId, array $paymentDetails): void

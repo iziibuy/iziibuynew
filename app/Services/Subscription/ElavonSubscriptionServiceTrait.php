@@ -58,24 +58,17 @@ trait ElavonSubscriptionServiceTrait
             return redirect(route('shop.dashboard'))->with('Thank your for subscribe');
         }
 
-        $planResult = $elavon->ensurePlanAndSubscription();
-        if (! $planResult['status']) {
-            return redirect(route('shop.subscription.payment'))->withErrors(
-                $planResult['data']['message'] ?? 'Could not start your subscription. Please try again later.'
-            );
-        }
-
-        $elavon->waitForActiveSubscription(5);
-
         return $this->activateShopAfterElavonSubscription($elavon);
     }
 
     protected function activateShopAfterElavonSubscription(ElavonShopSubscription $elavon)
     {
-        $amount = Iziibuy::round_num($this->shop->subscriptionFee());
-        $transactionId = filled($this->shop->payment_order_id)
-            ? (string) $this->shop->payment_order_id
-            : (string) ($this->shop->elavon_subscription_id ?? uniqid('elavon-sub-'));
+        $amount = (float) Iziibuy::round_num($this->shop->subscriptionFee());
+        $transactionId = (string) ($this->shop->elavon_initial_transaction_id ?: $this->shop->payment_order_id ?: '');
+
+        if ($transactionId !== '' && ! filled($this->shop->elavon_initial_transaction_id)) {
+            $this->shop->elavon_initial_transaction_id = $transactionId;
+        }
 
         try {
             Mail::to($this->shop->user->email)->send(new ShopInvoice($this->shop));
@@ -83,14 +76,16 @@ trait ElavonSubscriptionServiceTrait
             Log::error('Error sending shop invoice: '.$e->getMessage());
         }
 
-        Charge::create([
-            'shop_id' => $this->shop->id,
-            'order_id' => $transactionId,
-            'amount' => $amount,
-            'status' => true,
-            'comment' => 'subscription fee',
-            'details' => json_encode($this->shop->subscriptionFeeDetails()),
-        ]);
+        if ($amount > 0 && $transactionId !== '') {
+            Charge::create([
+                'shop_id' => $this->shop->id,
+                'order_id' => $transactionId,
+                'amount' => $amount,
+                'status' => true,
+                'comment' => 'subscription fee',
+                'details' => json_encode($this->shop->subscriptionFeeDetails()),
+            ]);
+        }
 
         $this->shop->status = 1;
         $this->shop->establishment = 1;

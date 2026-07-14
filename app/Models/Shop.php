@@ -604,10 +604,17 @@ class Shop extends Model
         return $this->hasElavonSubscriptionMethod() && filled($this->elavon_subscription_id);
     }
 
+    public function usesElavonAppManagedSubscription(): bool
+    {
+        return $this->hasElavonSubscriptionMethod()
+            && filled($this->subscription_id)
+            && ! $this->usesElavonNativeSubscription();
+    }
+
     public function subscriptionFee()
     {
         if (ElavonOnboardingPromo::isFreeSubscriptionPeriod()) {
-            return 0;
+            return (int) ElavonOnboardingPromo::PROMO_SIGNUP_FEE;
         }
 
         if ($this->paid_at == null && @$this->paid_at?->isCurrentMonth() == false) {

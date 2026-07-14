@@ -9,6 +9,9 @@ use App\Elavon\Converge2\Response\OrderResponse;
 use App\Elavon\Converge2\Response\PaymentSessionResponse;
 use App\Elavon\Converge2\Response\ResponseInterface;
 use App\Models\Shop;
+use App\Services\Elavon\ElavonOnboardingPromo;
+use App\Services\Elavon\ElavonRecurringTransaction;
+use App\Services\Elavon\ElavonVaultOnlyPaymentSession;
 use Illuminate\Support\Facades\Log;
 
 class ElavonShopHostedSubscription
@@ -235,14 +238,18 @@ class ElavonShopHostedSubscription
     /**
      * @return array<string, mixed>
      */
-    protected function makeOrderCreateBody(float $amountNok): array
+    protected function makeOrderCreateBody(float $amountNok, bool $vaultOnly = false): array
     {
+        $description = $vaultOnly
+            ? sprintf('Card registration — %s', $this->shop->user_name)
+            : sprintf('Shop subscription — %s', $this->shop->user_name);
+
         return [
             'total' => (object) [
-                'amount' => $amountNok,
+                'amount' => round($amountNok, 2),
                 'currencyCode' => 'NOK',
             ],
-            'description' => sprintf('Shop subscription — %s', $this->shop->user_name),
+            'description' => $description,
             'items' => null,
             'shipTo' => $this->billTo(),
             'shopperEmailAddress' => $this->shopperEmail(),
@@ -252,6 +259,7 @@ class ElavonShopHostedSubscription
                 'vendor_app_name' => config('app.name'),
                 'vendor_app_version' => '1.0.0',
                 'shop_id' => (string) $this->shop->id,
+                'signup_type' => $vaultOnly ? 'vault_only' : 'subscription',
             ],
         ];
     }
@@ -271,20 +279,35 @@ class ElavonShopHostedSubscription
             ];
         }
 
-        $amountNok = round($amountNok, 2);
+        $vaultOnly = ElavonVaultOnlyPaymentSession::isVaultOnlyAmount($amountNok);
+        $orderAmountNok = ElavonOnboardingPromo::hppOrderAmount($amountNok);
 
-        $order_create_response = $this->elavon->createOrder($this->makeOrderCreateBody($amountNok));
+        $order_create_response = $this->elavon->createOrder($this->makeOrderCreateBody($orderAmountNok, $vaultOnly));
         if (! $order_create_response->isSuccess()) {
             return $this->failureFromResponse($order_create_response, 'order');
         }
 
-        $this->resolveShopperReferenceForSession();
+        $shopperReference = $this->resolveShopperReferenceForSession();
+        if ($vaultOnly && ($shopperReference === null || $shopperReference === '')) {
+            return [
+                'status' => false,
+                'code' => 400,
+                'data' => ['message' => 'Could not prepare card registration. Please try again.'],
+            ];
+        }
 
         $session_body = $this->makePaymentSessionCreateBody($order_create_response, $returnUrl, $cancelUrl);
+        if ($vaultOnly) {
+            $session_body = ElavonVaultOnlyPaymentSession::augmentPaymentSessionBody(
+                $session_body,
+                (string) $shopperReference
+            );
+        }
 
         Log::info('Elavon shop subscription HPP: creating payment session', [
             'shop_id' => $this->shop->id,
-            'amount' => $amountNok,
+            'amount' => $orderAmountNok,
+            'vault_only' => $vaultOnly,
             'sandbox' => $this->keys['sandbox'],
             'charge_on_server' => $this->chargesOnServer(),
             'creates_transaction_on_hpp' => $this->createsTransactionOnHostedPage(),
@@ -304,6 +327,7 @@ class ElavonShopHostedSubscription
                 'data' => [
                     'payment_id' => $sessionId,
                     'url' => $this->endpoint.'/?merchantAlias='.$this->keys['mercahantAlias'].'&publicApiKey='.$this->keys['publicKey'].'&sessionId='.$sessionId,
+                    'vault_only' => $vaultOnly,
                 ],
             ];
         }
@@ -318,9 +342,11 @@ class ElavonShopHostedSubscription
      */
     public function chargeSignupFeeWithStoredCard(PaymentSessionResponse $session, float $amountNok, string $storedCardId): array
     {
-        $response = $this->elavon->createSaleTransaction(
+        $body = ElavonRecurringTransaction::applyFirstSetup(
             $this->makeTransactionCreateBody($session, $amountNok, $storedCardId)
         );
+
+        $response = $this->elavon->createSaleTransaction($body);
 
         if (! $response->isSuccess() || ! $this->transactionIsApproved($response)) {
             $message = $this->extractFailureMessage($response);
@@ -377,7 +403,9 @@ class ElavonShopHostedSubscription
         }
 
         $response = $this->elavon->createSaleTransaction(
-            $this->makeTransactionCreateBody($session, $amountNok, null)
+            ElavonRecurringTransaction::applyFirstSetup(
+                $this->makeTransactionCreateBody($session, $amountNok, null)
+            )
         );
 
         if (! $response->isSuccess() || ! $this->transactionIsApproved($response)) {
@@ -403,6 +431,19 @@ class ElavonShopHostedSubscription
     }
 
     /**
+     * @return array{status: bool, data: array<string, mixed>}
+     */
+    public function verifyStoredCardForSubscriptionSetup(PaymentSessionResponse $session, string $storedCardId): array
+    {
+        return ElavonRecurringTransaction::verifyStoredCardForSubscriptionSetup(
+            $this->elavon,
+            $session,
+            $this->makeTransactionCreateBody($session, 0.0, $storedCardId),
+            fn (ResponseInterface $transaction): bool => $this->transactionIsApproved($transaction)
+        );
+    }
+
+    /**
      * @return array<string, mixed>
      */
     protected function makeTransactionCreateBody(PaymentSessionResponse $session, float $amountNok, ?string $storedCardId): array
@@ -410,11 +451,10 @@ class ElavonShopHostedSubscription
         $body = [
             'type' => 'sale',
             'total' => (object) [
-                'amount' => $amountNok,
+                'amount' => round($amountNok, 2),
                 'currencyCode' => 'NOK',
             ],
             'doCapture' => true,
-            'shopperInteraction' => 'ecommerce',
             'shipTo' => $this->billTo(),
             'shopperEmailAddress' => $this->shopperEmail(),
             'doSendReceipt' => false,
@@ -434,8 +474,12 @@ class ElavonShopHostedSubscription
             ],
             'createdBy' => config('app.name'),
             'orderReference' => (string) $this->shop->id,
-            'order' => $this->entityIdFromHref($session->getOrder()),
         ];
+
+        $orderId = $this->entityIdFromHref($session->getOrder());
+        if ($orderId !== '') {
+            $body['order'] = $orderId;
+        }
 
         if ($storedCardId !== null && $storedCardId !== '') {
             $body['storedCard'] = $this->convergeResourceUrl(Endpoint::STORED_CARD, $storedCardId);
@@ -443,18 +487,7 @@ class ElavonShopHostedSubscription
             $body['hostedCard'] = $this->entityIdFromHref((string) $session->getHostedCard());
         }
 
-        $threeDS = $session->getThreeDSecure();
-        if ($threeDS) {
-            $body['threeDSecure'] = [
-                'directoryServerTransactionId' => $threeDS->getDirectoryServerTransactionId(),
-                'transactionStatus' => $threeDS->getTransactionStatus(),
-                'electronicCommerceIndicator' => $threeDS->getElectronicCommerceIndicator(),
-                'authenticationValue' => $threeDS->getAuthenticationValue(),
-                'protocolVersion' => $threeDS->getProtocolVersion(),
-            ];
-        }
-
-        return $body;
+        return ElavonRecurringTransaction::appendThreeDSecureFromSession($body, $session);
     }
 
     public function transactionIsApproved(ResponseInterface $transaction): bool
