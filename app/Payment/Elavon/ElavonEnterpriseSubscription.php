@@ -71,7 +71,7 @@ class ElavonEnterpriseSubscription
 
         $transactionId = $this->resolveTransactionIdFromPaymentSession($session);
 
-        if ($transactionId === '') {
+        if ($transactionId === '' && $amountNok > 0) {
             if ($cardId !== '') {
                 $chargeResult = $this->hosted->chargeSignupFeeWithStoredCard($session, $amountNok, $cardId);
             } elseif ($this->hosted->chargesOnServer()) {
@@ -91,7 +91,7 @@ class ElavonEnterpriseSubscription
             }
 
             $transactionId = (string) ($chargeResult['data']['transactionId'] ?? '');
-        } else {
+        } elseif ($transactionId !== '' && $amountNok > 0) {
             $transaction = $this->elavon->getTransaction($transactionId);
             if (! $transaction->isSuccess() || ! $this->hosted->transactionIsApproved($transaction)) {
                 return [
@@ -143,6 +143,27 @@ class ElavonEnterpriseSubscription
                 'type' => 'signup',
                 'session_id' => $sessionId,
             ]);
+        } else {
+            $subscription->charges()->create([
+                'amount' => 0,
+                'status' => true,
+                'elavon_transaction_id' => null,
+                'charge_details' => json_encode([
+                    'provider' => 'elavon',
+                    'type' => 'vault_only_signup',
+                    'session_id' => $sessionId,
+                ]),
+                'payment_details' => json_encode([
+                    'type' => 'signup',
+                    'session_id' => $sessionId,
+                    'vault_only' => true,
+                    'enterprise' => [
+                        'uid' => $this->enterprise->unqid,
+                        'name' => $this->enterprise->enterprise_name,
+                        'domain' => $this->enterprise->domain,
+                    ],
+                ]),
+            ]);
         }
 
         return [
@@ -170,6 +191,25 @@ class ElavonEnterpriseSubscription
         }
 
         $amountNok = round($amountNok, 2);
+
+        if ($amountNok <= 0) {
+            $this->recordCharge($subscription, 0, '', array_merge($paymentDetails, [
+                'type' => 'zero_amount',
+                'vault_only' => true,
+            ]));
+
+            return [
+                'status' => true,
+                'transaction_id' => null,
+                'data' => [
+                    'amount' => 0,
+                    'currencyCode' => 'NOK',
+                    'state' => 'skipped',
+                    'processed' => true,
+                ],
+            ];
+        }
+
         $response = $this->elavon->createSaleTransaction($this->makeMitTransactionBody($amountNok, $storedCardId));
 
         if (! $response->isSuccess() || ! $this->hosted->transactionIsApproved($response)) {

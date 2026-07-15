@@ -11,6 +11,8 @@ use App\Elavon\Converge2\Response\OrderResponse;
 use App\Elavon\Converge2\Response\PaymentSessionResponse;
 use App\Elavon\Converge2\Response\ResponseInterface;
 use App\Models\Enterprise;
+use App\Services\Elavon\ElavonOnboardingPromo;
+use App\Services\Elavon\ElavonVaultOnlyPaymentSession;
 use Illuminate\Support\Facades\Log;
 
 class ElavonEnterpriseHostedSubscription
@@ -204,14 +206,18 @@ class ElavonEnterpriseHostedSubscription
     }
 
     /** @return array<string, mixed> */
-    protected function makeOrderCreateBody(float $amountNok): array
+    protected function makeOrderCreateBody(float $amountNok, bool $vaultOnly = false): array
     {
+        $description = $vaultOnly
+            ? sprintf('Card registration — %s', $this->enterprise->enterprise_name ?? $this->enterprise->unqid)
+            : sprintf('Enterprise subscription — %s', $this->enterprise->enterprise_name ?? $this->enterprise->unqid);
+
         return [
             'total' => (object) [
                 'amount' => round($amountNok, 2),
                 'currencyCode' => 'NOK',
             ],
-            'description' => sprintf('Enterprise subscription — %s', $this->enterprise->enterprise_name ?? $this->enterprise->unqid),
+            'description' => $description,
             'items' => null,
             'shipTo' => $this->billTo(),
             'shopperEmailAddress' => $this->shopperEmail(),
@@ -221,6 +227,7 @@ class ElavonEnterpriseHostedSubscription
                 'vendor_app_name' => config('app.name'),
                 'vendor_app_version' => '1.0.0',
                 'enterprise_uid' => (string) $this->enterprise->unqid,
+                'signup_type' => $vaultOnly ? 'vault_only' : 'subscription',
             ],
         ];
     }
@@ -238,20 +245,42 @@ class ElavonEnterpriseHostedSubscription
             ];
         }
 
-        $amountNok = round($amountNok, 2);
+        $vaultOnly = ElavonVaultOnlyPaymentSession::isVaultOnlyAmount($amountNok);
+        $orderAmountNok = ElavonOnboardingPromo::hppOrderAmount($amountNok);
 
-        $order_create_response = $this->elavon->createOrder($this->makeOrderCreateBody($amountNok));
+        $order_create_response = $this->elavon->createOrder($this->makeOrderCreateBody($orderAmountNok, $vaultOnly));
         if (! $order_create_response->isSuccess()) {
             return $this->failureFromResponse($order_create_response, 'order');
         }
 
-        $this->resolveShopperReferenceForSession();
+        $shopperReference = $this->resolveShopperReferenceForSession();
+        if ($vaultOnly && ($shopperReference === null || $shopperReference === '')) {
+            return [
+                'status' => false,
+                'code' => 400,
+                'data' => ['message' => 'Could not prepare card registration. Please try again.'],
+            ];
+        }
 
         $session_body = $this->makePaymentSessionCreateBody($order_create_response, $returnUrl, $cancelUrl);
+        if ($vaultOnly) {
+            $session_body = ElavonVaultOnlyPaymentSession::augmentPaymentSessionBody(
+                $session_body,
+                (string) $shopperReference
+            );
+        }
+
         $payment_session_create_response = $this->elavon->createPaymentSession($session_body);
 
         if ($payment_session_create_response->isSuccess()) {
             $sessionId = $payment_session_create_response->getId();
+
+            Log::info('Elavon enterprise HPP: created payment session', [
+                'enterprise_id' => $this->enterprise->id,
+                'session_id' => $sessionId,
+                'vault_only' => $vaultOnly,
+                'order_amount' => $orderAmountNok,
+            ]);
 
             return [
                 'status' => true,
@@ -259,6 +288,7 @@ class ElavonEnterpriseHostedSubscription
                 'data' => [
                     'payment_id' => $sessionId,
                     'url' => $this->endpoint.'/?merchantAlias='.$this->keys['mercahantAlias'].'&publicApiKey='.$this->keys['publicKey'].'&sessionId='.$sessionId,
+                    'vault_only' => $vaultOnly,
                 ],
             ];
         }

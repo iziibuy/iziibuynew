@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Enterprise;
 use App\Models\Subscription;
 use App\Payment\Elavon\ElavonEnterpriseSubscription;
+use App\Services\Elavon\ElavonOnboardingPromo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Throwable;
@@ -30,7 +31,7 @@ class EnterpriseSubscriptionController extends Controller
             'payment_provider' => 'elavon',
         ]);
 
-        $fee = self::DEFAULT_SIGNUP_FEE;
+        $fee = $this->resolveSignupFee(self::DEFAULT_SIGNUP_FEE);
         $subscription = $enterprise->subscription()->create([
             'fee' => (int) $fee,
             'establishment_status' => 1,
@@ -57,7 +58,7 @@ class EnterpriseSubscriptionController extends Controller
             abort(404, 'Subscription not found');
         }
 
-        $fee = $this->resolveEnterpriseFee($enterprise);
+        $fee = $this->resolveSignupFee($this->resolveEnterpriseFee($enterprise));
         $result = $this->beginHostedSignup($enterprise, $subscription, $fee);
         if (! $result['status']) {
             return response()->json([
@@ -112,7 +113,7 @@ class EnterpriseSubscriptionController extends Controller
     public function charge(Request $request, string $uid): JsonResponse|array
     {
         $request->validate([
-            'amount' => 'required|numeric|min:0.01',
+            'amount' => 'required|numeric|min:0',
             'details' => 'required',
         ]);
 
@@ -192,5 +193,10 @@ class EnterpriseSubscriptionController extends Controller
         }
 
         return self::DEFAULT_SIGNUP_FEE;
+    }
+
+    protected function resolveSignupFee(float $baseFeeNok): float
+    {
+        return ElavonOnboardingPromo::signupFee($baseFeeNok);
     }
 }

@@ -28,6 +28,7 @@ use App\Payment\Surfboard\SurfboardOrderApi;
 use App\Payment\Two\TwoPayment;
 use App\Payment\UserSubscription;
 use App\Services\CreditWallet;
+use App\Services\Elavon\ElavonOnboardingPromo;
 use App\Services\Elavon\ElavonShopSubscriptionNotificationHandler;
 use App\Services\RetailerCommission;
 use Error;
@@ -576,7 +577,7 @@ class CallbackController extends Controller
                 ->withErrors('Payment session is missing.');
         }
 
-        $fee = (float) ($subscription->fee ?: 299);
+        $fee = ElavonOnboardingPromo::signupFee((float) ($subscription->fee ?: 299));
         $result = (new ElavonEnterpriseSubscription($subscribable))
             ->finalizeHostedSubscriptionFromSession(trim($sessionId), $subscription, $fee);
 
