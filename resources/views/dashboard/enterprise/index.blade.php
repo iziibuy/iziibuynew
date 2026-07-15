@@ -6,6 +6,11 @@
             </h1>
             <a class="mt-0 pt-0"
                 href="{{ $enterprise->company_domain }}">{{ $enterprise->company_domain }} </a>
+            @if ($enterprise->needs_elavon_resubscription)
+                <div class="small text-warning mt-2">
+                    {{ $enterprise->elavon_resubscription_message }}
+                </div>
+            @endif
         </div>
         <div class="d-flex flex-column gap-2">
             {{-- <a href="{{ route('external.download.plugin') }}" class="btn  btn-outline-primary ">

@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Dashboard\Enterprise;
 use App\Http\Controllers\Controller;
 use App\Mail\ElavonPaymentDetails;
 use App\Mail\paymentCapture;
-use App\Mail\PaymentMethodAccessMail;
 use App\Models\Enterprise;
 use App\Models\EnterpriseOnboarding;
 use App\Models\PaymentMethodAccess;
@@ -13,6 +12,7 @@ use App\Models\ProtectedLink;
 use App\Models\Subscription;
 use App\Models\SubscriptionCharge;
 use App\Models\User;
+use App\Payment\Elavon\ElavonEnterpriseOnboardingSubscription;
 use App\Payment\Enterprise\Surfboard\EnterpriseSurfboardMarchant;
 use App\Payment\Subscribe;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -34,20 +34,30 @@ class DashboardController extends Controller
         if ($subscription->subscribable->user_id != auth()->id()) {
             return abort(403);
         }
+
         try {
-
             DB::beginTransaction();
-            $subscription_fee = $subscription->fee;
-            $subscribe = (new Subscribe)->subscription();
+            $enterprise = $subscription->subscribable;
+            $subscriptionFee = $enterprise->fresh()->signupFee();
 
-            $subscribe = $subscribe->getUrl($subscription_fee, false, [
-                'continueurl' => route('enterprise.subscription.success', $subscribe->subscription->id),
-                'cancelurl' => route('enterprise.subscription.cancel', $subscribe->subscription->id),
-            ]);
+            $elavon = new ElavonEnterpriseOnboardingSubscription($enterprise);
+
+            $result = $elavon->getPaymentLink(
+                $subscriptionFee,
+                route('enterprise.subscription.success', $subscription),
+                route('enterprise.subscription.cancel', $subscription)
+            );
+
+            if (! $result['status']) {
+                DB::rollBack();
+
+                return redirect()->back()->withErrors($result['data']['message'] ?? 'Payment link failed');
+            }
 
             $subscription->update([
-                'key' => $subscribe['data']['payment_id'],
-                'url' => $subscribe['data']['url'],
+                'key' => $result['data']['payment_id'],
+                'url' => $result['data']['url'],
+                'fee' => (int) round($subscriptionFee),
             ]);
             DB::commit();
 
@@ -57,47 +67,52 @@ class DashboardController extends Controller
 
             return redirect()->back()->withErrors($e->getMessage());
         } catch (Error $e) {
+            DB::rollBack();
+
             return redirect()->back()->withErrors($e->getMessage());
         }
     }
 
-    public function subscriptionSuccess($subscription = null)
+    public function subscriptionSuccess(Request $request, Subscription $subscription)
     {
+        $enterprise = null;
 
         try {
             DB::beginTransaction();
-            $subscriptionDatabase = Subscription::where('key', $subscription)->first();
-            $subscriptionQuickpay = (new Subscribe)->subscription($subscription);
 
-            if ($subscriptionQuickpay->subscription->state == 'active') {
+            $sessionId = $request->input('sessionId')
+                ?? $request->input('session_id')
+                ?? $request->query('sessionId')
+                ?? $request->query('session_id')
+                ?? $subscription->key;
 
-                $create_charge = $subscriptionQuickpay->charge($subscriptionDatabase->fee);
+            if (! is_string($sessionId) || trim($sessionId) === '') {
+                DB::rollBack();
 
-                if ($create_charge['status']) {
-                    $payment = $subscriptionQuickpay->payment($create_charge['data']->id);
-                    if ($payment['data']->state == 'processed') {
-
-                        $subscriptionDatabase->paid_at = now();
-                        $subscriptionDatabase->status = true;
-                        $subscriptionDatabase->establishment_status = true;
-                        $subscriptionDatabase->save();
-
-                        $subscriptionDatabase->charges()->create([
-                            'amount' => $subscriptionDatabase->fee,
-                            'status' => true,
-                        ]);
-
-                        $enterpriseOnboarding = $subscriptionDatabase->subscribable;
-                        $enterpriseOnboarding->status = true;
-                        $enterpriseOnboarding->key = Str::uuid();
-                        $enterpriseOnboarding->last_paid_at = now();
-                        $enterpriseOnboarding->save();
-                    }
-                }
+                return redirect()->route('enterprise.contract')->withErrors('Payment session is missing.');
             }
+
+            $enterprise = $subscription->subscribable;
+            $elavon = new ElavonEnterpriseOnboardingSubscription($enterprise);
+            $result = $elavon->finalizeHostedSubscriptionFromSession(
+                trim($sessionId),
+                $subscription,
+                $enterprise->fresh()->signupFee()
+            );
+
+            if (! $result['status']) {
+                DB::rollBack();
+
+                return redirect()->route('enterprise.contract')
+                    ->withErrors($result['data']['message'] ?? 'Payment could not be completed.');
+            }
+
+            $enterprise->status = true;
+            $enterprise->key = $enterprise->key ?: (string) Str::uuid();
+            $enterprise->last_paid_at = now();
+            $enterprise->save();
+
             DB::commit();
-            Mail::to($enterpriseOnboarding->user->email)->send(new PaymentMethodAccessMail($enterpriseOnboarding));
-            Mail::to(setting('site.email'))->send(new PaymentMethodAccessMail($enterpriseOnboarding));
 
             return redirect()->route('enterprise.contract')->with('success', 'Subscription completed');
         } catch (Exception $e) {
@@ -109,6 +124,21 @@ class DashboardController extends Controller
 
             return redirect()->route('enterprise.contract')->withErrors($e->getMessage());
         }
+    }
+
+    public function subscriptionCancel(Subscription $subscription)
+    {
+        return redirect()->route('enterprise.subscription.payment')->withErrors('Payment cancelled.');
+    }
+
+    public function subscriptionIndex()
+    {
+        $enterprise = auth()->user()->enterpriseOnboarding;
+        $subscription = $enterprise->subscription()->firstOrCreate([], [
+            'fee' => (int) round($enterprise->signupFee()),
+        ]);
+
+        return view('dashboard.enterprise.subscription', compact('enterprise', 'subscription'));
     }
 
     public function dashboard()
@@ -156,9 +186,10 @@ class DashboardController extends Controller
 
         $enterprise = auth()->user()->enterpriseOnboarding;
 
-        if ($enterprise && $enterprise->last_paid_at == null) {
-            return redirect(auth()->user()->enterpriseOnboarding->subscription->url);
+        if ($enterprise && ! $enterprise->canProcessPayments()) {
+            return redirect()->route('enterprise.subscription.payment');
         }
+
         if ($enterprise->user_id != auth()->id()) {
             abort(403);
         }
@@ -331,21 +362,11 @@ class DashboardController extends Controller
 
         $enterprise = auth()->user()->enterpriseOnboarding;
 
-        $subscription_fee = $enterprise->getSubscriptionFee();
-        $subscribe = (new Subscribe)->subscription();
-
-        $subscribe = $subscribe->getUrl($subscription_fee, false, [
-            'continueurl' => route('enterprise.subscription.success', $subscribe->subscription->id),
-            'cancelurl' => route('enterprise.subscription.cancel', $subscribe->subscription->id),
+        $enterprise->subscription()->firstOrCreate([], [
+            'fee' => (int) round($enterprise->signupFee()),
         ]);
 
-        $subscription = $enterprise->subscription()->create([
-            'key' => $subscribe['data']['payment_id'],
-            'url' => $subscribe['data']['url'],
-            'fee' => $subscription_fee,
-        ]);
-
-        return redirect($subscription->url);
+        return redirect()->route('enterprise.subscription.payment');
     }
 
     public function setup_surfboard_payment()
