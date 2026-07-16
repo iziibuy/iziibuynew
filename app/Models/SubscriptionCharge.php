@@ -14,9 +14,23 @@ class SubscriptionCharge extends Model
 
     public $additional_attributes = ['domain'];
 
-    public function getDomainAttribute()
+    public function getDomainAttribute(): string
     {
-        return @json_decode($this->payment_details)->enterprise->domain ?? 'N/A';
+        if (blank($this->payment_details)) {
+            return 'N/A';
+        }
+
+        $decoded = json_decode((string) $this->payment_details, true);
+        if (! is_array($decoded)) {
+            return 'N/A';
+        }
+
+        return (string) (
+            data_get($decoded, 'enterprise.domain')
+            ?? data_get($decoded, 'payment_method_access.domain')
+            ?? data_get($decoded, 'shop.domain')
+            ?? 'N/A'
+        );
     }
 
     public function getAmountAttribute()
@@ -36,7 +50,22 @@ class SubscriptionCharge extends Model
 
     public function last4(): Attribute
     {
-        return Attribute::make(get: fn () => $this->attributes['charge_details'] ? json_decode($this->attributes['charge_details'])->metadata->last4 : 'N/A');
+        return Attribute::make(get: function (): string {
+            if (blank($this->attributes['charge_details'] ?? null)) {
+                return 'N/A';
+            }
+
+            $decoded = json_decode((string) $this->attributes['charge_details'], true);
+            if (! is_array($decoded)) {
+                return 'N/A';
+            }
+
+            return (string) (
+                data_get($decoded, 'metadata.last4')
+                ?? data_get($decoded, 'last4')
+                ?? 'N/A'
+            );
+        });
     }
 
     public function scopeEnterpriseOnly($query)

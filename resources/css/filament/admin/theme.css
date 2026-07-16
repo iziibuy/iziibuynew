@@ -202,6 +202,73 @@
     text-decoration-line: underline;
 }
 
+/* Voyager-style subscription charges browse (Filament resource) */
+.fi-voyager-subscription-charges-table.fi-ta {
+    overflow: hidden;
+    border-radius: 10px;
+    background-color: #fff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 0 0 1px rgb(0 0 0 / 0.08);
+}
+
+.fi-voyager-subscription-charges-table thead .fi-ta-header-cell {
+    border-style: none;
+    background-color: #7c9da6 !important;
+    padding-block: 0.65rem;
+    padding-inline: 1.25rem;
+    font-size: 12px !important;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0.02em;
+    color: #fff !important;
+}
+
+.fi-voyager-subscription-charges-table thead .fi-ta-header-cell * {
+    color: inherit !important;
+}
+
+.fi-voyager-subscription-charges-table .fi-ta-cell {
+    border-style: none;
+    padding-block: 0.65rem;
+    padding-inline: 1.25rem;
+    font-size: 0.875rem;
+    color: #1e293b !important;
+}
+
+.fi-voyager-subscription-charges-table .fi-ta-cell * {
+    color: inherit;
+}
+
+.fi-voyager-subscription-charges-table .fi-ta-table tbody tr.fi-ta-row:nth-child(even) {
+    background-color: rgb(248 250 252) !important;
+}
+
+.fi-voyager-subscription-charges-table .fi-ta-table tbody tr.fi-ta-row {
+    background-color: #fff !important;
+}
+
+.fi-voyager-subscription-charges-table .fi-ta-actions-cell {
+    white-space: nowrap;
+}
+
+.fi-voyager-subscription-charges-table .fi-ta-actions-cell .fi-ac {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.35rem;
+}
+
+.fi-voyager-subscription-charges-table .fi-ta-actions-cell .fi-ac-btn-action {
+    min-height: 2rem;
+    padding-inline: 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.fi-voyager-subscription-charges-table .fi-ta-header-toolbar,
+.fi-voyager-subscription-charges-table .fi-ta-pagination {
+    background-color: rgb(248 250 252) !important;
+    border-color: rgb(226 232 240) !important;
+}
+
 /* Softer striped rows globally */
 .fi-ta-table tbody tr.fi-ta-row:nth-child(even) {
     @apply bg-gray-50/70 dark:bg-white/[0.02];
