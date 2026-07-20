@@ -89,7 +89,12 @@ class ShopResource extends Resource
                     ->columnSpanFull(),
                 TextInput::make('payment_order_id'),
                 TextInput::make('tax')
-                    ->numeric(),
+                    ->label(__('VAT / MVA (%)'))
+                    ->numeric()
+                    ->minValue(0)
+                    ->maxValue(100)
+                    ->suffix('%')
+                    ->helperText(__('Applied to this shop\'s subscription fees and customer orders. Leave empty to use the global PAYMENT_REGISTRATION_TAX default.')),
                 Toggle::make('status'),
                 TextInput::make('subscription_id')
                     ->required(),
@@ -252,7 +257,10 @@ class ShopResource extends Resource
                             ->money('NOK')
                             ->placeholder('—'),
                         TextEntry::make('tax')
-                            ->numeric()
+                            ->label(__('VAT / MVA (%)'))
+                            ->formatStateUsing(fn (?int $state, Shop $record): string => $state !== null
+                                ? $state.' %'
+                                : __('Global default (:rate %)', ['rate' => config('settings.payment.registration_tax', 0)]))
                             ->placeholder('—'),
                         TextEntry::make('paid_at')
                             ->dateTime()
@@ -450,7 +458,8 @@ class ShopResource extends Resource
                 ColumnGroup::make(__('Fees & services'))
                     ->columns([
                         TextColumn::make('tax')
-                            ->numeric()
+                            ->label(__('VAT / MVA (%)'))
+                            ->formatStateUsing(fn (?int $state): string => $state !== null ? $state.' %' : '—')
                             ->sortable()
                             ->toggleable(isToggledHiddenByDefault: true),
                         IconColumn::make('establishment')

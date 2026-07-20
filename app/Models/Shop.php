@@ -516,13 +516,16 @@ class Shop extends Model
     }
 
     /**
-     * registrationTax
-     *
-     * @return int
+     * VAT rate (%) for platform subscription fees. Uses the shop's tax when set,
+     * otherwise falls back to the global PAYMENT_REGISTRATION_TAX setting.
      */
-    public function registrationTax()
+    public function registrationTax(): float
     {
-        return config('settings.payment.registration_tax', 0);
+        if (array_key_exists('tax', $this->attributes) && $this->attributes['tax'] !== null) {
+            return (float) $this->attributes['tax'];
+        }
+
+        return (float) config('settings.payment.registration_tax', 0);
     }
 
     public function getTax($amount)

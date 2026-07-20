@@ -48,8 +48,8 @@
                                     @endif
                                     <br>
                                     <br>
-                                        {{__('words.total')}} : {{Iziibuy::price(auth()->user()->shop->subscriptionFee() / 1.25)}} {{ __('words.subscription_vat_cal') }}<br>
-                                        {{__('words.mva')}} : {{Iziibuy::price(auth()->user()->shop->subscriptionFee() - (auth()->user()->shop->subscriptionFee() / 1.25 ))}} <br>
+                                        {{__('words.total')}} : {{Iziibuy::price(auth()->user()->shop->subscriptionFee() - auth()->user()->shop->tax())}} {{ __('words.subscription_vat_cal') }}<br>
+                                        {{__('words.mva')}} : {{Iziibuy::price(auth()->user()->shop->tax())}} <br>
                                         <b>{{__('words.cart_account_table_title')}} : {{Iziibuy::price(auth()->user()->shop->subscriptionFee())}} </b><br>
 
                                     <br><br>{{ __('words.subscription_due_next_date') }}:

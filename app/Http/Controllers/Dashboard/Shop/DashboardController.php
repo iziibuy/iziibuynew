@@ -198,7 +198,7 @@ class DashboardController extends Controller
     public function downloadInvoice(Charge $charge)
     {
 
-        $reg_tax = setting('payment.registration_tax');
+        $reg_tax = $charge->shop?->registrationTax() ?? setting('payment.registration_tax');
 
         $amount = $charge->amount;
         $base_price = ($amount * 100) / (100 + $reg_tax);
