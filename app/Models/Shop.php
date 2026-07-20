@@ -17,7 +17,9 @@ use Spatie\Translatable\HasTranslations;
 
 class Shop extends Model
 {
-    use HasFactory, HasMeta, HasTranslations, LegacyVoyagerGetsTranslatedAttribute;
+    use HasFactory, HasMeta, HasTranslations, LegacyVoyagerGetsTranslatedAttribute {
+        getTranslation as protected spatieGetTranslation;
+    }
 
     public const SUBSCRIPTION_METHOD_ELAVON = 'elavon';
 
@@ -162,6 +164,37 @@ class Shop extends Model
                 $shop->subscriptionMethod = self::SUBSCRIPTION_METHOD_ELAVON;
             }
         });
+    }
+
+    public function getTranslation(string $key, string $locale, bool $useFallbackLocale = true): mixed
+    {
+        $translation = $this->spatieGetTranslation($key, $locale, $useFallbackLocale);
+
+        if (filled($translation) || ! $this->isTranslatableAttribute($key)) {
+            return $translation;
+        }
+
+        $raw = $this->getAttributes()[$key] ?? null;
+
+        if (! is_string($raw) || blank($raw)) {
+            return $translation;
+        }
+
+        $decoded = json_decode($raw, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return $raw;
+        }
+
+        if (is_array($decoded)) {
+            foreach ($decoded as $value) {
+                if (filled($value)) {
+                    return $value;
+                }
+            }
+        }
+
+        return $translation;
     }
 
     public function status(): Attribute
