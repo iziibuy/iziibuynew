@@ -2,8 +2,6 @@
 
 namespace App\Services\Elavon;
 
-use App\Elavon\Converge2\Client\ClientConfig;
-use App\Elavon\Converge2\Converge2;
 use App\Mail\NotificationEmail;
 use App\Models\Charge;
 use App\Models\Shop;
@@ -16,16 +14,17 @@ class ElavonShopSubscriptionNotificationHandler
 {
     public function handleNotificationId(string $notificationId): bool
     {
-        $client = $this->platformClient();
-        $notification = $client->getNotification($notificationId);
+        $client = PlatformElavonCredentials::clientForNotification($notificationId);
 
-        if (! $notification->isSuccess()) {
+        if ($client === null) {
             Log::warning('Elavon shop subscription notification: could not load notification', [
                 'notification_id' => $notificationId,
             ]);
 
             return false;
         }
+
+        $notification = $client->getNotification($notificationId);
 
         $eventType = $notification->getEventType();
         if ($eventType === null) {
@@ -144,20 +143,6 @@ class ElavonShopSubscriptionNotificationHandler
                 Log::error('Elavon shop subscription renewal email failed: '.$e->getMessage());
             }
         }
-    }
-
-    protected function platformClient(): Converge2
-    {
-        $config = new ClientConfig;
-        $config->setMerchantAlias(str_replace(' ', '', (string) config('services.enterprise_elavon.merchant_alias', '')));
-        $config->setPublicKey(str_replace(' ', '', (string) config('services.enterprise_elavon.public_key', '')));
-        $config->setSecretKey(str_replace(' ', '', (string) config('services.enterprise_elavon.secret_key', '')));
-
-        if (config('services.enterprise_elavon.sandbox')) {
-            $config->setSandboxMode();
-        }
-
-        return new Converge2($config);
     }
 
     protected function entityIdFromHref(string $href): string

@@ -36,7 +36,7 @@ class ElavonPayment
             'publicKey' => $publicKey,
             'secretKey' => $secretKey,
         ];
-        if ($shop->usesElavonSandbox()) {
+        if ($shop->site_mode === 'test') {
             $this->endpoint = 'https://uat.hpp.converge.eu.elavonaws.com';
         } else {
             $this->endpoint = 'https://hpp.eu.convergepay.com';
@@ -54,7 +54,7 @@ class ElavonPayment
         $config->setPublicKey($this->keys['publicKey']);
         $config->setSecretKey($this->keys['secretKey']);
 
-        if ($this->order->shop->usesElavonSandbox()) {
+        if ($this->order->shop->site_mode == 'test') {
 
             $config->setSandboxMode();
         }

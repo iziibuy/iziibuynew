@@ -133,12 +133,12 @@ class ShopResource extends Resource
                 Toggle::make('store_as_pickup_point'),
                 DateTimePicker::make('paid_at'),
                 TextInput::make('area'),
-                Section::make(__('Elavon environment'))
-                    ->description(__('Demo mode uses Elavon sandbox (UAT). Live mode uses production keys.'))
+                Section::make(__('Platform subscription (Elavon)'))
+                    ->description(__('Controls which iziibuy platform Elavon credentials are used when this shop subscribes. Demo uses sandbox keys from .env; live uses production keys from .env.'))
                     ->schema([
                         Toggle::make('is_demo')
-                            ->label(__('Demo mode (Elavon sandbox)'))
-                            ->helperText(__('When enabled, Elavon checkout and subscriptions use UAT. When disabled, production keys are used.'))
+                            ->label(__('Demo subscription (Elavon sandbox)'))
+                            ->helperText(__('Uses ELAVON_ENTERPRISE_SANDBOX_* from .env. When off, uses ELAVON_ENTERPRISE_* production keys.'))
                             ->default(false),
                     ])
                     ->columnSpanFull(),
@@ -176,7 +176,7 @@ class ShopResource extends Resource
                             ->color(fn (?bool $state): string => $state ? 'success' : 'danger'),
                         TextEntry::make('is_demo')
                             ->label(__('Demo / Live'))
-                            ->formatStateUsing(fn (bool $state): string => $state ? __('Demo (Elavon sandbox)') : __('Live (Elavon production)'))
+                            ->formatStateUsing(fn (bool $state): string => $state ? __('Demo subscription (sandbox .env)') : __('Live subscription (production .env)'))
                             ->badge()
                             ->color(fn (bool $state): string => $state ? 'warning' : 'success'),
                         TextEntry::make('paymentMethod')
@@ -404,7 +404,7 @@ class ShopResource extends Resource
                     ->placeholder('—'),
                 TextColumn::make('is_demo')
                     ->label(__('Demo / Live'))
-                    ->formatStateUsing(fn (bool $state): string => $state ? __('Demo (Elavon sandbox)') : __('Live (Elavon production)'))
+                    ->formatStateUsing(fn (bool $state): string => $state ? __('Demo subscription (sandbox .env)') : __('Live subscription (production .env)'))
                     ->badge()
                     ->color(fn (bool $state): string => $state ? 'warning' : 'success')
                     ->sortable(),

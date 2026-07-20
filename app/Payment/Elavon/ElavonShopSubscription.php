@@ -11,6 +11,7 @@ use App\Elavon\Converge2\Response\ShopperResponse;
 use App\Elavon\Converge2\Response\StoredCardResponse;
 use App\Models\Shop;
 use App\Services\Elavon\ElavonRecurringTransaction;
+use App\Services\Elavon\PlatformElavonCredentials;
 use Illuminate\Support\Facades\Log;
 use Iziibuy;
 
@@ -61,30 +62,7 @@ class ElavonShopSubscription
      */
     protected function resolveConvergeKeys(): array
     {
-        $merchant = (string) ($this->shop->elavon_merchant_alias ?? '');
-        $public = (string) ($this->shop->elavon_public_key ?? '');
-        $secret = (string) ($this->shop->elavon_secret_key ?? '');
-
-        if ($merchant !== '' && $public !== '' && $secret !== '') {
-            return [
-                'mercahantAlias' => str_replace(' ', '', $merchant),
-                'publicKey' => str_replace(' ', '', $public),
-                'secretKey' => str_replace(' ', '', $secret),
-                'sandbox' => $this->shop->usesElavonSandbox(),
-            ];
-        }
-
-        $merchant = (string) config('services.enterprise_elavon.merchant_alias', '');
-        $public = (string) config('services.enterprise_elavon.public_key', '');
-        $secret = (string) config('services.enterprise_elavon.secret_key', '');
-        $sandbox = $this->shop->usesElavonSandbox();
-
-        return [
-            'mercahantAlias' => str_replace(' ', '', $merchant),
-            'publicKey' => str_replace(' ', '', $public),
-            'secretKey' => str_replace(' ', '', $secret),
-            'sandbox' => $sandbox,
-        ];
+        return PlatformElavonCredentials::forShop($this->shop);
     }
 
     protected function config(): ClientConfig
