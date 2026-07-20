@@ -19,13 +19,6 @@ class IziipayController extends Controller
     public function createPayment(PaymentMethodAccess $paymentMethodAccess, Request $request)
     {
         // Log::info($request->all());
-        if (! $paymentMethodAccess->canProcessPayments()) {
-            return response()->json([
-                'message' => $paymentMethodAccess->elavon_resubscription_message ?? 'This payment method is inactive.',
-                'status' => false,
-            ], 403);
-        }
-
         $api = $paymentMethodAccess->paymentapis()->where('key', $request->source_key)->first();
         if (! $api) {
             return response()->json([
@@ -108,13 +101,6 @@ class IziipayController extends Controller
 
     public function createPaymentLink(PaymentMethodAccess $paymentMethodAccess, Request $request)
     {
-        if (! $paymentMethodAccess->canProcessPayments()) {
-            return response()->json([
-                'message' => $paymentMethodAccess->elavon_resubscription_message ?? 'This payment method is inactive.',
-                'status' => false,
-            ], 403);
-        }
-
         $request->validate([
             'order_id' => ['required', 'integer'],
         ]);
