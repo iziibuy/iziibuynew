@@ -94,7 +94,9 @@ class ShopResource extends Resource
                     ->minValue(0)
                     ->maxValue(100)
                     ->suffix('%')
-                    ->helperText(__('Applied to this shop\'s subscription fees and customer orders. Leave empty to use the global PAYMENT_REGISTRATION_TAX default.')),
+                    ->default(fn (): float => (float) config('settings.payment.registration_tax', 0))
+                    ->formatStateUsing(fn ($state): float => $state ?? (float) config('settings.payment.registration_tax', 0))
+                    ->helperText(__('Applied to this shop\'s subscription fees and customer orders. Pre-filled from PAYMENT_REGISTRATION_TAX when this shop has no saved value.')),
                 Toggle::make('status'),
                 TextInput::make('subscription_id')
                     ->required(),
