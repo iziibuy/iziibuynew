@@ -611,6 +611,11 @@ class Shop extends Model
             && ! $this->usesElavonNativeSubscription();
     }
 
+    public function usesElavonSandbox(): bool
+    {
+        return (bool) ($this->attributes['is_demo'] ?? false);
+    }
+
     public function subscriptionFee()
     {
         if (ElavonOnboardingPromo::isFreeSubscriptionPeriod()) {

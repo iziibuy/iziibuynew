@@ -133,8 +133,15 @@ class ShopResource extends Resource
                 Toggle::make('store_as_pickup_point'),
                 DateTimePicker::make('paid_at'),
                 TextInput::make('area'),
-                Toggle::make('is_demo')
-                    ->required(),
+                Section::make(__('Elavon environment'))
+                    ->description(__('Demo mode uses Elavon sandbox (UAT). Live mode uses production keys.'))
+                    ->schema([
+                        Toggle::make('is_demo')
+                            ->label(__('Demo mode (Elavon sandbox)'))
+                            ->helperText(__('When enabled, Elavon checkout and subscriptions use UAT. When disabled, production keys are used.'))
+                            ->default(false),
+                    ])
+                    ->columnSpanFull(),
                 TextInput::make('previous_retailer')
                     ->numeric(),
                 DatePicker::make('retailer_joined_at'),
@@ -169,7 +176,7 @@ class ShopResource extends Resource
                             ->color(fn (?bool $state): string => $state ? 'success' : 'danger'),
                         TextEntry::make('is_demo')
                             ->label(__('Demo / Live'))
-                            ->formatStateUsing(fn (bool $state): string => $state ? __('Demo') : __('Live'))
+                            ->formatStateUsing(fn (bool $state): string => $state ? __('Demo (Elavon sandbox)') : __('Live (Elavon production)'))
                             ->badge()
                             ->color(fn (bool $state): string => $state ? 'warning' : 'success'),
                         TextEntry::make('paymentMethod')
@@ -397,7 +404,7 @@ class ShopResource extends Resource
                     ->placeholder('—'),
                 TextColumn::make('is_demo')
                     ->label(__('Demo / Live'))
-                    ->formatStateUsing(fn (bool $state): string => $state ? __('Demo') : __('Live'))
+                    ->formatStateUsing(fn (bool $state): string => $state ? __('Demo (Elavon sandbox)') : __('Live (Elavon production)'))
                     ->badge()
                     ->color(fn (bool $state): string => $state ? 'warning' : 'success')
                     ->sortable(),

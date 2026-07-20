@@ -6,7 +6,9 @@ use Illuminate\Support\Carbon;
 
 class ElavonOnboardingPromo
 {
-    public const FREE_SUBSCRIPTION_UNTIL = '2026-07-20';
+    public const FREE_SUBSCRIPTION_FROM = '2026-07-19';
+
+    public const FREE_SUBSCRIPTION_UNTIL = '2026-07-26';
 
     public const PROMO_SIGNUP_FEE = 0.0;
 
@@ -15,7 +17,10 @@ class ElavonOnboardingPromo
 
     public static function isFreeSubscriptionPeriod(): bool
     {
-        return now()->lt(Carbon::parse(self::FREE_SUBSCRIPTION_UNTIL)->startOfDay());
+        $now = now();
+
+        return $now->gte(Carbon::parse(self::FREE_SUBSCRIPTION_FROM)->startOfDay())
+            && $now->lte(Carbon::parse(self::FREE_SUBSCRIPTION_UNTIL)->endOfDay());
     }
 
     public static function signupFee(float $fee): float

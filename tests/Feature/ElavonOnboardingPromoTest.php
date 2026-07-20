@@ -9,8 +9,12 @@ use App\Services\Elavon\ElavonRecurringTransaction;
 use App\Services\Elavon\ElavonVaultOnlyPaymentSession;
 use Illuminate\Support\Carbon;
 
-it('uses zero promo signup fee before 20 july 2026', function (): void {
+it('uses zero promo signup fee between 19 and 26 july 2026', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-07-19 12:00:00'));
+
+    expect(ElavonOnboardingPromo::isFreeSubscriptionPeriod())->toBeTrue();
+
+    Carbon::setTestNow(Carbon::parse('2026-07-26 23:59:59'));
 
     expect(ElavonOnboardingPromo::isFreeSubscriptionPeriod())->toBeTrue();
 
@@ -42,8 +46,12 @@ it('uses vault-only signup when promo fee is zero', function (): void {
         ->and(ElavonOnboardingPromo::hppOrderAmount(100))->toBe(100.0);
 });
 
-it('charges normal subscription fees from 20 july 2026', function (): void {
-    Carbon::setTestNow(Carbon::parse('2026-07-20 00:00:00'));
+it('charges normal subscription fees outside the promo period', function (): void {
+    Carbon::setTestNow(Carbon::parse('2026-07-18 23:59:59'));
+
+    expect(ElavonOnboardingPromo::isFreeSubscriptionPeriod())->toBeFalse();
+
+    Carbon::setTestNow(Carbon::parse('2026-07-27 00:00:00'));
 
     expect(ElavonOnboardingPromo::isFreeSubscriptionPeriod())->toBeFalse();
 

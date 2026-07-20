@@ -70,14 +70,14 @@ class ElavonShopSubscription
                 'mercahantAlias' => str_replace(' ', '', $merchant),
                 'publicKey' => str_replace(' ', '', $public),
                 'secretKey' => str_replace(' ', '', $secret),
-                'sandbox' => ($this->shop->site_mode ?? '') === 'test',
+                'sandbox' => $this->shop->usesElavonSandbox(),
             ];
         }
 
         $merchant = (string) config('services.enterprise_elavon.merchant_alias', '');
         $public = (string) config('services.enterprise_elavon.public_key', '');
         $secret = (string) config('services.enterprise_elavon.secret_key', '');
-        $sandbox = (bool) config('services.enterprise_elavon.sandbox');
+        $sandbox = $this->shop->usesElavonSandbox();
 
         return [
             'mercahantAlias' => str_replace(' ', '', $merchant),
