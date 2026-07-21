@@ -209,9 +209,15 @@ class RegisterController extends Controller
         return redirect()->back()->withErrors('Something went wrong');
     }
 
-    public function subscriptionIndex()
+    public function subscriptionIndex(Request $request)
     {
         if (auth()->user()->role_id == 3) {
+            $shop = auth()->user()->shop;
+
+            if ($this->shouldFinalizeElavonSubscriptionFromRequest($request, $shop)) {
+                return $this->elavonSubscriptionReturn($request);
+            }
+
             return view('dashboard.shop.subscription');
         }
 
@@ -287,11 +293,7 @@ class RegisterController extends Controller
     {
         $shop = auth()->user()->shop;
 
-        $sessionId = $request->input('sessionId')
-            ?? $request->input('session_id')
-            ?? $request->query('sessionId')
-            ?? $request->query('session_id')
-            ?? $shop->payment_order_id;
+        $sessionId = $this->elavonSessionIdFromRequest($request, $shop);
 
         if (! is_string($sessionId) || trim($sessionId) === '') {
             return redirect()->route('shop.subscription.payment')
@@ -329,6 +331,30 @@ class RegisterController extends Controller
         // Activate immediately after HPP finalize (same as enterprise/plugin), instead of an
         // extra redirect that can bounce unpaid shops back to the subscription page.
         return ShopSubscriptionService::confirmSubscription($shop);
+    }
+
+    protected function shouldFinalizeElavonSubscriptionFromRequest(Request $request, Shop $shop): bool
+    {
+        if ($shop->subscriptionMethod !== 'elavon' || filled($shop->subscription_id)) {
+            return false;
+        }
+
+        if ($request->filled('sessionId') || $request->filled('session_id')) {
+            return true;
+        }
+
+        return filled($shop->payment_order_id) && filled($shop->payment_url);
+    }
+
+    protected function elavonSessionIdFromRequest(Request $request, Shop $shop): ?string
+    {
+        $sessionId = $request->input('sessionId')
+            ?? $request->input('session_id')
+            ?? $request->query('sessionId')
+            ?? $request->query('session_id')
+            ?? $shop->payment_order_id;
+
+        return is_string($sessionId) ? $sessionId : null;
     }
 
     public function elavonSubscriptionCancel()
