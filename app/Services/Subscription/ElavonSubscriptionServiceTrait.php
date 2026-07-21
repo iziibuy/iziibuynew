@@ -105,6 +105,7 @@ trait ElavonSubscriptionServiceTrait
         $this->shop->establishment = 1;
         $this->shop->paid_at = Carbon::now();
         $this->shop->subscriptionMethod = 'elavon';
+        $this->shop->ensureDefaultPackageOption();
         if ($this->shop->retailer_id) {
             RetailerCommission::one_time_pay_out($this->shop)->pay();
             RetailerCommission::commission_from_recurring_payments($this->shop)->pay();

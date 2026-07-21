@@ -100,6 +100,8 @@ class RegisterController extends Controller
                 'buy_btn_hover_color' => '#ffffff',
             ]);
 
+            $shop->ensureDefaultPackageOption();
+
             $user->update([
                 'shop_id' => $user->shop->id,
             ]);

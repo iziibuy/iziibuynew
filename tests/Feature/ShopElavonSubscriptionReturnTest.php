@@ -75,6 +75,8 @@ it('activates the shop after elavon hpp return even if stored card lookup fails'
     expect((int) $shop->status)->toBe(1)
         ->and((int) $shop->establishment)->toBe(1)
         ->and($shop->subscription_id)->toBe('card-xyz')
+        ->and($shop->defaultoption)->not->toBeNull()
+        ->and($shop->defaultoption->minutes)->toBe(60)
         ->and($shop->paid_at)->not->toBeNull();
 
     Mail::assertSent(ShopInvoice::class);
@@ -171,6 +173,8 @@ it('activates the shop when elavon hpp returns to the subscription page with a s
         ->and((int) $shop->establishment)->toBe(1)
         ->and($shop->subscriptionMethod)->toBe('elavon')
         ->and($shop->subscription_id)->toBe('card-from-subscription-page')
+        ->and($shop->defaultoption)->not->toBeNull()
+        ->and($shop->defaultoption->minutes)->toBe(60)
         ->and($shop->paid_at)->not->toBeNull();
 
     Mail::assertSent(ShopInvoice::class);

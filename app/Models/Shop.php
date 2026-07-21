@@ -343,6 +343,34 @@ class Shop extends Model
         );
     }
 
+    public function ensureDefaultPackageOption(): Packageoption
+    {
+        if ($this->default_package_option) {
+            $defaultOption = Packageoption::query()
+                ->where('shop_id', $this->id)
+                ->find($this->default_package_option);
+
+            if ($defaultOption) {
+                return $defaultOption;
+            }
+        }
+
+        $defaultOption = $this->options()->first();
+
+        if (! $defaultOption) {
+            $defaultOption = $this->options()->create([
+                'title' => 'Standard',
+                'details' => 'Standard booking option',
+                'minutes' => 60,
+                'buffer' => 0,
+            ]);
+        }
+
+        $this->createMeta('default_package_option', $defaultOption->id);
+
+        return $defaultOption;
+    }
+
     public function getSelfCheckoutAttribute()
     {
 
