@@ -343,9 +343,7 @@ class RegisterController extends Controller
             return true;
         }
 
-        return filled($shop->payment_order_id)
-            && filled($shop->payment_url)
-            && str_contains((string) $shop->payment_url, 'sessionId=');
+        return false;
     }
 
     protected function elavonSessionIdFromRequest(Request $request, Shop $shop): ?string

@@ -80,7 +80,36 @@ it('activates the shop after elavon hpp return even if stored card lookup fails'
     Mail::assertSent(ShopInvoice::class);
 });
 
-it('activates the shop when elavon hpp returns to the subscription page', function (): void {
+it('does not finalize a pending elavon hpp session before elavon returns', function (): void {
+    $user = User::factory()->create([
+        'role_id' => User::ROLES['Vendor'],
+    ]);
+    $user->assignRole('vendor');
+
+    $shop = Shop::query()->create([
+        'user_id' => $user->id,
+        'user_name' => 'shop-hpp-pending-'.uniqid(),
+        'paymentMethod' => 'elavon',
+        'status' => 0,
+        'establishment' => 0,
+        'payment_order_id' => 'session-pending',
+        'payment_url' => 'https://hpp.example.test/?sessionId=session-pending',
+        'monthly_cost' => 0,
+        'establishment_cost' => 0,
+        'per_user_fee' => 0,
+    ]);
+    $user->update(['shop_id' => $shop->id]);
+
+    $factory = Mockery::mock(ElavonShopSubscriptionFactory::class);
+    $factory->shouldNotReceive('make');
+    $this->app->instance(ElavonShopSubscriptionFactory::class, $factory);
+
+    $this->actingAs($user)
+        ->get(route('shop.subscription.payment'))
+        ->assertOk();
+});
+
+it('activates the shop when elavon hpp returns to the subscription page with a session id', function (): void {
     Mail::fake();
 
     $user = User::factory()->create([
@@ -133,7 +162,7 @@ it('activates the shop when elavon hpp returns to the subscription page', functi
     $this->app->instance(ElavonShopSubscriptionFactory::class, $factory);
 
     $this->actingAs($user)
-        ->get(route('shop.subscription.payment'))
+        ->get(route('shop.subscription.payment', ['sessionId' => 'session-subscription-page']))
         ->assertRedirect(route('shop.complete.signup'));
 
     $shop->refresh();
