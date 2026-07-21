@@ -67,6 +67,8 @@ trait ElavonSubscriptionServiceTrait
         if ($this->shop->paid_at && $this->shop->paid_at->isSameMonth(today())) {
             $this->shop->status = 1;
             $this->shop->establishment = 1;
+            $this->shop->subscriptionMethod = 'elavon';
+            $this->shop->ensureDefaultPackageOption();
             $this->shop->save();
 
             return redirect(route('shop.dashboard'))->with('Thank your for subscribe');

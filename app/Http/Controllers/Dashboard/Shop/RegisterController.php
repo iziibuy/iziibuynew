@@ -15,19 +15,16 @@ use App\Payment\Elavon\ElavonShopSubscription;
 use App\Payment\Elavon\ElavonShopSubscriptionFactory;
 use App\Rules\CreditCardValidation;
 use App\Services\Elavon\ElavonShopSubscriptionBilling;
-use App\Services\RetailerCommission;
 use App\Services\Subscription\ShopSubscriptionService;
 use Exception;
 use Illuminate\Contracts\Auth\Guard;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Session;
-use Iziibuy;
 
 class RegisterController extends Controller
 {
@@ -248,38 +245,24 @@ class RegisterController extends Controller
             ]);
         }
 
+        if (! request()->has('type') && $shop->subscription_id && $shop->subscriptionMethod !== Shop::SUBSCRIPTION_METHOD_ELAVON) {
+            ElavonShopSubscriptionBilling::cancel($shop);
+
+            $shop->update([
+                'subscription_id' => null,
+                'shopperId' => null,
+                'payment_order_id' => null,
+                'payment_url' => null,
+                'elavon_plan_id' => null,
+                'elavon_subscription_id' => null,
+                'subscriptionMethod' => Shop::SUBSCRIPTION_METHOD_ELAVON,
+            ]);
+        }
+
         if (! request()->has('type') && $shop->subscription_id) {
-            if ($shop->subscriptionMethod === 'elavon') {
-                return redirect()->route('shop.confirm.subscription', [
-                    'subscription_id' => $shop->subscription_id,
-                ]);
-            }
-
-            $amount = Iziibuy::round_num($shop->subscriptionFee());
-            $charge_status = app(ElavonShopSubscriptionFactory::class)->make($shop)->chargeViaCard($amount);
-
-            if ($charge_status['status'] == true && ($charge_status['data']['status'] ?? false)) {
-                Charge::create([
-                    'shop_id' => $shop->id,
-                    'order_id' => $charge_status['data']['id'],
-                    'amount' => $amount,
-                    'status' => true,
-                    'comment' => 'subscription fee',
-                    'details' => json_encode($shop->subscriptionFeeDetails()),
-                ]);
-                $shop->is_demo = false;
-                $shop->status = 1;
-                $shop->establishment = 1;
-                $shop->paid_at = Carbon::now();
-                $shop->save();
-                if ($shop->retailer_id) {
-                    RetailerCommission::commission_from_recurring_payments($shop)->pay();
-                }
-
-                return redirect(route('shop.dashboard'));
-            }
-
-            return redirect(route('shop.subscription.payment'))->withErrors('There is a problem with your Payment method. Please try again later');
+            return redirect()->route('shop.confirm.subscription', [
+                'subscription_id' => $shop->subscription_id,
+            ]);
         }
 
         try {

@@ -225,3 +225,56 @@ it('opens complete signup when gateway contract metadata is empty', function ():
         ->get(route('shop.complete.signup'))
         ->assertOk();
 });
+
+it('clears legacy quickpay subscription ids before starting elavon hosted payment', function (): void {
+    $user = User::factory()->create([
+        'role_id' => User::ROLES['Vendor'],
+    ]);
+    $user->assignRole('vendor');
+
+    $shop = Shop::query()->create([
+        'user_id' => $user->id,
+        'user_name' => 'shop-legacy-quickpay-'.uniqid(),
+        'subscriptionMethod' => 'quickpay',
+        'paymentMethod' => 'surfboard',
+        'subscription_id' => 'stored-card-legacy',
+        'status' => 0,
+        'establishment' => 0,
+        'monthly_cost' => 0,
+        'establishment_cost' => 0,
+        'per_user_fee' => 0,
+    ]);
+    $user->update(['shop_id' => $shop->id]);
+
+    $elavon = Mockery::mock(ElavonShopSubscription::class);
+    $elavon->shouldReceive('createSubscription')
+        ->once()
+        ->andReturn([
+            'status' => true,
+            'code' => 200,
+            'data' => [
+                'requires_hpp' => true,
+                'url' => 'https://hpp.example.test/?sessionId=elavon-session-legacy',
+                'payment_id' => 'elavon-session-legacy',
+            ],
+        ]);
+
+    $factory = Mockery::mock(ElavonShopSubscriptionFactory::class);
+    $factory->shouldReceive('make')->once()->with(Mockery::type(Shop::class))->andReturn($elavon);
+    $this->app->instance(ElavonShopSubscriptionFactory::class, $factory);
+
+    $this->actingAs($user)
+        ->get(route('shop.enroll.subscription'))
+        ->assertRedirect('https://hpp.example.test/?sessionId=elavon-session-legacy');
+
+    $shop->refresh();
+
+    expect((int) $shop->status)->toBe(0)
+        ->and((int) $shop->establishment)->toBe(0)
+        ->and($shop->subscriptionMethod)->toBe('elavon')
+        ->and($shop->subscription_id)->toBeNull()
+        ->and($shop->shopperId)->toBeNull()
+        ->and($shop->payment_order_id)->toBe('elavon-session-legacy')
+        ->and($shop->payment_url)->toBe('https://hpp.example.test/?sessionId=elavon-session-legacy')
+        ->and($shop->paid_at)->toBeNull();
+});
