@@ -48,6 +48,7 @@ Route::get('subscription', [RegisterController::class, 'subscriptionIndex'])->na
 Route::get('delete-account', [RegisterController::class, 'deleteAccount'])->name('delete.account');
 Route::any('enroll-subscription', [RegisterController::class, 'enrollSubscription'])->name('enroll.subscription');
 Route::get('subscription/elavon-return', [RegisterController::class, 'elavonSubscriptionReturn'])->name('subscription.elavon.return');
+Route::get('subscription/elavon-cancel', [RegisterController::class, 'elavonSubscriptionCancel'])->name('subscription.elavon.cancel');
 Route::get('confirm-subscription/{subscription_id}', [RegisterController::class, 'confirmSubscription'])->name('confirm.subscription');
 
 Route::get('/charges', [DashboardController::class, 'indexCharges'])->name('charges.index');

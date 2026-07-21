@@ -12,6 +12,7 @@ use App\Models\Charge;
 use App\Models\Shop;
 use App\Models\User;
 use App\Payment\Elavon\ElavonShopSubscription;
+use App\Payment\Elavon\ElavonShopSubscriptionFactory;
 use App\Rules\CreditCardValidation;
 use App\Services\Elavon\ElavonShopSubscriptionBilling;
 use App\Services\RetailerCommission;
@@ -247,7 +248,7 @@ class RegisterController extends Controller
             }
 
             $amount = Iziibuy::round_num($shop->subscriptionFee());
-            $charge_status = (new ElavonShopSubscription($shop))->chargeViaCard($amount);
+            $charge_status = app(ElavonShopSubscriptionFactory::class)->make($shop)->chargeViaCard($amount);
 
             if ($charge_status['status'] == true && ($charge_status['data']['status'] ?? false)) {
                 Charge::create([
@@ -308,7 +309,9 @@ class RegisterController extends Controller
             'session_id' => $sessionId,
         ]);
 
-        $result = (new ElavonShopSubscription($shop))->finalizeHostedSubscriptionFromSession($sessionId);
+        $result = app(ElavonShopSubscriptionFactory::class)
+            ->make($shop)
+            ->finalizeHostedSubscriptionFromSession($sessionId);
 
         if (! $result['status']) {
             Log::warning('Elavon shop subscription: HPP return failed', [
@@ -321,9 +324,17 @@ class RegisterController extends Controller
                 ->withErrors($result['data']['message'] ?? 'Payment could not be completed.');
         }
 
-        return redirect()->route('shop.confirm.subscription', [
-            'subscription_id' => $result['data']['cardId'],
-        ]);
+        $shop->refresh();
+
+        // Activate immediately after HPP finalize (same as enterprise/plugin), instead of an
+        // extra redirect that can bounce unpaid shops back to the subscription page.
+        return ShopSubscriptionService::confirmSubscription($shop);
+    }
+
+    public function elavonSubscriptionCancel()
+    {
+        return redirect()->route('shop.subscription.payment')
+            ->withErrors('Payment cancelled.');
     }
 
     public function confirmSubscription(string $subscription_id)

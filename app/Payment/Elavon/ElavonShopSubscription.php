@@ -292,7 +292,7 @@ class ElavonShopSubscription
         $result = $hosted->getPaymentLink(
             $amount,
             route('shop.subscription.elavon.return', absolute: true),
-            route('shop.subscription.payment', absolute: true),
+            route('shop.subscription.elavon.cancel', absolute: true),
         );
 
         if (! $result['status']) {

@@ -5,6 +5,7 @@ namespace App\Services\Subscription;
 use App\Mail\ShopInvoice;
 use App\Models\Charge;
 use App\Payment\Elavon\ElavonShopSubscription;
+use App\Payment\Elavon\ElavonShopSubscriptionFactory;
 use App\Services\RetailerCommission;
 use Carbon\Carbon;
 use Exception;
@@ -16,7 +17,7 @@ trait ElavonSubscriptionServiceTrait
 {
     protected function createSubscriptionWithElavon()
     {
-        $subscription = (new ElavonShopSubscription($this->shop))->createSubscription();
+        $subscription = app(ElavonShopSubscriptionFactory::class)->make($this->shop)->createSubscription();
 
         if ($subscription['status'] !== true) {
             throw new Exception($subscription['data']['message'] ?? 'Subscription failed');
@@ -39,11 +40,22 @@ trait ElavonSubscriptionServiceTrait
 
     protected function confirmSubscriptionWithElavon()
     {
-        $elavon = new ElavonShopSubscription($this->shop);
+        if (! filled($this->shop->subscription_id)) {
+            return redirect(route('shop.subscription.payment'))
+                ->withErrors('There is a problem with your Payment method. Please try again later');
+        }
+
+        $elavon = app(ElavonShopSubscriptionFactory::class)->make($this->shop);
         $storedCard = $elavon->getStoredCardResource();
 
+        // HPP finalize already vaulted the card locally. A brief Converge lookup failure
+        // must not send the shop back to the unpaid subscription page after a successful payment.
         if (! $storedCard->isSuccess()) {
-            return redirect(route('shop.subscription.payment'))->withErrors('There is a problem with your Payment method. Please try again later');
+            Log::warning('Elavon shop subscription: stored card lookup failed during confirm; continuing with local subscription_id', [
+                'shop_id' => $this->shop->id,
+                'subscription_id' => $this->shop->subscription_id,
+                'has_initial_transaction' => filled($this->shop->elavon_initial_transaction_id),
+            ]);
         }
 
         if ($this->shop->status == 1) {
