@@ -91,7 +91,6 @@ it('activates the shop when elavon hpp returns to the subscription page', functi
     $shop = Shop::query()->create([
         'user_id' => $user->id,
         'user_name' => 'shop-hpp-subscription-'.uniqid(),
-        'subscriptionMethod' => 'elavon',
         'paymentMethod' => 'elavon',
         'status' => 0,
         'establishment' => 0,
@@ -141,10 +140,15 @@ it('activates the shop when elavon hpp returns to the subscription page', functi
 
     expect((int) $shop->status)->toBe(1)
         ->and((int) $shop->establishment)->toBe(1)
+        ->and($shop->subscriptionMethod)->toBe('elavon')
         ->and($shop->subscription_id)->toBe('card-from-subscription-page')
         ->and($shop->paid_at)->not->toBeNull();
 
     Mail::assertSent(ShopInvoice::class);
+
+    $this->actingAs($user)
+        ->get(route('shop.complete.signup'))
+        ->assertOk();
 });
 
 it('sends cancelled payments back to the subscription page with a message', function (): void {

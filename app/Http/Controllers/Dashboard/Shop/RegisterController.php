@@ -335,7 +335,7 @@ class RegisterController extends Controller
 
     protected function shouldFinalizeElavonSubscriptionFromRequest(Request $request, Shop $shop): bool
     {
-        if ($shop->subscriptionMethod !== 'elavon' || filled($shop->subscription_id)) {
+        if (filled($shop->subscription_id)) {
             return false;
         }
 
@@ -343,7 +343,9 @@ class RegisterController extends Controller
             return true;
         }
 
-        return filled($shop->payment_order_id) && filled($shop->payment_url);
+        return filled($shop->payment_order_id)
+            && filled($shop->payment_url)
+            && str_contains((string) $shop->payment_url, 'sessionId=');
     }
 
     protected function elavonSessionIdFromRequest(Request $request, Shop $shop): ?string

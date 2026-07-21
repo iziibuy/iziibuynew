@@ -24,6 +24,7 @@ trait ElavonSubscriptionServiceTrait
         }
 
         if (! empty($subscription['data']['requires_hpp'])) {
+            $this->shop->subscriptionMethod = 'elavon';
             $this->shop->payment_url = $subscription['data']['url'];
             $this->shop->payment_order_id = $subscription['data']['payment_id'] ?? null;
             $this->shop->save();
@@ -33,6 +34,7 @@ trait ElavonSubscriptionServiceTrait
 
         $this->shop->shopperId = $subscription['data']['shopperId'];
         $this->shop->subscription_id = $subscription['data']['cardId'];
+        $this->shop->subscriptionMethod = 'elavon';
         $this->shop->save();
 
         return route('shop.confirm.subscription', $subscription['data']['cardId']);
@@ -102,6 +104,7 @@ trait ElavonSubscriptionServiceTrait
         $this->shop->status = 1;
         $this->shop->establishment = 1;
         $this->shop->paid_at = Carbon::now();
+        $this->shop->subscriptionMethod = 'elavon';
         if ($this->shop->retailer_id) {
             RetailerCommission::one_time_pay_out($this->shop)->pay();
             RetailerCommission::commission_from_recurring_payments($this->shop)->pay();

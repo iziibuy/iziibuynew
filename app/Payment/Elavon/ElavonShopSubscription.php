@@ -417,6 +417,7 @@ class ElavonShopSubscription
         }
 
         $this->shop->subscription_id = $cardId;
+        $this->shop->subscriptionMethod = Shop::SUBSCRIPTION_METHOD_ELAVON;
         $primaryShopper = $shopperCandidates[0] ?? '';
         if ($primaryShopper !== '') {
             $this->shop->shopperId = $this->convergeEntityIdFromHrefOrId($primaryShopper) ?: $primaryShopper;
