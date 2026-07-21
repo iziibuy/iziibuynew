@@ -71,7 +71,7 @@
             <p>{{ __('words.contract_has_panding_pera_2') }} </p>
 
             <div class="row g-3">
-                @foreach (json_decode(auth()->user()->shop->gateway_contract_signed) as $gateway => $status)
+                @foreach (auth()->user()->shop->gateway_contract_signed ? json_decode(auth()->user()->shop->gateway_contract_signed) : [] as $gateway => $status)
                     <div class="col-12">
                         @include("dashboard.shop.contract.$gateway", ['status' => $status])
                     </div>

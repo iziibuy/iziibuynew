@@ -199,3 +199,25 @@ it('sends cancelled payments back to the subscription page with a message', func
         ->assertRedirect(route('shop.subscription.payment'))
         ->assertSessionHasErrors();
 });
+
+it('opens complete signup when gateway contract metadata is empty', function (): void {
+    $user = User::factory()->create([
+        'role_id' => User::ROLES['Vendor'],
+    ]);
+    $user->assignRole('vendor');
+
+    $shop = Shop::query()->create([
+        'user_id' => $user->id,
+        'user_name' => 'shop-empty-contracts-'.uniqid(),
+        'subscriptionMethod' => 'elavon',
+        'subscription_id' => 'card-empty-contracts',
+        'status' => 1,
+        'establishment' => 1,
+        'contract_signed' => 1,
+    ]);
+    $user->update(['shop_id' => $shop->id]);
+
+    $this->actingAs($user)
+        ->get(route('shop.complete.signup'))
+        ->assertOk();
+});
