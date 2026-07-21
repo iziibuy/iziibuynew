@@ -81,7 +81,7 @@
                             <div class="text-center">
                                 <a href="{{ route('shop.enroll.subscription') }}"
                                     class="btn btn-primary">{{ __('words.start_running_subs_btn') }}</a>
-                                @if (auth()->user()->shop->subscription_id)
+                                @if (filled(auth()->user()->shop->subscription_id) || filled(auth()->user()->shop->elavon_subscription_id) || filled(auth()->user()->shop->shopperId))
                                     <a href="{{ route('shop.enroll.subscription', ['type' => 'new_card']) }}"
                                         class="btn btn-primary">{{ __('words.subscribe_with_new_card') }}</a>
                                 @endif

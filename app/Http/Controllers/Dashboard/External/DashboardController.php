@@ -90,9 +90,24 @@ class DashboardController extends Controller
             return abort(403);
         }
 
+        $paymentMethodAccess = $subscription->subscribable;
+
+        if (request()->has('type')) {
+            $paymentMethodAccess->update([
+                'shopperId' => null,
+            ]);
+            $subscription->update([
+                'key' => null,
+                'url' => null,
+                'status' => 0,
+                'establishment_status' => 0,
+                'paid_at' => null,
+            ]);
+        }
+
         try {
             DB::beginTransaction();
-            $paymentMethodAccess = $subscription->subscribable;
+
             $subscriptionFee = $paymentMethodAccess->fresh()->fee();
 
             $elavon = new ElavonExternalSubscription($paymentMethodAccess);

@@ -35,9 +35,24 @@ class DashboardController extends Controller
             return abort(403);
         }
 
+        $enterprise = $subscription->subscribable;
+
+        if (request()->has('type')) {
+            $enterprise->update([
+                'shopperId' => null,
+            ]);
+            $subscription->update([
+                'key' => null,
+                'url' => null,
+                'status' => 0,
+                'establishment_status' => 0,
+                'paid_at' => null,
+            ]);
+        }
+
         try {
             DB::beginTransaction();
-            $enterprise = $subscription->subscribable;
+
             $subscriptionFee = $enterprise->fresh()->signupFee();
 
             $elavon = new ElavonEnterpriseOnboardingSubscription($enterprise);

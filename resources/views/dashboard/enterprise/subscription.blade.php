@@ -41,6 +41,10 @@
                             <div class="text-center">
                                 <a href="{{ route('enterprise.start-subscription', $subscription) }}"
                                     class="btn btn-primary">{{ __('words.start_running_subs_btn') }}</a>
+                                @if (filled($subscription->key) || filled($enterprise->shopperId))
+                                    <a href="{{ route('enterprise.start-subscription', [$subscription, 'type' => 'new_card']) }}"
+                                        class="btn btn-primary">{{ __('words.subscribe_with_new_card') }}</a>
+                                @endif
                                 <a class="btn btn-danger" href="{{ route('logout') }}"
                                     onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
                                     {{ __('words.shop_logout') }}
