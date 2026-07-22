@@ -94,7 +94,8 @@ class ProductResource extends Resource
                             ->label('SKU')
                             ->maxLength(255),
                         TextInput::make('slug')
-                            ->maxLength(255),
+                            ->maxLength(255)
+                            ->unique(Product::class, 'slug', ignoreRecord: true),
                         TextInput::make('item')
                             ->maxLength(255),
                         TextInput::make('ean')

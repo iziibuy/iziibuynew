@@ -46,6 +46,7 @@ class PaymentMethodAccessForm
                         TextInput::make('company_domain')
                             ->required()
                             ->maxLength(255)
+                            ->unique(PaymentMethodAccess::class, 'company_domain', ignoreRecord: true)
                             ->columnSpanFull(),
                         TextInput::make('company_registration')
                             ->required()
@@ -105,11 +106,13 @@ class PaymentMethodAccessForm
                         TextInput::make('quickpay_api_key')
                             ->label(__('words.shop_api_kay'))
                             ->maxLength(255)
+                            ->unique(PaymentMethodAccess::class, 'quickpay_api_key', ignoreRecord: true)
                             ->copyable()
                             ->visible(fn (Get $get): bool => $get('paymentMethod') === 'quickpay'),
                         TextInput::make('quickpay_secret_key')
                             ->label(__('words.shop_secrate_key'))
                             ->maxLength(255)
+                            ->unique(PaymentMethodAccess::class, 'quickpay_secret_key', ignoreRecord: true)
                             ->copyable()
                             ->visible(fn (Get $get): bool => $get('paymentMethod') === 'quickpay'),
                         TextInput::make('elavon_merchant_alias')

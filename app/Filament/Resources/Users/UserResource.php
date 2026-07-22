@@ -76,11 +76,13 @@ class UserResource extends Resource
                 TextInput::make('email')
                     ->label('Email address')
                     ->email()
-                    ->required(),
+                    ->required()
+                    ->unique(User::class, 'email', ignoreRecord: true),
                 DateTimePicker::make('email_verified_at'),
                 TextInput::make('password')
                     ->password()
-                    ->required(),
+                    ->dehydrated(fn (?string $state): bool => filled($state))
+                    ->maxLength(255),
                 TextInput::make('pt_package_id')
                     ->numeric(),
                 TextInput::make('pt_trainer_id')

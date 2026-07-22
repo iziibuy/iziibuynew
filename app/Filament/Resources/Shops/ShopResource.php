@@ -84,7 +84,8 @@ class ShopResource extends Resource
                 TextInput::make('retailer_id')
                     ->numeric(),
                 TextInput::make('user_name')
-                    ->required(),
+                    ->required()
+                    ->unique(Shop::class, 'user_name', ignoreRecord: true),
                 RichEditor::make('terms')
                     ->columnSpanFull(),
                 TextInput::make('payment_order_id'),
