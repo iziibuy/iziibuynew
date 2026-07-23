@@ -4,6 +4,7 @@ namespace App\Services\Elavon;
 
 use App\Elavon\Converge2\Client\ClientConfig;
 use App\Elavon\Converge2\Converge2;
+use App\Models\PaymentMethodAccess;
 use App\Models\Shop;
 
 class PlatformElavonCredentials
@@ -16,6 +17,16 @@ class PlatformElavonCredentials
     public static function forShop(Shop $shop): array
     {
         return self::forSandbox($shop->usesElavonSandbox());
+    }
+
+    /**
+     * Platform subscription credentials for a plugin (demo → sandbox .env, live → production .env).
+     *
+     * @return array{mercahantAlias: string, publicKey: string, secretKey: string, sandbox: bool}
+     */
+    public static function forPaymentMethodAccess(PaymentMethodAccess $access): array
+    {
+        return self::forSandbox($access->usesElavonSandbox());
     }
 
     /**

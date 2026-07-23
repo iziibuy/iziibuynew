@@ -27,7 +27,7 @@ class ElavonExternalSubscription
         $this->access->loadMissing('user');
         $this->hosted = new ElavonExternalHostedSubscription($access);
         $this->elavon = $this->hosted->convergeClient();
-        $this->apiBase = config('services.enterprise_elavon.sandbox')
+        $this->apiBase = $this->access->usesElavonSandbox()
             ? 'https://uat.api.converge.eu.elavonaws.com'
             : 'https://api.converge.eu.elavonaws.com';
     }

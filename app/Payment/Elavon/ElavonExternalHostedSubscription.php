@@ -14,6 +14,7 @@ use App\Models\PaymentMethodAccess;
 use App\Services\Elavon\ElavonOnboardingPromo;
 use App\Services\Elavon\ElavonRecurringTransaction;
 use App\Services\Elavon\ElavonVaultOnlyPaymentSession;
+use App\Services\Elavon\PlatformElavonCredentials;
 use Illuminate\Support\Facades\Log;
 
 class ElavonExternalHostedSubscription
@@ -49,12 +50,7 @@ class ElavonExternalHostedSubscription
     /** @return array{mercahantAlias:string,publicKey:string,secretKey:string,sandbox:bool} */
     protected function resolveKeys(): array
     {
-        return [
-            'mercahantAlias' => str_replace(' ', '', (string) config('services.enterprise_elavon.merchant_alias', '')),
-            'publicKey' => str_replace(' ', '', (string) config('services.enterprise_elavon.public_key', '')),
-            'secretKey' => str_replace(' ', '', (string) config('services.enterprise_elavon.secret_key', '')),
-            'sandbox' => (bool) config('services.enterprise_elavon.sandbox'),
-        ];
+        return PlatformElavonCredentials::forPaymentMethodAccess($this->access);
     }
 
     protected function config(): ClientConfig

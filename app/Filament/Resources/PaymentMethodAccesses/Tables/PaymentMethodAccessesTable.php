@@ -45,6 +45,10 @@ class PaymentMethodAccessesTable
                     ->sortable(),
                 IconColumn::make('status')
                     ->boolean(),
+                IconColumn::make('is_demo')
+                    ->label(__('Demo'))
+                    ->boolean()
+                    ->toggleable(),
                 TextColumn::make('last_paid_at')
                     ->label(__('Last paid'))
                     ->dateTime()
@@ -57,6 +61,7 @@ class PaymentMethodAccessesTable
             ->defaultSort('created_at', 'desc')
             ->filters([
                 ResourceTableFilters::boolean('status', __('Active')),
+                ResourceTableFilters::boolean('is_demo', __('Demo / Live')),
                 ResourceTableFilters::select('paymentMethod', [
                     'quickpay' => 'QuickPay',
                     'elavon' => 'Elavon',

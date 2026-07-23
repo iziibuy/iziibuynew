@@ -177,6 +177,15 @@ class PaymentMethodAccessForm
                             ->label(__('Last paid at'))
                             ->native(false),
                     ]),
+                Section::make(__('Platform subscription (Elavon)'))
+                    ->description(__('Controls which iziibuy platform Elavon credentials are used when this plugin subscribes. Demo uses sandbox keys from .env; live uses production keys from .env.'))
+                    ->schema([
+                        Toggle::make('is_demo')
+                            ->label(__('Demo subscription (Elavon sandbox)'))
+                            ->helperText(__('Uses ELAVON_ENTERPRISE_SANDBOX_* from .env. When off, uses ELAVON_ENTERPRISE_* production keys.'))
+                            ->default(false),
+                    ])
+                    ->columnSpanFull(),
                 Section::make(__('Status'))
                     ->columns(4)
                     ->schema([

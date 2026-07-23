@@ -43,8 +43,9 @@ return [
     | Platform Converge2 (Elavon) credentials for enterprise API hosted subscription
     | (GET /api/enterprise/{uid}/start). Use sandbox HPP when sandbox is true.
     |
-    | Shop platform subscriptions (is_demo on shops) use credentials.production vs
-    | credentials.sandbox based on the shop flag — not the shop's own Elavon keys.
+    | Shop / plugin platform subscriptions (is_demo on shops and payment_method_accesses)
+    | use credentials.production vs credentials.sandbox based on the record flag —
+    | not the merchant's own Elavon keys.
     */
     'enterprise_elavon' => [
         'credentials' => [

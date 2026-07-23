@@ -19,7 +19,10 @@ class PaymentMethodAccess extends Model
 
     protected $guarded = [];
 
-    protected $casts = ['last_paid_at' => 'datetime'];
+    protected $casts = [
+        'last_paid_at' => 'datetime',
+        'is_demo' => 'boolean',
+    ];
 
     protected $meta_attributes = [
         'name',
@@ -136,6 +139,11 @@ class PaymentMethodAccess extends Model
     public function hasElavonSubscriptionMethod(): bool
     {
         return strtolower((string) ($this->attributes['subscriptionMethod'] ?? '')) === self::SUBSCRIPTION_METHOD_ELAVON;
+    }
+
+    public function usesElavonSandbox(): bool
+    {
+        return (bool) ($this->attributes['is_demo'] ?? false);
     }
 
     public function canProcessPayments(): bool
