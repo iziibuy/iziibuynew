@@ -6,6 +6,7 @@ use App\Constants\Constants;
 use App\Enterprise\Permissions;
 use App\Models\Traits\HasMeta;
 use App\Models\Traits\LegacyVoyagerGetsTranslatedAttribute;
+use App\Services\Checkout\CheckoutPaymentOptionCatalog;
 use App\Services\Elavon\ElavonOnboardingPromo;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -149,6 +150,8 @@ class Shop extends Model
         'site_mode',
         'gateway_contract_signed',
         'fallback_payment_method',
+        'checkout_payment_options',
+        'selected_payment_methods',
         'surfboard_terminalId',
         'surfboard_merchantId',
         'surfboard_storeId',
@@ -826,60 +829,182 @@ class Shop extends Model
 
     public function checkout_payment_methods()
     {
+        return $this->enabledCheckoutPaymentOptions();
+    }
 
-        if ($this->requiresElavonResubscription()) {
-            return [];
+    /**
+     * Flat list of enabled checkout options for this shop.
+     *
+     * @return array<string, array{key: string, label: string, icon: string, acquirer: string}>
+     */
+    public function enabledCheckoutPaymentOptions(): array
+    {
+        $catalog = app(CheckoutPaymentOptionCatalog::class)->active();
+        $config = $this->checkoutPaymentOptionsConfig();
+        $enabled = [];
+
+        foreach ($catalog as $key => $option) {
+            $shopOption = $config[$key] ?? null;
+
+            if (! is_array($shopOption) || empty($shopOption['enabled'])) {
+                continue;
+            }
+
+            $acquirer = (string) ($shopOption['acquirer'] ?? '');
+            if ($acquirer === '' || ! in_array($acquirer, $option['acquirers'], true)) {
+                continue;
+            }
+
+            $enabled[$key] = [
+                'key' => $key,
+                'label' => $option['label'],
+                'icon' => (string) ($option['icon'] ?? $key),
+                'acquirer' => $acquirer,
+            ];
         }
 
-        if ($this->selected_payment_methods) {
-            return json_decode($this->selected_payment_methods, true);
-        }
-        $methods = [];
+        return $enabled;
+    }
 
-        if (in_array('elavon', explode(',', $this->paymentMethod))) {
-            $methods = array_merge($methods, [
-                'elavon' => [
-                    'card' => ['mastercard', 'visa', 'amex'],
-                ],
-            ]);
-        } elseif (in_array('quickpay', explode(',', $this->paymentMethod))) {
+    /**
+     * @return array<string, array{enabled: bool, acquirer: string|null}>
+     */
+    public function checkoutPaymentOptionsConfig(): array
+    {
+        $raw = $this->checkout_payment_options;
+        $fromMeta = null;
 
-            $methods = array_merge($methods, [
-                'quickpay' => [
-                    'card' => ['mastercard', 'visa', 'amex'],
-                ],
-            ]);
-        }
-        if (in_array('surfboard', explode(',', $this->paymentMethod))) {
-            $methods = array_merge($methods, [
-                'surfboard' => [
-                    'card' => ['mastercard', 'visa', 'amex'],
-                    'mobile' => ['googlepay', 'applepay', 'vipps'],
-                    'b2c' => ['klarna'],
-                ],
-            ]);
-        }
-        if (in_array('dintero', explode(',', $this->paymentMethod))) {
-            $methods = array_merge($methods, [
-                'dintero' => [
-                    'mobile' => ['googlepay', 'applepay', 'vipps'],
-                ],
-            ]);
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $fromMeta = $this->normalizeCheckoutPaymentOptionsConfig($decoded);
+            }
+        } elseif (is_array($raw)) {
+            $fromMeta = $this->normalizeCheckoutPaymentOptionsConfig($raw);
         }
 
-        return $methods;
+        if (is_array($fromMeta) && $this->checkoutPaymentOptionsConfigHasEnabled($fromMeta)) {
+            return $fromMeta;
+        }
+
+        return $this->defaultCheckoutPaymentOptionsConfigFromGateways();
+    }
+
+    /**
+     * @param  array<string, array{enabled: bool, acquirer: string|null}>  $config
+     */
+    protected function checkoutPaymentOptionsConfigHasEnabled(array $config): bool
+    {
+        foreach ($config as $row) {
+            if (! empty($row['enabled']) && filled($row['acquirer'] ?? null)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Resolve the acquirer for a checkout payment option key (visa, vipps, …).
+     */
+    public function acquirerForCheckoutOption(?string $optionKey): ?string
+    {
+        if ($optionKey === null || $optionKey === '') {
+            return null;
+        }
+
+        $enabled = $this->enabledCheckoutPaymentOptions();
+
+        return $enabled[$optionKey]['acquirer'] ?? null;
+    }
+
+    /**
+     * Acquirers currently selected across enabled checkout options.
+     *
+     * @return list<string>
+     */
+    public function selectedCheckoutAcquirers(): array
+    {
+        return array_values(array_unique(array_map(
+            fn (array $option): string => $option['acquirer'],
+            $this->enabledCheckoutPaymentOptions()
+        )));
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return array<string, array{enabled: bool, acquirer: string|null}>
+     */
+    public function normalizeCheckoutPaymentOptionsConfig(array $config): array
+    {
+        $catalog = app(CheckoutPaymentOptionCatalog::class)->all();
+        $normalized = [];
+
+        foreach ($catalog as $key => $option) {
+            $row = $config[$key] ?? [];
+            if (! is_array($row)) {
+                $row = [];
+            }
+
+            $acquirer = isset($row['acquirer']) && is_string($row['acquirer']) && $row['acquirer'] !== ''
+                ? $row['acquirer']
+                : null;
+
+            if ($acquirer !== null && ! in_array($acquirer, $option['acquirers'], true)) {
+                $acquirer = $option['acquirers'][0] ?? null;
+            }
+
+            $normalized[$key] = [
+                'enabled' => (bool) ($row['enabled'] ?? false),
+                'acquirer' => $acquirer,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * Legacy fallback when shop has no checkout_payment_options meta yet.
+     *
+     * @return array<string, array{enabled: bool, acquirer: string|null}>
+     */
+    protected function defaultCheckoutPaymentOptionsConfigFromGateways(): array
+    {
+        $gateways = array_values(array_filter(explode(',', (string) $this->paymentMethod)));
+        $catalog = app(CheckoutPaymentOptionCatalog::class)->active();
+        $config = [];
+
+        foreach ($catalog as $key => $option) {
+            $preferred = null;
+
+            foreach ($option['acquirers'] as $acquirer) {
+                if (in_array($acquirer, $gateways, true)) {
+                    $preferred = $acquirer;
+                    break;
+                }
+            }
+
+            // Cards historically defaulted to elavon/quickpay; wallets to surfboard/dintero.
+            if ($preferred === null && in_array($key, ['visa', 'mastercard', 'amex'], true)) {
+                foreach (['elavon', 'quickpay', 'surfboard'] as $acquirer) {
+                    if (in_array($acquirer, $gateways, true) && in_array($acquirer, $option['acquirers'], true)) {
+                        $preferred = $acquirer;
+                        break;
+                    }
+                }
+            }
+
+            $config[$key] = [
+                'enabled' => $preferred !== null,
+                'acquirer' => $preferred,
+            ];
+        }
+
+        return $config;
     }
 
     public function hasPaymentGateway($gateway)
     {
-        if ($this->requiresElavonResubscription()) {
-            return false;
-        }
-
-        if (in_array($gateway, explode(',', $this->paymentMethod))) {
-            return true;
-        }
-
-        return false;
+        return in_array($gateway, explode(',', (string) $this->paymentMethod), true);
     }
 }

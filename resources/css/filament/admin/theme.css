@@ -533,6 +533,55 @@
     font-weight: 500;
     color: rgb(55 65 81);
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.shop-advance-edit .checkout-payment-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid rgb(209 213 219);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: #fff;
+    margin-bottom: 1rem;
+}
+
+.shop-advance-edit .checkout-payment-option-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid rgb(229 231 235);
+}
+
+.shop-advance-edit .checkout-payment-option-row:last-child {
+    border-bottom: 0;
+}
+
+.shop-advance-edit .checkout-payment-option-row .form-check {
+    flex: 1 1 auto;
+    min-width: 10rem;
+}
+
+.shop-advance-edit .checkout-payment-option-acquirer {
+    flex: 0 1 14rem;
+    min-width: 12rem;
+    margin-left: auto;
+}
+
+.shop-advance-edit .checkout-payment-option-icon {
+    display: inline-block;
+    width: auto;
+    max-width: 2.5rem;
+    height: 1.25rem;
+    max-height: 1.25rem;
+    object-fit: contain;
+    flex-shrink: 0;
+    vertical-align: middle;
 }
 
 .shop-advance-edit .d-flex.border {

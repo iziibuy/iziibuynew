@@ -74,6 +74,23 @@ class DashboardController extends Controller
         } else {
             $shop = auth()->user()->shop;
         }
+        $paymentMethods = [];
+        $checkoutPaymentOptions = null;
+
+        if (auth()->user()->role_id == 1 && $request->has('checkout_payment_options')) {
+            $checkoutPaymentOptions = $shop->normalizeCheckoutPaymentOptionsConfig(
+                (array) $request->input('checkout_payment_options', [])
+            );
+            $paymentMethods = array_values(array_unique(array_filter(array_map(
+                fn (array $row): ?string => ! empty($row['enabled']) && filled($row['acquirer'] ?? null)
+                    ? (string) $row['acquirer']
+                    : null,
+                $checkoutPaymentOptions
+            ))));
+        } elseif (auth()->user()->role_id == 1 && $request->has('payment_method')) {
+            $paymentMethods = array_values(array_filter((array) $request->payment_method));
+        }
+
         $shop->update([
             'country' => $request->country,
             'user_name' => $request->user_name,
@@ -81,17 +98,20 @@ class DashboardController extends Controller
             'currencies' => json_encode($request->currencies),
             'selling_location_mode' => $request->selling_location_mode,
             'locations' => json_encode($request->locations),
-            ...(auth()->user()->role_id == 1 && $request->has('payment_method')
-                ? ['paymentMethod' => implode(',', $request->payment_method ?? [])]
+            ...(auth()->user()->role_id == 1 && ($checkoutPaymentOptions !== null || $request->has('payment_method'))
+                ? ['paymentMethod' => implode(',', $paymentMethods)]
                 : []),
         ]);
         $data = $request->meta ?? [];
 
         $data['footerPaymentMethod'] = $request->meta['footerPaymentMethod'] ?? [];
+
+        if ($checkoutPaymentOptions !== null) {
+            $data['checkout_payment_options'] = $checkoutPaymentOptions;
+        }
+
         Iziibuy::resetShop($shop);
         $shop->createMetas($data);
-
-        return back()->with('success', 'profile updated succesfully');
 
         return back()->with('success', 'profile updated succesfully');
     }

@@ -92,49 +92,69 @@
                  <h5>{{ __('words.payment_methods') }}</h5>
                  <br>
 
-            
-                 @foreach ($shop->checkout_payment_methods() as $service => $methods)
-                     @foreach ($methods as $method => $data)
-                         <label for="{{ $method }}" class="w-100 d-block">
-                             <div class="custom-control custom-checkbox "
-                                 style="border: 2px solid rgba(42, 100, 149, 1);margin-bottom:10px;border-radius: 16px; padding: 21px 18px;">
+                 @php
+                     $checkoutPaymentOptions = $shop->checkout_payment_methods();
+                     $acquirerLabels = app(\App\Services\Checkout\CheckoutPaymentOptionCatalog::class)->acquirerLabels();
+                     $paymentOptionIcons = [
+                         'visa' => asset('images/payment/visa.png'),
+                         'mastercard' => asset('images/payment/mastercard.png'),
+                         'amex' => asset('images/payment/amex.png'),
+                         'googlepay' => asset('images/payment/googlepay.png'),
+                         'applepay' => asset('images/payment/applepay.png'),
+                         'klarna' => asset('images/payment/klarna.jpg'),
+                         'vipps' => asset('images/payment/vipps.png'),
+                         'swish' => asset('images/payment/swish.png'),
+                     ];
+                     $checkoutOptionsByAcquirer = [];
+                     foreach ($checkoutPaymentOptions as $option) {
+                         $acquirer = (string) ($option['acquirer'] ?? '');
+                         if ($acquirer === '') {
+                             continue;
+                         }
+                         $checkoutOptionsByAcquirer[$acquirer][] = $option;
+                     }
+                 @endphp
 
-                                 <div class="d-flex " style="gap:19px">
-                                     <input type="radio" class="btn-check" name="payment" id="{{ $method }}"
-                                         value="{{ $service }}">
-                                     <div class="d-flex  align-items-center" style="gap:10px">
+                 @foreach ($checkoutOptionsByAcquirer as $acquirer => $options)
+                     @php
+                         $acquirerLabel = $acquirerLabels[$acquirer] ?? ucfirst($acquirer);
+                         $groupId = 'payment-acquirer-'.$acquirer;
+                     @endphp
+                     <label for="{{ $groupId }}" class="w-100 d-block">
+                         <div class="custom-control custom-checkbox "
+                             style="border: 2px solid rgba(42, 100, 149, 1);margin-bottom:10px;border-radius: 16px; padding: 21px 18px;">
 
-                                         <p
-                                             style="font-size: 16px;font-weight: 600;font-family: 'Inter', sans-serif;color:rgba(4, 52, 92, 1)">
-                                             {{ [
-                                                 'card' => __('words.card_payment_title'),
-                                                 'mobile' => __('words.mobile_payment_title'),
-                                                 'b2c' => __('words.b2c_payment_title'),
-                                             ][$method] }}
-
-
-                                         </p>
-                                         <div class="d-flex " style="gap:10px">
-                                             @foreach ($data as $item)
-                                                 <img height="20px"
-                                                     src="{{ [
-                                                         'visa' => asset('images/payment/visa.png'),
-                                                         'mastercard' => asset('images/payment/mastercard.png'),
-                                                         'amex' => asset('images/payment/amex.png'),
-                                                         'googlepay' => asset('images/payment/googlepay.png'),
-                                                         'applepay' => asset('images/payment/applepay.png'),
-                                                         'klarna' => asset('images/payment/klarna.jpg'),
-                                                         'vipps' => asset('images/payment/vipps.png'),
-                                                     ][$item] }}"
-                                                     alt="{{ $item }}">
-                                             @endforeach
-                                         </div>
+                             <div class="d-flex " style="gap:19px">
+                                 <input type="radio" class="btn-check" name="payment" id="{{ $groupId }}"
+                                     value="{{ $acquirer }}">
+                                 <div class="d-flex align-items-center flex-wrap" style="gap:10px">
+                                     <p
+                                         style="font-size: 16px;font-weight: 600;font-family: 'Inter', sans-serif;color:rgba(4, 52, 92, 1);margin:0;">
+                                         {{ $acquirerLabel }}
+                                     </p>
+                                     <div class="d-flex align-items-center flex-wrap" style="gap:10px">
+                                         @foreach ($options as $option)
+                                             @php
+                                                 $optionLabel = $option['label'] ?? ($option['key'] ?? '');
+                                                 $optionIcon = $option['icon'] ?? ($option['key'] ?? '');
+                                                 $iconUrl = $paymentOptionIcons[$optionIcon] ?? null;
+                                             @endphp
+                                             @if ($iconUrl)
+                                                 <img height="20" src="{{ $iconUrl }}" alt="{{ $optionLabel }}"
+                                                     title="{{ $optionLabel }}"
+                                                     style="height:20px;width:auto;max-height:20px;object-fit:contain;"
+                                                     onerror="this.style.display='none'">
+                                             @else
+                                                 <span
+                                                     style="font-size: 13px;font-weight: 500;color:rgba(4, 52, 92, 1)">{{ $optionLabel }}</span>
+                                             @endif
+                                         @endforeach
                                      </div>
                                  </div>
-                             
                              </div>
-                         </label>
-                     @endforeach
+
+                         </div>
+                     </label>
                  @endforeach
              </div>
 
@@ -329,7 +349,7 @@
                                          <input placeholder="{{ __('words.checkout_form_email') }}" id="email"
                                              type="text" class="form-control @error('email') is-invalid @enderror"
                                              name="user[login][email]" value="{{ old('email') }}"
-                                             autocomplete="email" required autofocus>
+                                             autocomplete="email" autofocus>
                                          @error('email')
                                              <span class="invalid-feedback" role="alert">
                                                  <strong>{{ $message }}</strong>
@@ -343,7 +363,7 @@
                                          <input placeholder="{{ __('words.password') }}" id="password"
                                              type="password"
                                              class="form-control @error('password') is-invalid @enderror"
-                                             name="user[login][password]" required autocomplete="current-password">
+                                             name="user[login][password]" autocomplete="current-password">
                                          @error('password')
                                              <span class="invalid-feedback" role="alert">
                                                  <strong>{{ $message }}</strong>
@@ -377,6 +397,7 @@
  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
  <script>
      $(document).ready(function() {
+         disableRegister();
 
 
          $('#shipping_force_register').click(function() {
