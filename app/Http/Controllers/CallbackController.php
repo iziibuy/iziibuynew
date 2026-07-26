@@ -26,6 +26,7 @@ use App\Payment\External\Elavon\ExternalBookingElavonPayment;
 use App\Payment\External\Surfboard\ExternalBookingSurfboardApi;
 use App\Payment\Quickpay\QuickPayPayment;
 use App\Payment\Subscribe;
+use App\Payment\Surfboard\ApiSurfboardButtonSubscription;
 use App\Payment\Surfboard\SurfboardOrderApi;
 use App\Payment\Two\TwoPayment;
 use App\Payment\UserSubscription;
@@ -248,6 +249,81 @@ class CallbackController extends Controller
             return redirect()->to($order->success_redirect_url.'?order='.$order->orderId.'&payment_id='.$order->payment_id);
         } catch (Exception|Error $e) {
             return redirect(url('/'))->withErrors($e->getMessage());
+        }
+    }
+
+    public function surfboardApiSubscriptionSuccess(Request $request)
+    {
+        $orderId = (string) ($request->orderId ?? $request->input('orderId') ?? '');
+        $subscription = ExternalSubscription::where('payment_id', $orderId)->first();
+
+        if (! $subscription) {
+            Log::warning('Surfboard subscription callback: subscription not found', [
+                'orderId' => $orderId,
+            ]);
+
+            return response()->json(['status' => false], 404);
+        }
+
+        $api = $subscription->paymentApi;
+
+        try {
+            $result = (new ApiSurfboardButtonSubscription($subscription))->finalizeFromOrder($orderId);
+
+            if (! ($result['status'] ?? false)) {
+                $subscription->update(['status' => 'FAILED']);
+                $failureUrl = ($api->failed_redirect_url ?? '/').'?subscription='.$subscription->id.'&order='.$subscription->orderId.'&status=failed';
+
+                try {
+                    Http::timeout(10)->get($failureUrl);
+                } catch (\Throwable) {
+                }
+
+                return response()->json(['status' => false, 'message' => $result['data']['message'] ?? 'failed']);
+            }
+
+            $successUrl = ($api->success_redirect_url ?? '/').'?subscription='.$subscription->id.'&order='.$subscription->orderId.'&status=active';
+
+            try {
+                Http::timeout(10)->get($successUrl);
+            } catch (\Throwable) {
+            }
+
+            return response()->json(['status' => true]);
+        } catch (\Throwable $e) {
+            Log::error('Surfboard subscription callback failed', [
+                'subscription_id' => $subscription->id,
+                'error' => $e->getMessage(),
+            ]);
+            $subscription->update(['status' => 'FAILED']);
+
+            return response()->json(['status' => false], 500);
+        }
+    }
+
+    public function surfboardApiSubscriptionRedirect(Request $request)
+    {
+        $orderId = (string) ($request->orderId ?? $request->input('orderId') ?? '');
+        $subscription = ExternalSubscription::where('payment_id', $orderId)->firstOrFail();
+        $api = $subscription->paymentApi;
+
+        try {
+            if (strtoupper((string) $subscription->status) !== 'ACTIVE') {
+                $result = (new ApiSurfboardButtonSubscription($subscription))->finalizeFromOrder($orderId);
+                if (! ($result['status'] ?? false)) {
+                    return redirect(
+                        ($api->failed_redirect_url ?? '/').'?subscription='.$subscription->id.'&order='.$subscription->orderId.'&status=failed'
+                    );
+                }
+            }
+
+            return redirect(
+                ($api->success_redirect_url ?? '/').'?subscription='.$subscription->id.'&order='.$subscription->orderId.'&status=active'
+            );
+        } catch (\Throwable $e) {
+            return redirect(
+                ($api->failed_redirect_url ?? '/').'?subscription='.$subscription->id.'&order='.$subscription->orderId.'&status=failed'
+            );
         }
     }
 

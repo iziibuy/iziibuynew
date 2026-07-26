@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Models\ExternalSubscription;
 use App\Payment\Elavon\ApiElavonButtonSubscription;
+use App\Payment\Surfboard\ApiSurfboardButtonSubscription;
 use Illuminate\Support\Facades\Log;
 
 class ExternalButtonSubscriptionCharger
@@ -26,15 +27,11 @@ class ExternalButtonSubscriptionCharger
 
         $method = strtolower((string) $subscription->payment_method);
 
-        if ($method === 'surfboard') {
-            return [
-                'status' => false,
-                'message' => 'Surfboard recurring charges are not available yet.',
-            ];
-        }
-
         try {
-            $result = (new ApiElavonButtonSubscription($subscription))->chargeRenewal();
+            $result = match ($method) {
+                'surfboard' => (new ApiSurfboardButtonSubscription($subscription))->chargeRenewal(),
+                default => (new ApiElavonButtonSubscription($subscription))->chargeRenewal(),
+            };
 
             if (! $result['status']) {
                 $subscription->update(['status' => 'PAST_DUE']);
@@ -52,6 +49,7 @@ class ExternalButtonSubscriptionCharger
         } catch (\Throwable $e) {
             Log::error('External button subscription charge failed', [
                 'subscription_id' => $subscription->id,
+                'payment_method' => $method,
                 'error' => $e->getMessage(),
             ]);
 
@@ -71,7 +69,10 @@ class ExternalButtonSubscriptionCharger
     {
         $query = ExternalSubscription::query()
             ->where('status', 'ACTIVE')
-            ->whereNotNull('stored_card_id')
+            ->where(function ($query): void {
+                $query->whereNotNull('stored_card_id')
+                    ->orWhereNotNull('surfboard_token');
+            })
             ->whereNotNull('next_charge_at')
             ->where('next_charge_at', '<=', now())
             ->orderBy('next_charge_at');

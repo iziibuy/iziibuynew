@@ -95,6 +95,7 @@ class PaymentMethodAccess extends Model
         'selected_payment_methods',
         'surfboard_webKybUrl',
         'surfboard_terminalId',
+        'surfboard_mit_terminalId',
         'surfboard_application_id',
         'surfboard_application_status',
         'surfboard_merchantId',

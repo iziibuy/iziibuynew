@@ -8,6 +8,7 @@ use App\Models\PaymentMethodAccess;
 use App\Models\User;
 use App\Services\ExternalButtonSubscriptionCharger;
 use Database\Seeders\RoleSeeder;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 beforeEach(function (): void {
@@ -171,4 +172,104 @@ it('charges due external button subscriptions via command', function (): void {
 
     $this->artisan('external-button-subscriptions:charge')
         ->assertSuccessful();
+});
+
+it('creates a surfboard subscription payment link', function (): void {
+    [, $access] = createExternalButtonPlugin();
+    $access->update(['paymentMethod' => 'surfboard']);
+    $access->createMetas([
+        'surfboard_merchantId' => 'merchant-1',
+        'surfboard_storeId' => 'store-1',
+        'surfboard_terminalId' => 'terminal-pp',
+    ]);
+
+    $api = PaymentApi::query()->create([
+        'payment_method_access_id' => $access->id,
+        'domain' => 'https://example.com',
+        'success_redirect_url' => 'https://example.com/ok',
+        'failed_redirect_url' => 'https://example.com/fail',
+        'status' => true,
+        'is_subscription' => true,
+    ]);
+
+    Http::fake([
+        '*/orders' => Http::response([
+            'status' => 'SUCCESS',
+            'data' => [
+                'orderId' => 'ord-sub-1',
+                'paymentPageLink' => 'https://pay.example/sub',
+            ],
+        ], 200),
+    ]);
+
+    $this->postJson(route('iziipay.createSubscription', $access->key), [
+        'source_key' => $api->key,
+        'name' => 'Jane',
+        'email' => 'jane@example.com',
+        'amount' => 199,
+        'currency' => 'NOK',
+        'interval_days' => 14,
+        'preferred_acquirer' => 'surfboard',
+    ])
+        ->assertSuccessful()
+        ->assertJsonPath('url', 'https://pay.example/sub')
+        ->assertJsonPath('subscription.payment_method', 'surfboard');
+
+    expect(ExternalSubscription::query()->where('payment_id', 'ord-sub-1')->exists())->toBeTrue();
+});
+
+it('charges a due surfboard subscription renewal via MIT token', function (): void {
+    [, $access] = createExternalButtonPlugin();
+    $access->update(['paymentMethod' => 'surfboard']);
+    $access->createMetas([
+        'surfboard_merchantId' => 'merchant-1',
+        'surfboard_storeId' => 'store-1',
+        'surfboard_terminalId' => 'terminal-pp',
+        'surfboard_mit_terminalId' => 'terminal-mit',
+    ]);
+
+    $api = PaymentApi::query()->create([
+        'payment_method_access_id' => $access->id,
+        'domain' => 'https://example.com',
+        'success_redirect_url' => 'https://example.com/ok',
+        'failed_redirect_url' => 'https://example.com/fail',
+        'status' => true,
+        'is_subscription' => true,
+    ]);
+
+    $subscription = ExternalSubscription::query()->create([
+        'payment_method_access_id' => $access->id,
+        'api_id' => $api->id,
+        'customer_name' => 'Jane',
+        'customer_email' => 'jane@example.com',
+        'amount' => 199,
+        'currency' => 'NOK',
+        'interval_days' => 7,
+        'status' => 'ACTIVE',
+        'surfboard_token' => 'tok-abc',
+        'stored_card_id' => 'tok-abc',
+        'next_charge_at' => now()->subMinute(),
+        'payment_method' => 'surfboard',
+    ]);
+
+    Http::fake([
+        '*/orders' => Http::response([
+            'status' => 'SUCCESS',
+            'data' => ['orderId' => 'ord-renew-1'],
+        ], 200),
+        '*/payments' => Http::response([
+            'status' => 'SUCCESS',
+            'data' => ['paymentId' => 'pay-renew-1'],
+        ], 200),
+        '*/orders/ord-renew-1/status' => Http::response([
+            'data' => ['orderStatus' => 'PAYMENT_COMPLETED', 'paymentId' => 'pay-renew-1'],
+        ], 200),
+    ]);
+
+    $result = (new ExternalButtonSubscriptionCharger)->charge($subscription->fresh());
+
+    expect($result['status'])->toBeTrue()
+        ->and($subscription->fresh()->status)->toBe('ACTIVE')
+        ->and($subscription->fresh()->next_charge_at?->greaterThan(now()))->toBeTrue()
+        ->and($subscription->charges()->where('type', 'renewal')->where('status', true)->count())->toBe(1);
 });

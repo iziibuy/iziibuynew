@@ -56,10 +56,12 @@ class ExternalSubscription extends Model
 
     public function isDueForCharge(): bool
     {
+        $hasToken = filled($this->stored_card_id) || filled($this->surfboard_token);
+
         return $this->isActive()
             && $this->next_charge_at !== null
             && $this->next_charge_at->lte(now())
-            && filled($this->stored_card_id);
+            && $hasToken;
     }
 
     public function scheduleNextCharge(): void

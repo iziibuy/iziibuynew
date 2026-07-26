@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ExternalSubscription;
 use App\Models\PaymentMethodAccess;
 use App\Payment\Elavon\ApiElavonButtonSubscription;
+use App\Payment\Surfboard\ApiSurfboardButtonSubscription;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -44,13 +45,6 @@ class IziipaySubscriptionController extends Controller
 
         $acquirer = $this->resolveAcquirer($paymentMethodAccess, $validated['preferred_acquirer'] ?? null);
 
-        if ($acquirer === 'surfboard') {
-            return response()->json([
-                'message' => 'Surfboard subscription payments are coming soon. Use Elavon for now.',
-                'status' => false,
-            ], 400);
-        }
-
         $subscription = ExternalSubscription::create([
             'uuid' => (string) Str::ulid(),
             'payment_method_access_id' => $paymentMethodAccess->id,
@@ -69,10 +63,12 @@ class IziipaySubscriptionController extends Controller
             'currency' => strtoupper($validated['currency']),
             'interval_days' => (int) $validated['interval_days'],
             'status' => 'PENDING',
-            'payment_method' => 'elavon',
+            'payment_method' => $acquirer,
         ]);
 
-        $payment = (new ApiElavonButtonSubscription($subscription))->getPaymentLink();
+        $payment = $acquirer === 'surfboard'
+            ? (new ApiSurfboardButtonSubscription($subscription))->getPaymentLink()
+            : (new ApiElavonButtonSubscription($subscription))->getPaymentLink();
 
         if (! ($payment['status'] ?? false) || ! isset($payment['data']['payment_id'])) {
             $subscription->update(['status' => 'FAILED']);

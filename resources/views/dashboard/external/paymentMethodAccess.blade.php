@@ -65,7 +65,7 @@
                                 </tr>
                             @endif
                         @elseif ($paymentMethodAccess->paymentMethod == 'surfboard')
-                            @foreach (['surfboard_terminalId', 'surfboard_merchantId', 'surfboard_storeId'] as $field)
+                            @foreach (['surfboard_terminalId', 'surfboard_mit_terminalId', 'surfboard_merchantId', 'surfboard_storeId'] as $field)
                                 <tr>
                                     <th>{{ __('words.' . $field) }}</th>
                                     <td class="d-flex">

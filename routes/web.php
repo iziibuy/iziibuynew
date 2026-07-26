@@ -104,6 +104,8 @@ Route::group(['controller' => CallbackController::class, 'prefix' => 'callback',
     Route::get('api/elavon/payment/success', 'elavonApiPaymentSuccess')->name('api.elavon.payment.success');
     Route::any('api/surfboard/payment/success', 'surfboardApiPaymentSuccess')->name('api.surfboard.payment.success');
     Route::any('api/surfboard/payment/redirect', 'surfboardApiRedirect')->name('api.surfboard.payment.redirect');
+    Route::any('api/surfboard/subscription/success', 'surfboardApiSubscriptionSuccess')->name('api.surfboard.subscription.success');
+    Route::any('api/surfboard/subscription/redirect', 'surfboardApiSubscriptionRedirect')->name('api.surfboard.subscription.redirect');
     Route::get('api/elavon/payment/cancel/{order_id}', 'elavonApiPaymentCancel')->name('api.elavon.payment.cancel');
     Route::get('api/elavon/subscription/success', 'elavonApiSubscriptionSuccess')->name('api.elavon.subscription.success');
     Route::get('api/elavon/subscription/cancel/{subscription}', 'elavonApiSubscriptionCancel')->name('api.elavon.subscription.cancel');

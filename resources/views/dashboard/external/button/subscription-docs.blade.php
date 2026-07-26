@@ -24,8 +24,10 @@
             <p class="mb-0 mt-3 text-muted">
                 {{ __('Creates a subscription: customer pays the first period now, card is saved, then renewals are charged every interval_days via artisan command.') }}
             </p>
-            <p class="mb-0 mt-2"><strong>{{ __('Elavon:') }}</strong> {{ __('supported now.') }}
-                <strong>{{ __('Surfboard:') }}</strong> {{ __('coming soon.') }}</p>
+            <p class="mb-0 mt-2">
+                <strong>{{ __('Elavon:') }}</strong> {{ __('vaulted card + MIT renewals.') }}
+                <strong>{{ __('Surfboard:') }}</strong> {{ __('tokenized first payment + MIT renewals (requires surfboard_mit_terminalId).') }}
+            </p>
         </div>
     </div>
 
