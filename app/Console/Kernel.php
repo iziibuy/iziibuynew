@@ -10,7 +10,6 @@ class Kernel extends ConsoleKernel
     /**
      * Define the application's command schedule.
      *
-     * @param  \Illuminate\Console\Scheduling\Schedule  $schedule
      * @return void
      */
     protected function schedule(Schedule $schedule)
@@ -29,10 +28,11 @@ class Kernel extends ConsoleKernel
         $schedule->command('queue:work --stop-when-empty')->everyMinute();
         $schedule->command('subscription:autorenew')->daily();
         $schedule->command('payment-method-access:charge')->daily();
+        $schedule->command('external-button-subscriptions:charge')->daily();
         $schedule->command('order:cancel')->everyMinute();
         $schedule->command('charges:check')->everyFiveMinutes();
         $schedule->command('shops:process')->hourly();
-        
+
     }
 
     /**
@@ -42,7 +42,7 @@ class Kernel extends ConsoleKernel
      */
     protected function commands()
     {
-        $this->load(__DIR__ . '/Commands');
+        $this->load(__DIR__.'/Commands');
 
         require base_path('routes/console.php');
     }

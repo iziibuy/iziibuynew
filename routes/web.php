@@ -105,6 +105,8 @@ Route::group(['controller' => CallbackController::class, 'prefix' => 'callback',
     Route::any('api/surfboard/payment/success', 'surfboardApiPaymentSuccess')->name('api.surfboard.payment.success');
     Route::any('api/surfboard/payment/redirect', 'surfboardApiRedirect')->name('api.surfboard.payment.redirect');
     Route::get('api/elavon/payment/cancel/{order_id}', 'elavonApiPaymentCancel')->name('api.elavon.payment.cancel');
+    Route::get('api/elavon/subscription/success', 'elavonApiSubscriptionSuccess')->name('api.elavon.subscription.success');
+    Route::get('api/elavon/subscription/cancel/{subscription}', 'elavonApiSubscriptionCancel')->name('api.elavon.subscription.cancel');
     Route::get('subscription/{subscription}/success', 'subscriptionSuccess')->name('subscription.success');
     Route::get('subscription/{subscription}/cancel', 'subscriptionCancel')->name('subscription.cancel');
     Route::get('enterprise/elavon/subscription/{subscription}/success', 'enterpriseElavonSubscriptionSuccess')->name('enterprise.elavon.subscription.success');
@@ -253,4 +255,3 @@ Route::get('/test/financial-report', function (Request $request, FinancialReport
             return $service->streamPdf($from, $to);
     }
 });
-

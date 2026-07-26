@@ -11,12 +11,14 @@ use App\Models\Charge;
 use App\Models\Enterprise;
 use App\Models\ExternalBooking;
 use App\Models\ExternalOrder;
+use App\Models\ExternalSubscription;
 use App\Models\Membership;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\Shop;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Payment\Elavon\ApiElavonButtonSubscription;
 use App\Payment\Elavon\ApiElavonPayment;
 use App\Payment\Elavon\ElavonEnterpriseSubscription;
 use App\Payment\Elavon\ElavonPayment;
@@ -256,6 +258,59 @@ class CallbackController extends Controller
         $order->save();
 
         return redirect($order->failed_redirect_url.'?order='.$order->orderId.'&payment_id='.$order->payment_id);
+    }
+
+    public function elavonApiSubscriptionSuccess(Request $request)
+    {
+        $subscription = ExternalSubscription::where('payment_id', $request->sessionId)->first();
+
+        if (! $subscription) {
+            abort(404);
+        }
+
+        $api = $subscription->paymentApi;
+
+        try {
+            $result = (new ApiElavonButtonSubscription($subscription))->finalizeFromSession((string) $request->sessionId);
+
+            if (! ($result['status'] ?? false)) {
+                $subscription->update(['status' => 'FAILED']);
+
+                return redirect(
+                    ($api->failed_redirect_url ?? '/').'?subscription='.$subscription->id.'&order='.$subscription->orderId.'&status=failed'
+                );
+            }
+
+            return redirect(
+                ($api->success_redirect_url ?? '/').'?subscription='.$subscription->id.'&order='.$subscription->orderId.'&status=active'
+            );
+        } catch (\Throwable $e) {
+            Log::error('Elavon button subscription callback failed', [
+                'subscription_id' => $subscription->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            $subscription->update(['status' => 'FAILED']);
+
+            return redirect(
+                ($api->failed_redirect_url ?? '/').'?subscription='.$subscription->id.'&order='.$subscription->orderId.'&status=failed'
+            );
+        }
+    }
+
+    public function elavonApiSubscriptionCancel(ExternalSubscription $subscription)
+    {
+        $subscription->update([
+            'status' => 'CANCELED',
+            'canceled_at' => now(),
+            'next_charge_at' => null,
+        ]);
+
+        $api = $subscription->paymentApi;
+
+        return redirect(
+            ($api->failed_redirect_url ?? '/').'?subscription='.$subscription->id.'&order='.$subscription->orderId.'&status=canceled'
+        );
     }
 
     public function elavonPaymentCancel($order_id)

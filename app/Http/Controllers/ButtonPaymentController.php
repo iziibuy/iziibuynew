@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ExternalOrder;
+use App\Models\ExternalSubscription;
 use App\Models\PaymentApi;
 use App\Payment\Surfboard\SurfboardOrderApi;
 use Carbon\Carbon;
@@ -16,14 +17,13 @@ class ButtonPaymentController extends Controller
     public function index()
     {
         $paymentMethodAccess = auth()->user()->paymentMethodAccess;
-        $apis = PaymentApi::where('payment_method_access_id', $paymentMethodAccess->id)->get();
+        $apis = PaymentApi::where('payment_method_access_id', $paymentMethodAccess->id)->latest()->get();
 
         return view('dashboard.external.button.index', compact('apis'));
     }
 
     public function edit(PaymentApi $paymentApi)
     {
-
         if ($paymentApi->payment_method_access_id != auth()->user()->paymentMethodAccess->id) {
             abort(403);
         }
@@ -43,6 +43,7 @@ class ButtonPaymentController extends Controller
             'failed' => 'required',
             'domain' => 'required',
             'cancel_callback_url' => 'nullable|url',
+            'is_subscription' => 'nullable|boolean',
         ]);
 
         PaymentApi::create([
@@ -53,6 +54,7 @@ class ButtonPaymentController extends Controller
             'success_redirect_url' => $request->success,
             'failed_redirect_url' => $request->failed,
             'cancel_callback_url' => $request->cancel_callback_url,
+            'is_subscription' => $request->boolean('is_subscription'),
         ]);
 
         return redirect()->route('external.buttonPayment')->with('success', 'Payment api created');
@@ -60,7 +62,6 @@ class ButtonPaymentController extends Controller
 
     public function update(PaymentApi $paymentApi, Request $request)
     {
-
         if ($paymentApi->payment_method_access_id != auth()->user()->paymentMethodAccess->id) {
             abort(403);
         }
@@ -69,6 +70,7 @@ class ButtonPaymentController extends Controller
             'failed' => 'required',
             'domain' => 'required',
             'cancel_callback_url' => 'nullable|url',
+            'is_subscription' => 'nullable|boolean',
         ]);
 
         $paymentApi->update([
@@ -76,6 +78,7 @@ class ButtonPaymentController extends Controller
             'success_redirect_url' => $request->success,
             'failed_redirect_url' => $request->failed,
             'cancel_callback_url' => $request->cancel_callback_url,
+            'is_subscription' => $request->boolean('is_subscription'),
         ]);
 
         return redirect()->route('external.buttonPayment')->with('success', 'Payment api updated');
@@ -85,6 +88,10 @@ class ButtonPaymentController extends Controller
     {
         if ($paymentApi->payment_method_access_id != auth()->user()->paymentMethodAccess->id) {
             abort(403);
+        }
+
+        if ($paymentApi->is_subscription) {
+            return $this->viewSubscriptions($paymentApi, $request);
         }
 
         $filters = $request->only([
@@ -126,6 +133,34 @@ class ButtonPaymentController extends Controller
         return view('dashboard.external.button.view', compact('paymentApi', 'orders', 'filters'));
     }
 
+    protected function viewSubscriptions(PaymentApi $paymentApi, Request $request)
+    {
+        $filters = $request->only([
+            'search',
+            'status',
+        ]);
+
+        $subscriptions = ExternalSubscription::where('api_id', $paymentApi->id)
+            ->when($filters['search'] ?? null, function ($query, $value) {
+                $query->where(function ($query) use ($value) {
+                    $query->where('customer_name', 'like', "%$value%")
+                        ->orWhere('customer_email', 'like', "%$value%")
+                        ->orWhere('customer_phone', 'like', "%$value%")
+                        ->orWhere('orderId', 'like', "%$value%")
+                        ->orWhere('id', $value)
+                        ->orWhere('uuid', 'like', "%$value%");
+                });
+            })
+            ->when($filters['status'] ?? null, function ($query, $value) {
+                $query->where('status', $value);
+            })
+            ->latest()
+            ->paginate(20)
+            ->withQueryString();
+
+        return view('dashboard.external.button.subscriptions', compact('paymentApi', 'subscriptions', 'filters'));
+    }
+
     public function docs(PaymentApi $paymentApi)
     {
         if ($paymentApi->payment_method_access_id != auth()->user()->paymentMethodAccess->id) {
@@ -134,7 +169,32 @@ class ButtonPaymentController extends Controller
 
         $paymentMethodAccess = auth()->user()->paymentMethodAccess;
 
+        if ($paymentApi->is_subscription) {
+            return view('dashboard.external.button.subscription-docs', compact('paymentApi', 'paymentMethodAccess'));
+        }
+
         return view('dashboard.external.button.docs', compact('paymentApi', 'paymentMethodAccess'));
+    }
+
+    public function cancelSubscription(PaymentApi $paymentApi, ExternalSubscription $subscription)
+    {
+        if ($paymentApi->payment_method_access_id != auth()->user()->paymentMethodAccess->id) {
+            abort(403);
+        }
+
+        if ($subscription->api_id !== $paymentApi->id) {
+            abort(404);
+        }
+
+        $subscription->update([
+            'status' => 'CANCELED',
+            'canceled_at' => now(),
+            'next_charge_at' => null,
+        ]);
+
+        return redirect()
+            ->route('external.buttonPayment.view', $paymentApi)
+            ->with('success', 'Subscription canceled.');
     }
 
     public function cancelOrder(PaymentApi $paymentApi, $order)

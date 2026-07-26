@@ -40,6 +40,7 @@ Route::middleware('ExternalPaid')->group(function () {
     Route::get('/button-payment/create', [ButtonPaymentController::class, 'create'])->name('buttonPayment.create');
     Route::post('/button-payment/store', [ButtonPaymentController::class, 'store'])->name('buttonPayment.store');
     Route::delete('/button-payment/{paymentApi}/order/{order}/cancel', [ButtonPaymentController::class, 'cancelOrder'])->name('buttonPayment.cancel');
+    Route::delete('/button-payment/{paymentApi}/subscription/{subscription}/cancel', [ButtonPaymentController::class, 'cancelSubscription'])->name('buttonPayment.subscription.cancel');
 
     Route::get('/setup/payment/surfboard', [DashboardController::class, 'setup_surfboard_payment'])->name('setup_surfboard_payment');
     Route::get('/setup/payment/elavon', [DashboardController::class, 'setup_elavon_payment'])->name('setup_elavon_payment');

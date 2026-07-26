@@ -26,6 +26,12 @@ class IziipayController extends Controller
                 'status' => false,
             ], 404);
         }
+        if ($api->is_subscription) {
+            return response()->json([
+                'message' => 'This source key is a subscription button. Use the create-subscription endpoint instead.',
+                'status' => false,
+            ], 400);
+        }
         $request->validate([
             'name' => ['required'],
             'email' => ['required', 'email'],
