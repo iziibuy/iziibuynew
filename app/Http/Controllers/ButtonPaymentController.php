@@ -21,14 +21,16 @@ class ButtonPaymentController extends Controller
         return view('dashboard.external.button.index', compact('apis'));
     }
 
-
     public function edit(PaymentApi $paymentApi)
     {
 
+        if ($paymentApi->payment_method_access_id != auth()->user()->paymentMethodAccess->id) {
+            abort(403);
+        }
 
-        if ($paymentApi->payment_method_access_id != auth()->user()->paymentMethodAccess->id) abort(403);
         return view('dashboard.external.button.edit', compact('paymentApi'));
     }
+
     public function create()
     {
         return view('dashboard.external.button.add');
@@ -56,12 +58,12 @@ class ButtonPaymentController extends Controller
         return redirect()->route('external.buttonPayment')->with('success', 'Payment api created');
     }
 
-
     public function update(PaymentApi $paymentApi, Request $request)
     {
 
-
-        if ($paymentApi->payment_method_access_id != auth()->user()->paymentMethodAccess->id) abort(403);
+        if ($paymentApi->payment_method_access_id != auth()->user()->paymentMethodAccess->id) {
+            abort(403);
+        }
         $request->validate([
             'success' => 'required',
             'failed' => 'required',
@@ -75,12 +77,15 @@ class ButtonPaymentController extends Controller
             'failed_redirect_url' => $request->failed,
             'cancel_callback_url' => $request->cancel_callback_url,
         ]);
+
         return redirect()->route('external.buttonPayment')->with('success', 'Payment api updated');
     }
 
     public function view(PaymentApi $paymentApi, Request $request)
     {
-        if ($paymentApi->payment_method_access_id != auth()->user()->paymentMethodAccess->id) abort(403);
+        if ($paymentApi->payment_method_access_id != auth()->user()->paymentMethodAccess->id) {
+            abort(403);
+        }
 
         $filters = $request->only([
             'search',
@@ -118,9 +123,18 @@ class ButtonPaymentController extends Controller
 
         $orders = $ordersQuery->paginate(20)->withQueryString();
 
+        return view('dashboard.external.button.view', compact('paymentApi', 'orders', 'filters'));
+    }
+
+    public function docs(PaymentApi $paymentApi)
+    {
+        if ($paymentApi->payment_method_access_id != auth()->user()->paymentMethodAccess->id) {
+            abort(403);
+        }
+
         $paymentMethodAccess = auth()->user()->paymentMethodAccess;
 
-        return view('dashboard.external.button.view', compact('paymentApi', 'paymentMethodAccess', 'orders', 'filters'));
+        return view('dashboard.external.button.docs', compact('paymentApi', 'paymentMethodAccess'));
     }
 
     public function cancelOrder(PaymentApi $paymentApi, $order)
@@ -135,7 +149,7 @@ class ButtonPaymentController extends Controller
             ->where('api_id', $paymentApi->id)
             ->first();
 
-        if (!$externalOrder) {
+        if (! $externalOrder) {
             return redirect()->route('external.buttonPayment.view', $paymentApi)
                 ->with('error', 'Order not found.');
         }
@@ -149,48 +163,47 @@ class ButtonPaymentController extends Controller
         try {
             // Cancel the order based on payment method
             if ($externalOrder->payment_method == 'surfboard') {
-                  $externalOrder->update([
+                $externalOrder->update([
+                    'status' => 'CANCELED',
+                ]);
+                if ($paymentApi->cancel_callback_url) {
+                    $callbackPayload = [
+                        'order_id' => $externalOrder->id,
                         'status' => 'CANCELED',
+                        'message' => 'Order canceled successfully',
+                    ];
+
+                    Log::info('Sending cancel callback request.', [
+                        'url' => $paymentApi->cancel_callback_url,
+                        'payload' => $callbackPayload,
+                        'external_order_id' => $externalOrder->id,
                     ]);
-                    if ($paymentApi->cancel_callback_url) {
-                        $callbackPayload = [
-                            'order_id' => $externalOrder->id,
-                            'status' => 'CANCELED',
-                            'message' => 'Order canceled successfully'
-                        ];
 
-                        Log::info('Sending cancel callback request.', [
-                            'url' => $paymentApi->cancel_callback_url,
-                            'payload' => $callbackPayload,
-                            'external_order_id' => $externalOrder->id,
-                        ]);
+                    Http::timeout(10)->get($paymentApi->cancel_callback_url, $callbackPayload);
 
-                        Http::timeout(10)->get($paymentApi->cancel_callback_url, $callbackPayload);
-
-                     
-                    }
+                }
                 $payment_data = (new SurfboardOrderApi($externalOrder))->cancelOrder();
 
                 if ($payment_data['status']) {
-                  
 
                     return redirect()->route('external.buttonPayment.view', $paymentApi)
                         ->with('success', 'Order canceled successfully.');
                 } else {
                     return redirect()->route('external.buttonPayment.view', $paymentApi)
-                        ->with('error', 'Failed to cancel order: ' . ($payment_data['data'] ?? 'Unknown error'));
+                        ->with('error', 'Failed to cancel order: '.($payment_data['data'] ?? 'Unknown error'));
                 }
             } else {
                 // For other payment methods, just update the status
                 $externalOrder->update([
                     'status' => 'CANCELED',
                 ]);
+
                 return redirect()->route('external.buttonPayment.view', $paymentApi)
                     ->with('success', 'Order canceled successfully.');
             }
         } catch (\Exception $e) {
             return redirect()->route('external.buttonPayment.view', $paymentApi)
-                ->with('error', 'An error occurred while canceling the order: ' . $e->getMessage());
+                ->with('error', 'An error occurred while canceling the order: '.$e->getMessage());
         }
     }
 
@@ -198,30 +211,30 @@ class ButtonPaymentController extends Controller
     {
         $orderId = $request->query('order_id');
 
-        if (!$orderId) {
+        if (! $orderId) {
             return response()->json([
                 'status' => false,
-                'message' => 'order_id parameter is required'
+                'message' => 'order_id parameter is required',
             ], 400);
         }
 
         // Find the order by ID
         $externalOrder = ExternalOrder::find($orderId);
 
-        if (!$externalOrder) {
+        if (! $externalOrder) {
             return response()->json([
                 'status' => false,
-                'message' => 'Order not found'
+                'message' => 'Order not found',
             ], 404);
         }
 
         // Get the payment API
         $paymentApi = PaymentApi::find($externalOrder->api_id);
 
-        if (!$paymentApi) {
+        if (! $paymentApi) {
             return response()->json([
                 'status' => false,
-                'message' => 'Payment API not found'
+                'message' => 'Payment API not found',
             ], 404);
         }
 
@@ -229,7 +242,7 @@ class ButtonPaymentController extends Controller
         if (strtoupper($externalOrder->status) !== 'PENDING') {
             return response()->json([
                 'status' => false,
-                'message' => 'Only pending orders can be canceled. Current status: ' . $externalOrder->status
+                'message' => 'Only pending orders can be canceled. Current status: '.$externalOrder->status,
             ], 400);
         }
 
@@ -249,11 +262,11 @@ class ButtonPaymentController extends Controller
                             Http::timeout(10)->get($paymentApi->cancel_callback_url, [
                                 'order_id' => $externalOrder->id,
                                 'status' => 'CANCELED',
-                                'message' => 'Order canceled successfully'
+                                'message' => 'Order canceled successfully',
                             ]);
                         } catch (\Exception $e) {
                             // Log the error but don't fail the cancellation
-                            Log::warning('Failed to call cancel callback URL: ' . $e->getMessage());
+                            Log::warning('Failed to call cancel callback URL: '.$e->getMessage());
                         }
                     }
 
@@ -261,12 +274,12 @@ class ButtonPaymentController extends Controller
                         'status' => true,
                         'message' => 'Order canceled successfully',
                         'order_id' => $externalOrder->id,
-                        'order_status' => 'CANCELED'
+                        'order_status' => 'CANCELED',
                     ], 200);
                 } else {
                     return response()->json([
                         'status' => false,
-                        'message' => 'Failed to cancel order: ' . ($payment_data['data'] ?? 'Unknown error')
+                        'message' => 'Failed to cancel order: '.($payment_data['data'] ?? 'Unknown error'),
                     ], 500);
                 }
             } else {
@@ -281,11 +294,11 @@ class ButtonPaymentController extends Controller
                         Http::timeout(10)->get($paymentApi->cancel_callback_url, [
                             'order_id' => $externalOrder->id,
                             'status' => 'CANCELED',
-                            'message' => 'Order canceled successfully'
+                            'message' => 'Order canceled successfully',
                         ]);
                     } catch (\Exception $e) {
                         // Log the error but don't fail the cancellation
-                        Log::warning('Failed to call cancel callback URL: ' . $e->getMessage());
+                        Log::warning('Failed to call cancel callback URL: '.$e->getMessage());
                     }
                 }
 
@@ -293,13 +306,13 @@ class ButtonPaymentController extends Controller
                     'status' => true,
                     'message' => 'Order canceled successfully',
                     'order_id' => $externalOrder->id,
-                    'order_status' => 'CANCELED'
+                    'order_status' => 'CANCELED',
                 ], 200);
             }
         } catch (\Exception $e) {
             return response()->json([
                 'status' => false,
-                'message' => 'An error occurred while canceling the order: ' . $e->getMessage()
+                'message' => 'An error occurred while canceling the order: '.$e->getMessage(),
             ], 500);
         }
     }

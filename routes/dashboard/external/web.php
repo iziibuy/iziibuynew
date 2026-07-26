@@ -34,6 +34,7 @@ Route::middleware('ExternalPaid')->group(function () {
 
     Route::get('/button-payment', [ButtonPaymentController::class, 'index'])->name('buttonPayment');
     Route::get('/button-payment/view/{paymentApi}', [ButtonPaymentController::class, 'view'])->name('buttonPayment.view');
+    Route::get('/button-payment/view/{paymentApi}/docs', [ButtonPaymentController::class, 'docs'])->name('buttonPayment.docs');
     Route::get('/button-payment/edit/{paymentApi}', [ButtonPaymentController::class, 'edit'])->name('buttonPayment.edit');
     Route::post('/button-payment/edit/{paymentApi}', [ButtonPaymentController::class, 'update'])->name('buttonPayment.update');
     Route::get('/button-payment/create', [ButtonPaymentController::class, 'create'])->name('buttonPayment.create');
