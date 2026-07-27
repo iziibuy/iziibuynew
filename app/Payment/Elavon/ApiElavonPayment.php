@@ -12,28 +12,28 @@ use Illuminate\Support\Facades\Log;
 
 class ApiElavonPayment
 {
-
     public $endpoint;
-    protected $elavon;
-    protected $shop;
-    public $keys;
-    protected $order;
 
+    protected $elavon;
+
+    protected $shop;
+
+    public $keys;
+
+    protected $order;
 
     public function __construct(ExternalOrder $order)
     {
         $this->order = $order;
         $this->shop = $this->order->paymentMethodAccess;
 
-
-
-        $merchantAlias =  $this->shop->elavon_merchant_alias;
+        $merchantAlias = $this->shop->elavon_merchant_alias;
         $publicKey = $this->shop->elavon_public_key;
-        $secretKey =  $this->shop->elavon_secret_key;
+        $secretKey = $this->shop->elavon_secret_key;
         $this->keys = [
             'mercahantAlias' => str_replace(' ', '', $merchantAlias),
-            'publicKey' =>   str_replace(' ', '', $publicKey),
-            'secretKey' =>  str_replace(' ', '', $secretKey)
+            'publicKey' => str_replace(' ', '', $publicKey),
+            'secretKey' => str_replace(' ', '', $secretKey),
         ];
 
         if ($this->shop->site_mode == 'test') {
@@ -46,11 +46,10 @@ class ApiElavonPayment
         $this->elavon = new Converge2($this->config());
     }
 
-
     protected function config()
     {
 
-        $config = new ClientConfig();
+        $config = new ClientConfig;
 
         $config->setMerchantAlias($this->keys['mercahantAlias']);
         $config->setPublicKey($this->keys['publicKey']);
@@ -63,33 +62,28 @@ class ApiElavonPayment
         return $config;
     }
 
-
-
-
-
-
     protected function makeOrderCreateBody()
     {
 
-        return   [
+        return [
             'total' => (object) [
                 'amount' => $this->order->amount,
-                'currencyCode' => $this->order->currency
+                'currencyCode' => $this->order->currency,
             ],
             'description' => sprintf('Purchase from %s- %s', env('APP_NAME'), $this->order->id),
             // 'expiresAt' => now()->addDays(14)->setTimezone('UTC')->format('Y-m-d\TH:i:s\Z'),
             // 'returnUrl' => route('callback.elavon.payment.success'),
             'items' => null,
             'shipTo' => [
-                'fullName' => $this->order->first_name . ' ' . $this->order->last_name,
-                'company' => "",
+                'fullName' => $this->order->first_name.' '.$this->order->last_name,
+                'company' => '',
                 'postalCode' => $this->order->post_code,
                 'street1' => $this->order->address,
                 'street2' => '',
                 'city' => $this->order->city,
                 'countryCode' => 'NOR',
                 'primaryPhone' => $this->order->phone,
-                'email' => $this->order->customer_email
+                'email' => $this->order->customer_email,
             ],
             'shopperEmailAddress' => $this->order->customer_email,
             'shopperReference' => $this->order->customer_email,
@@ -100,38 +94,38 @@ class ApiElavonPayment
                 'php_version' => phpversion(),
                 // 'woocommerce_version' => '8.1.1',
                 // 'WooCommerceID' => '54eccead-f25d-453b-a799-630fe3f17e53'
-            ]
+            ],
         ];
     }
 
     protected function makePaymentSessionCreateBody(OrderResponse $response)
     {
         return [
-            "order" => $response->getId(),
-            "billTo" => array(
+            'order' => $response->getId(),
+            'billTo' => [
                 'fullName' => $this->order->customer_name,
-                'company' => "",
+                'company' => '',
                 'postalCode' => $this->order->customer_post_code,
                 'street1' => $this->order->customer_address,
                 'street2' => '',
                 'city' => $this->order->city,
                 'countryCode' => 'NOR',
                 'primaryPhone' => $this->order->customer_phone,
-                'email' => $this->order->customer_email
-            ),
-            "returnUrl" =>  route('callback.api.elavon.payment.success'),
-            "cancelUrl" =>  route('callback.api.elavon.payment.cancel', ['order_id' => $this->order->id]),
-            "originUrl" => $this->order->source_url,
-            "defaultLanguageTag" => "en-US",
-            "customFields" => array(
+                'email' => $this->order->customer_email,
+            ],
+            'returnUrl' => route('callback.api.elavon.payment.success'),
+            'cancelUrl' => route('callback.api.elavon.payment.cancel', ['order_id' => $this->order->id]),
+            'originUrl' => $this->order->source_url,
+            'defaultLanguageTag' => 'en-US',
+            'customFields' => [
                 'vendor_id' => env('APP_NAME'),
                 'vendor_app_name' => env('APP_NAME'),
                 'vendor_app_version' => '1.0.0',
                 'php_version' => phpversion(),
-            ),
-            "doCreateTransaction" => false,
-            "doThreeDSecure" => 1,
-            "hppType" => "fullPageRedirect"
+            ],
+            'doCreateTransaction' => false,
+            'doThreeDSecure' => 1,
+            'hppType' => 'fullPageRedirect',
         ];
     }
 
@@ -163,39 +157,39 @@ class ApiElavonPayment
             'doCapture' => true,
             'shopperInteraction' => 'ecommerce',
             'shipTo' => [
-                'fullName'     => $this->order->customer_name,
-                'company'      => '',
-                'postalCode'   => $this->order->customer_post_code,
-                'street1'      => $this->order->customer_address,
-                'street2'      => '',
-                'city'         => $this->order->city,
-                'countryCode'  => 'NOR',
+                'fullName' => $this->order->customer_name,
+                'company' => '',
+                'postalCode' => $this->order->customer_post_code,
+                'street1' => $this->order->customer_address,
+                'street2' => '',
+                'city' => $this->order->city,
+                'countryCode' => 'NOR',
                 'primaryPhone' => $this->order->customer_phone,
-                'email'        => $this->order->customer_email,
+                'email' => $this->order->customer_email,
             ],
             'shopperEmailAddress' => $this->order->customer_email,
-            'doSendReceipt'       => false,
-            'shopperIpAddress'    => $_SERVER['REMOTE_ADDR'] ?? request()->ip(),
-            'shopperReference'    => $this->order->customer_email,
-            'shopperStatement'    => [
-                'name'  => $this->order->customer_name,
+            'doSendReceipt' => false,
+            'shopperIpAddress' => $_SERVER['REMOTE_ADDR'] ?? request()->ip(),
+            'shopperReference' => $this->order->customer_email,
+            'shopperStatement' => [
+                'name' => $this->order->customer_name,
                 'phone' => $this->order->customer_phone,
-                'url'   => '',
+                'url' => '',
             ],
 
-            'description'        => sprintf('Purchase from %s- %s', env('APP_NAME'), $this->order->id),
+            'description' => sprintf('Purchase from %s- %s', env('APP_NAME'), $this->order->id),
             'shopperLanguageTag' => app()->getLocale(),
-            'shopperTimeZone'    => config('app.timezone'),
-            'customFields'       => [
-                'vendor_id'         => env('APP_NAME'),
-                'vendor_app_name'   => env('APP_NAME'),
-                'vendor_app_version'=> '1.0.0',
-                'php_version'       => phpversion(),
+            'shopperTimeZone' => config('app.timezone'),
+            'customFields' => [
+                'vendor_id' => env('APP_NAME'),
+                'vendor_app_name' => env('APP_NAME'),
+                'vendor_app_version' => '1.0.0',
+                'php_version' => phpversion(),
             ],
-            'createdBy'      => env('APP_NAME'),
+            'createdBy' => env('APP_NAME'),
             'orderReference' => $this->order->id,
-            'order'          => $this->parseUrl($response->getOrder()),
-            'hostedCard'     => $this->parseUrl($response->getHostedCard()),
+            'order' => $this->parseUrl($response->getOrder()),
+            'hostedCard' => $this->parseUrl($response->getHostedCard()),
         ];
 
         // Guard 3DS access – some payment methods (like Apple Pay) may not
@@ -205,10 +199,10 @@ class ApiElavonPayment
         if ($threeDS) {
             $body['threeDSecure'] = [
                 'directoryServerTransactionId' => $threeDS->getDirectoryServerTransactionId(),
-                'transactionStatus'            => $threeDS->getTransactionStatus(),
-                'electronicCommerceIndicator'  => $threeDS->getElectronicCommerceIndicator(),
-                'authenticationValue'          => $threeDS->getAuthenticationValue(),
-                'protocolVersion'              => $threeDS->getProtocolVersion(),
+                'transactionStatus' => $threeDS->getTransactionStatus(),
+                'electronicCommerceIndicator' => $threeDS->getElectronicCommerceIndicator(),
+                'authenticationValue' => $threeDS->getAuthenticationValue(),
+                'protocolVersion' => $threeDS->getProtocolVersion(),
             ];
         }
 
@@ -225,32 +219,126 @@ class ApiElavonPayment
 
         $payment_session_create_response = $this->elavon->createPaymentSession($payment_session_create_body);
 
-
         if ($payment_session_create_response->isSuccess()) {
             return [
                 'status' => true,
                 'code' => 200,
                 'data' => [
                     'payment_id' => $payment_session_create_response->getId(),
-                    'url' => $this->endpoint . '/?merchantAlias=' . $this->keys['mercahantAlias'] . '&publicApiKey=' . $this->keys['publicKey'] . '&sessionId=' . $payment_session_create_response->getId()
-                ]
+                    'url' => $this->endpoint.'/?merchantAlias='.$this->keys['mercahantAlias'].'&publicApiKey='.$this->keys['publicKey'].'&sessionId='.$payment_session_create_response->getId(),
+                ],
             ];
         } else {
             $message = '';
             foreach ($payment_session_create_response->getData()->failures as $failure) {
 
-                $message .= ' | ' . $failure->getDescription();
+                $message .= ' | '.$failure->getDescription();
             }
+
             return [
                 'status' => false,
                 'code' => $payment_session_create_response->getData()->status,
                 'data' => [
-                    'message' => $message
-                ]
+                    'message' => $message,
+                ],
             ];
         }
     }
 
+    /**
+     * Read-only gateway inspection for admin tooling (does not create transactions).
+     *
+     * @return array{success:bool,summary:array<string,mixed>,raw:array<string,mixed>,error:?string}
+     */
+    public function inspectGateway(): array
+    {
+        $raw = [];
+        $summary = [];
+
+        try {
+            if (filled($this->order->payment_id)) {
+                $session = $this->elavon->getPaymentSession((string) $this->order->payment_id);
+                $raw['payment_session'] = $this->normalizeConvergePayload($session);
+                $summary['session_id'] = $this->order->payment_id;
+                $summary['session_success'] = $session->isSuccess();
+
+                $txHref = method_exists($session, 'getTransaction') ? $session->getTransaction() : null;
+                if ($txHref) {
+                    $summary['session_transaction'] = $this->parseUrl((string) $txHref);
+                }
+            }
+
+            $transactionId = (string) ($this->order->elavon_transaction_id
+                ?: (is_string($this->order->response) ? $this->order->response : ''));
+
+            if ($transactionId !== '') {
+                $tx = $this->elavon->getTransaction($transactionId);
+                $raw['transaction'] = $this->normalizeConvergePayload($tx);
+                $summary['transaction_id'] = $transactionId;
+                $summary['transaction_success'] = $tx->isSuccess();
+
+                if (method_exists($tx, 'getState') && $tx->getState()) {
+                    $state = $tx->getState();
+                    $summary['transaction_state'] = [
+                        'authorized' => method_exists($state, 'isAuthorized') ? $state->isAuthorized() : null,
+                        'captured' => method_exists($state, 'isCaptured') ? $state->isCaptured() : null,
+                        'settled' => method_exists($state, 'isSettled') ? $state->isSettled() : null,
+                    ];
+                }
+            }
+
+            if ($raw === []) {
+                return [
+                    'success' => false,
+                    'summary' => ['message' => 'No Elavon payment_id or transaction id available to inspect.'],
+                    'raw' => [],
+                    'error' => 'Missing gateway identifiers.',
+                ];
+            }
+
+            return [
+                'success' => true,
+                'summary' => $summary,
+                'raw' => $raw,
+                'error' => null,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'summary' => ['message' => 'Elavon inspection failed.'],
+                'raw' => $raw,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function normalizeConvergePayload(object $response): array
+    {
+        $payload = [
+            'id' => method_exists($response, 'getId') ? $response->getId() : null,
+            'success' => method_exists($response, 'isSuccess') ? $response->isSuccess() : null,
+        ];
+
+        if (method_exists($response, 'getData')) {
+            $data = $response->getData();
+            $payload['data'] = json_decode(json_encode($data), true);
+        }
+
+        if (method_exists($response, 'hasFailures') && $response->hasFailures() && method_exists($response, 'getFailures')) {
+            $failures = [];
+            foreach ($response->getFailures() as $failure) {
+                $failures[] = method_exists($failure, 'getDescription')
+                    ? (string) $failure->getDescription()
+                    : (string) json_encode($failure);
+            }
+            $payload['failures'] = $failures;
+        }
+
+        return $payload;
+    }
 
     public function processPayment($id)
     {
@@ -259,7 +347,7 @@ class ApiElavonPayment
             $sale_transcation_create_response = $this->elavon->getTransaction($this->order->elavon_transaction_id);
         } else {
 
-            $payment_session_response =  $this->elavon->getPaymentSession($id);
+            $payment_session_response = $this->elavon->getPaymentSession($id);
 
             $sale_transcation_create_body = $this->makeTransactionCreateBody($payment_session_response);
             $sale_transcation_create_response = $this->elavon->createSaleTransaction($sale_transcation_create_body);
@@ -270,7 +358,6 @@ class ApiElavonPayment
             'state' => $sale_transcation_create_response->getState()->isCaptured() || $sale_transcation_create_response->getState()->isAuthorized(),
         ];
     }
-
 
     // public function processPayment($id)
     // {
@@ -307,7 +394,6 @@ class ApiElavonPayment
 
     //             $transactionId = $this->parseUrl($transactionUrl);
     //             $tx = $this->elavon->getTransaction($transactionId);
-
 
     //         // Robust success evaluation: captured, authorized, or issuer/proc codes indicate success
     //         // Normalize transaction data to array to avoid stdClass property issues
