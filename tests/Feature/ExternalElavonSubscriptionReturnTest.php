@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Payment\Elavon\ElavonExternalSubscription;
 use App\Payment\Elavon\ElavonExternalSubscriptionFactory;
 use Database\Seeders\RoleSeeder;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
@@ -94,6 +95,81 @@ it('finalizes elavon hpp when returned to the subscription page with a session i
         ->assertOk();
 
     Mail::assertSent(PaymentMethodAccessMail::class);
+});
+
+it('completes subscription even when confirmation mail fails', function (): void {
+    Log::spy();
+
+    $user = User::factory()->create([
+        'role_id' => User::ROLES['External'],
+    ]);
+    $user->assignRole('external');
+
+    $access = PaymentMethodAccess::query()->create([
+        'user_id' => $user->id,
+        'company_name' => 'Plugin Mail Fail',
+        'company_email' => 'plugin-mail-'.uniqid().'@example.com',
+        'key' => (string) Str::uuid(),
+        'fee' => 50,
+        'subscriptionMethod' => 'quickpay',
+        'status' => 0,
+    ]);
+
+    $subscription = $access->subscription()->create([
+        'key' => 'session-mail-fail',
+        'url' => 'https://hpp.example.test/?sessionId=session-mail-fail',
+        'fee' => 50,
+        'status' => 0,
+    ]);
+
+    $elavon = Mockery::mock(ElavonExternalSubscription::class);
+    $elavon->shouldReceive('finalizeHostedSubscriptionFromSession')
+        ->once()
+        ->andReturnUsing(function () use ($access, $subscription): array {
+            $access->update([
+                'status' => true,
+                'subscriptionMethod' => PaymentMethodAccess::SUBSCRIPTION_METHOD_ELAVON,
+                'shopperId' => 'shopper-mail-fail',
+                'last_paid_at' => now(),
+            ]);
+            $subscription->update([
+                'key' => 'card-mail-fail',
+                'url' => null,
+                'status' => 1,
+                'establishment_status' => 1,
+                'paid_at' => now(),
+            ]);
+
+            return [
+                'status' => true,
+                'data' => [
+                    'cardId' => 'card-mail-fail',
+                    'transactionId' => 'tx-mail-fail',
+                ],
+            ];
+        });
+
+    $factory = Mockery::mock(ElavonExternalSubscriptionFactory::class);
+    $factory->shouldReceive('make')->andReturn($elavon);
+    $this->app->instance(ElavonExternalSubscriptionFactory::class, $factory);
+
+    Mail::shouldReceive('to')
+        ->once()
+        ->andThrow(new Exception('Connection to \'smtp.office365.com:587\' has been closed unexpectedly.'));
+
+    $this->actingAs($user)
+        ->get(route('external.subscription.payment', ['sessionId' => 'session-mail-fail']))
+        ->assertRedirect(route('external.contract'))
+        ->assertSessionHas('success');
+
+    $access->refresh();
+
+    expect((bool) $access->getAttributes()['status'])->toBeTruthy()
+        ->and($access->subscriptionMethod)->toBe(PaymentMethodAccess::SUBSCRIPTION_METHOD_ELAVON)
+        ->and($access->canProcessPayments())->toBeTrue();
+
+    Log::shouldHaveReceived('warning')
+        ->withArgs(fn (string $message): bool => str_contains($message, 'confirmation mail failed'));
 });
 
 it('does not finalize a pending elavon hpp session before elavon returns', function (): void {

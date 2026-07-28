@@ -21,6 +21,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -182,8 +183,20 @@ class DashboardController extends Controller
 
             DB::commit();
 
-            Mail::to($paymentMethodAccess->user->email)->send(new PaymentMethodAccessMail($paymentMethodAccess));
-            Mail::to(setting('site.email'))->send(new PaymentMethodAccessMail($paymentMethodAccess));
+            try {
+                Mail::to($paymentMethodAccess->user->email)->send(new PaymentMethodAccessMail($paymentMethodAccess));
+                Mail::to(setting('site.email'))->send(new PaymentMethodAccessMail($paymentMethodAccess));
+            } catch (Exception $e) {
+                Log::warning('External subscription confirmation mail failed', [
+                    'payment_method_access_id' => $paymentMethodAccess->id,
+                    'error' => $e->getMessage(),
+                ]);
+            } catch (Error $e) {
+                Log::warning('External subscription confirmation mail failed', [
+                    'payment_method_access_id' => $paymentMethodAccess->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return redirect()->route('external.contract')->with('success', 'Subscription completed');
         } catch (Exception $e) {
