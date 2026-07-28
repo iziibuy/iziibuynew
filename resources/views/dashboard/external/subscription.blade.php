@@ -28,7 +28,6 @@
                                 </div>
                             @endif
 
-                            @dd($paymentMethodAccess->fee());
                             <p>
                                 <b>{{ __('words.subscription_pera_1') }}</b>
                                 <br>
