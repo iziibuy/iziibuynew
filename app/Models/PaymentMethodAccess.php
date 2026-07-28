@@ -242,11 +242,12 @@ class PaymentMethodAccess extends Model
 
     public function fee(): float
     {
-        if (ElavonOnboardingPromo::isFreeSubscriptionPeriod()) {
-            return ElavonOnboardingPromo::PROMO_SIGNUP_FEE;
-        }
+        // if (ElavonOnboardingPromo::isFreeSubscriptionPeriod()) {
+        //     return ElavonOnboardingPromo::PROMO_SIGNUP_FEE;
+        // }
 
         $base = (float) ($this->attributes['fee'] ?? 0);
+        dd($base);
         if ($base <= 0) {
             $base = (float) setting('payment.payment_method_fee', 0);
         }
