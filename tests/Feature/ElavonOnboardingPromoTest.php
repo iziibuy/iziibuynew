@@ -86,12 +86,16 @@ it('builds first and subsequent recurring transaction payloads', function (): vo
     $base = [
         'type' => 'sale',
         'total' => ['amount' => 100, 'currencyCode' => 'NOK'],
+        'recurringType' => 'first',
+        'previousRecurringTransaction' => 'https://example.test/transactions/old',
     ];
 
     $first = ElavonRecurringTransaction::applyFirstSetup($base);
 
-    expect($first['recurringType'])->toBe('first')
-        ->and($first['shopperInteraction'])->toBe('ecommerce');
+    expect($first['credentialOnFileType'])->toBe('subscription')
+        ->and($first['shopperInteraction'])->toBe('ecommerce')
+        ->and($first)->not->toHaveKey('recurringType')
+        ->and($first)->not->toHaveKey('previousRecurringTransaction');
 
     $subsequent = ElavonRecurringTransaction::applySubsequentMerchantInitiated(
         $base,
@@ -99,7 +103,8 @@ it('builds first and subsequent recurring transaction payloads', function (): vo
         'tx-setup-123'
     );
 
-    expect($subsequent['recurringType'])->toBe('subsequent')
-        ->and($subsequent['shopperInteraction'])->toBe('mailOrder')
-        ->and($subsequent['previousRecurringTransaction'])->toBe('https://api.converge.eu.elavonaws.com/transactions/tx-setup-123');
+    expect($subsequent['credentialOnFileType'])->toBe('subscription')
+        ->and($subsequent['shopperInteraction'])->toBe('merchantInitiated')
+        ->and($subsequent)->not->toHaveKey('recurringType')
+        ->and($subsequent)->not->toHaveKey('previousRecurringTransaction');
 });
