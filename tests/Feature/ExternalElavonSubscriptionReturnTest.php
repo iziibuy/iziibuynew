@@ -30,7 +30,7 @@ it('finalizes elavon hpp when returned to the subscription page with a session i
         'company_email' => 'plugin-hpp-'.uniqid().'@example.com',
         'key' => (string) Str::uuid(),
         'fee' => 50,
-        'subscriptionMethod' => 'elavon',
+        'subscriptionMethod' => 'quickpay',
         'status' => 0,
     ]);
 
@@ -48,6 +48,7 @@ it('finalizes elavon hpp when returned to the subscription page with a session i
         ->andReturnUsing(function () use ($access, $subscription): array {
             $access->update([
                 'status' => true,
+                'subscriptionMethod' => PaymentMethodAccess::SUBSCRIPTION_METHOD_ELAVON,
                 'shopperId' => 'shopper-external',
                 'last_paid_at' => now(),
             ]);
@@ -79,9 +80,18 @@ it('finalizes elavon hpp when returned to the subscription page with a session i
     $access->refresh();
     $subscription->refresh();
 
-    expect((bool) $access->status)->toBeTrue()
+    expect((bool) $access->getAttributes()['status'])->toBeTruthy()
         ->and((int) $subscription->status)->toBe(1)
-        ->and($subscription->key)->toBe('card-external');
+        ->and($subscription->key)->toBe('card-external')
+        ->and($access->subscriptionMethod)->toBe(PaymentMethodAccess::SUBSCRIPTION_METHOD_ELAVON)
+        ->and($access->canProcessPayments())->toBeTrue()
+        ->and($access->requiresElavonResubscription())->toBeFalse();
+
+    $user->refresh();
+
+    $this->actingAs($user)
+        ->get(route('external.dashboard'))
+        ->assertOk();
 
     Mail::assertSent(PaymentMethodAccessMail::class);
 });

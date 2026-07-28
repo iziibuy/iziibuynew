@@ -134,6 +134,12 @@ class PaymentMethodAccess extends Model
 
     public function requiresElavonResubscription(): bool
     {
+        // Paid accounts must stay in the dashboard; do not bounce them to
+        // subscription.blade.php based on subscriptionMethod.
+        if ((bool) ($this->attributes['status'] ?? false)) {
+            return false;
+        }
+
         return ! $this->hasElavonSubscriptionMethod();
     }
 
@@ -149,7 +155,7 @@ class PaymentMethodAccess extends Model
 
     public function canProcessPayments(): bool
     {
-        return ! $this->requiresElavonResubscription() && (bool) ($this->attributes['status'] ?? false);
+        return (bool) ($this->attributes['status'] ?? false);
     }
 
     public function companyAddress(): Attribute

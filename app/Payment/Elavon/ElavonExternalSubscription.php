@@ -124,7 +124,7 @@ class ElavonExternalSubscription
             $this->access->shopperId = $this->convergeEntityIdFromHrefOrId($primaryShopper) ?: $primaryShopper;
         }
 
-        $this->access->subscriptionMethod = 'elavon';
+        $this->access->subscriptionMethod = PaymentMethodAccess::SUBSCRIPTION_METHOD_ELAVON;
         $this->access->status = true;
         $this->access->last_paid_at = now();
         $this->access->save();
