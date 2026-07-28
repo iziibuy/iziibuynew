@@ -39,11 +39,12 @@
                             </p>
 
                             <div class="text-center">
-                                <a href="{{ route('external.start-subscription', $subscription) }}"
-                                    class="btn btn-primary">{{ __('words.start_running_subs_btn') }}</a>
                                 @if (filled($subscription->key) || filled($paymentMethodAccess->shopperId))
                                     <a href="{{ route('external.start-subscription', [$subscription, 'type' => 'new_card']) }}"
                                         class="btn btn-primary">{{ __('words.subscribe_with_new_card') }}</a>
+                                @else
+                                    <a href="{{ route('external.start-subscription', $subscription) }}"
+                                        class="btn btn-primary">{{ __('words.start_running_subs_btn') }}</a>
                                 @endif
                                 <a class="btn btn-danger" href="{{ route('logout') }}"
                                     onclick="event.preventDefault(); document.getElementById('logout-form').submit();">

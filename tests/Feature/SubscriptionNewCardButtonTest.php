@@ -98,7 +98,8 @@ it('shows subscribe with new card on plugin subscription when a stored card exis
         ->get(route('external.subscription.payment'))
         ->assertOk()
         ->assertSee(__('words.subscribe_with_new_card'), false)
-        ->assertSee('type=new_card', false);
+        ->assertSee('type=new_card', false)
+        ->assertDontSee(__('words.start_running_subs_btn'), false);
 });
 
 it('clears enterprise stored card when starting with new card', function (): void {
