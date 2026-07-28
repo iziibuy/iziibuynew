@@ -12,6 +12,7 @@ use App\Models\Subscription;
 use App\Models\SubscriptionCharge;
 use App\Models\User;
 use App\Payment\Elavon\ElavonExternalSubscription;
+use App\Payment\Elavon\ElavonExternalSubscriptionFactory;
 use App\Payment\External\Surfboard\ExternalSurfboardMarchant;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Error;
@@ -110,12 +111,14 @@ class DashboardController extends Controller
 
             $subscriptionFee = $paymentMethodAccess->fresh()->fee();
 
-            $elavon = new ElavonExternalSubscription($paymentMethodAccess);
+            $elavon = app(ElavonExternalSubscriptionFactory::class)->make($paymentMethodAccess);
 
+            // Return to the subscription page (same as shop dashboard) so HPP can
+            // finalize via sessionId query params on this page.
             $result = $elavon->getPaymentLink(
                 $subscriptionFee,
-                route('external.subscription.success', $subscription),
-                route('external.subscription.cancel', $subscription)
+                route('external.subscription.payment', absolute: true),
+                route('external.subscription.cancel', $subscription, absolute: true)
             );
 
             if (! $result['status']) {
@@ -159,11 +162,11 @@ class DashboardController extends Controller
             if (! is_string($sessionId) || trim($sessionId) === '') {
                 DB::rollBack();
 
-                return redirect()->route('external.contract')->withErrors('Payment session is missing.');
+                return redirect()->route('external.subscription.payment')->withErrors('Payment session is missing.');
             }
 
             $paymentMethodAccess = $subscription->subscribable;
-            $elavon = new ElavonExternalSubscription($paymentMethodAccess);
+            $elavon = app(ElavonExternalSubscriptionFactory::class)->make($paymentMethodAccess);
             $result = $elavon->finalizeHostedSubscriptionFromSession(
                 trim($sessionId),
                 $subscription,
@@ -173,7 +176,7 @@ class DashboardController extends Controller
             if (! $result['status']) {
                 DB::rollBack();
 
-                return redirect()->route('external.contract')
+                return redirect()->route('external.subscription.payment')
                     ->withErrors($result['data']['message'] ?? 'Payment could not be completed.');
             }
 
@@ -186,17 +189,17 @@ class DashboardController extends Controller
         } catch (Exception $e) {
             DB::rollBack();
 
-            return redirect()->route('external.contract')->withErrors($e->getMessage());
+            return redirect()->route('external.subscription.payment')->withErrors($e->getMessage());
         } catch (Error $e) {
             DB::rollBack();
 
-            return redirect()->route('external.contract')->withErrors($e->getMessage());
+            return redirect()->route('external.subscription.payment')->withErrors($e->getMessage());
         }
     }
 
     public function subscriptionCancel(Subscription $subscription)
     {
-        return redirect()->route('external.contract')->withErrors('Payment cancelled.');
+        return redirect()->route('external.subscription.payment')->withErrors('Payment cancelled.');
     }
 
     public function dashboard()
@@ -249,14 +252,27 @@ class DashboardController extends Controller
         return view('dashboard.external.paymentMethodAccess', compact('paymentMethodAccess', 'billingStatus'));
     }
 
-    public function subscriptionIndex()
+    public function subscriptionIndex(Request $request)
     {
         $paymentMethodAccess = auth()->user()->paymentMethodAccess;
         $subscription = $paymentMethodAccess->subscription()->firstOrCreate([], [
             'fee' => (int) round($paymentMethodAccess->fee()),
         ]);
 
+        if ($this->shouldFinalizeElavonSubscriptionFromRequest($request, $subscription)) {
+            return $this->subscriptionSuccess($request, $subscription);
+        }
+
         return view('dashboard.external.subscription', compact('paymentMethodAccess', 'subscription'));
+    }
+
+    protected function shouldFinalizeElavonSubscriptionFromRequest(Request $request, Subscription $subscription): bool
+    {
+        if ((int) $subscription->status === 1) {
+            return false;
+        }
+
+        return $request->filled('sessionId') || $request->filled('session_id');
     }
 
     public function charges()

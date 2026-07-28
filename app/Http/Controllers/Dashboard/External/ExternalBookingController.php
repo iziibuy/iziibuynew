@@ -3,16 +3,17 @@
 namespace App\Http\Controllers\Dashboard\External;
 
 use App\Http\Controllers\Controller;
-use App\Models\Booking;
 use App\Models\ExternalBooking;
-use App\Payment\External\Surfboard\ExternalBookingSurfboardApi;
 use App\Payment\External\Elavon\ExternalBookingElavonPayment;
+use App\Payment\External\Surfboard\ExternalBookingSurfboardApi;
 use App\Services\SMS\SmsService;
+use App\Support\ExternalPaymentAcquirer;
 use Error;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ExternalBookingController extends Controller
 {
@@ -37,7 +38,7 @@ class ExternalBookingController extends Controller
 
         $breadcrumbs = [
             ['title' => 'Dashboard', 'url' => route('external.dashboard'), 'icon' => 'fas fa-home'],
-            ['title' => 'Booking History', 'url' => null, 'icon' => 'fas fa-calendar-alt']
+            ['title' => 'Booking History', 'url' => null, 'icon' => 'fas fa-calendar-alt'],
         ];
 
         return view('dashboard.external.booking.index', compact('bookings', 'breadcrumbs'));
@@ -50,8 +51,9 @@ class ExternalBookingController extends Controller
         $breadcrumbs = [
             ['title' => 'Dashboard', 'url' => route('external.dashboard'), 'icon' => 'fas fa-home'],
             ['title' => 'Bookings', 'url' => route('external.booking.index'), 'icon' => 'fas fa-calendar-alt'],
-            ['title' => 'Create Payment Request', 'url' => null, 'icon' => 'fas fa-plus']
+            ['title' => 'Create Payment Request', 'url' => null, 'icon' => 'fas fa-plus'],
         ];
+
         return view('dashboard.external.booking.create', compact('breadcrumbs', 'paymentMethodAccess'));
     }
 
@@ -66,11 +68,10 @@ class ExternalBookingController extends Controller
             ]);
 
             $booking = DB::transaction(function () use ($request) {
-                $phone_number = $request->country_code . $request->phone_number;
+                $phone_number = $request->country_code.$request->phone_number;
 
                 $taxPercentage = auth()->user()->paymentMethodAccess->tax_percentage != null ? auth()->user()->paymentMethodAccess->tax_percentage : 0;
 
-                
                 $booking = ExternalBooking::create([
                     'payment_method_access_id' => auth()->user()->paymentMethodAccess->id,
                     'ulid' => Str::ulid(),
@@ -80,9 +81,11 @@ class ExternalBookingController extends Controller
                     'total' => (float) $request->total,
                     'currency' => auth()->user()->paymentMethodAccess->currency ?: 'NOK',
                     'tax' => (float) ($taxPercentage ? ($request->total * $taxPercentage) / (100 + $taxPercentage) : 0),
-                    'payment_method' => auth()->user()->paymentMethodAccess->paymentMethod,
+                    'payment_method' => ExternalPaymentAcquirer::resolve(
+                        auth()->user()->paymentMethodAccess->paymentMethod
+                    ),
                 ]);
-              
+
                 return $booking;
             });
 
@@ -92,22 +95,20 @@ class ExternalBookingController extends Controller
 
 More text for 2izii: https://iziibuy.com';
 
-            if (env('APP_ENV') === 'production' && !empty($sms_text)) {
+            if (env('APP_ENV') === 'production' && ! empty($sms_text)) {
                 try {
                     $link = route('external-payment', $booking);
                     $message = str_replace(
                         ['{BOOKING_NUMBER}', '{TOTAL}', '{LINK}'],
-                        [$booking->booking_number, $booking->total . ' ' . $booking->currency, $link],
+                        [$booking->booking_number, $booking->total.' '.$booking->currency, $link],
                         $sms_text
                     );
-   
-                    $sms = new SmsService();
+
+                    $sms = new SmsService;
                     $sms->send($booking->phone_number, $message);
-                } catch (\Exception | Error $e) {
+                } catch (\Exception|Error $e) {
                 }
             }
-
-
 
             if ($request->expectsJson()) {
                 return response()->json([
@@ -117,23 +118,23 @@ More text for 2izii: https://iziibuy.com';
                 ]);
             }
 
-            return redirect()->route('external.booking.index')->with('success', "Payment request created successfully!");
-        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->route('external.booking.index')->with('success', 'Payment request created successfully!');
+        } catch (ValidationException $e) {
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation failed',
-                    'errors' => $e->errors()
+                    'errors' => $e->errors(),
                 ], 422);
             }
             throw $e;
         } catch (\Exception $e) {
-            Log::error("Booking creation failed: " . $e->getMessage());
+            Log::error('Booking creation failed: '.$e->getMessage());
 
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'An error occurred while creating the payment request. Please try again.'
+                    'message' => 'An error occurred while creating the payment request. Please try again.',
                 ], 500);
             }
 
@@ -143,25 +144,28 @@ More text for 2izii: https://iziibuy.com';
 
     public function createPaymentLink(ExternalBooking $externalBooking)
     {
-        if($externalBooking->payment_status == 'PAID') {
+        if ($externalBooking->payment_status == 'PAID') {
             return redirect()->route('external-payment-page', $externalBooking->ulid);
         }
-        if($externalBooking->payment_id && $externalBooking->payment_url) {
+        if ($externalBooking->payment_id && $externalBooking->payment_url) {
             return redirect($externalBooking->payment_url);
         }
 
-        if ($externalBooking->payment_method == 'surfboard') {
+        if ($externalBooking->usesSurfboard()) {
             $payment = (new ExternalBookingSurfboardApi($externalBooking))->getPaymentLink();
+            $acquirer = 'surfboard';
         } else {
-
             $payment = (new ExternalBookingElavonPayment($externalBooking))->getPaymentLink();
+            $acquirer = 'elavon';
         }
 
         if ($payment['status']) {
             $externalBooking->update([
                 'payment_id' => $payment['data']['payment_id'],
-                'payment_url' => $payment['data']['url']
+                'payment_url' => $payment['data']['url'],
+                'payment_method' => $acquirer,
             ]);
+
             return redirect($payment['data']['url']);
         } else {
             return redirect()->route('external-payment-page', $externalBooking->ulid);
@@ -174,7 +178,8 @@ More text for 2izii: https://iziibuy.com';
             return redirect()->route('external.booking.index')->withErrors('Unauthorized access to booking');
         }
         $externalBooking->delete();
-        return redirect()->route('external.booking.index')->with('success', "Booking deleted successfully");
+
+        return redirect()->route('external.booking.index')->with('success', 'Booking deleted successfully');
     }
 
     public function invoice(ExternalBooking $externalBooking)
@@ -188,15 +193,15 @@ More text for 2izii: https://iziibuy.com';
         $breadcrumbs = [
             ['title' => 'Dashboard', 'url' => route('external.dashboard'), 'icon' => 'fas fa-home'],
             ['title' => 'Bookings', 'url' => route('external.booking.index'), 'icon' => 'fas fa-calendar-alt'],
-            ['title' => 'Invoice #' . $externalBooking->booking_number, 'url' => null, 'icon' => 'fas fa-file-invoice']
+            ['title' => 'Invoice #'.$externalBooking->booking_number, 'url' => null, 'icon' => 'fas fa-file-invoice'],
         ];
 
         return view('dashboard.external.booking.invoice', compact('externalBooking', 'breadcrumbs', 'paymentMethodAccess'));
     }
+
     public function exportBookings()
     {
         $bookings = ExternalBooking::where('payment_method_access_id', auth()->user()->paymentMethodAccess->id)->latest()->get();
-
 
         $csvHeader = ['ID', 'Booking Number', 'Phone Number', 'Amount', 'Currency', 'Status', 'Transaction ID'];
         $callback = function () use ($bookings, $csvHeader) {
@@ -210,7 +215,7 @@ More text for 2izii: https://iziibuy.com';
                     $b->total,
                     $b->currency,
                     $b->status,
-                    $b->payment_id ?: 'N/A'
+                    $b->payment_id ?: 'N/A',
                 ]);
             }
             fclose($file);

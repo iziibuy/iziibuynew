@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Models\ExternalOrder;
 use App\Payment\Elavon\ApiElavonPayment;
 use App\Payment\Surfboard\SurfboardOrderApi;
+use App\Support\ExternalPaymentAcquirer;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -45,17 +46,20 @@ class ExternalOrderGatewayInspector
             'api_id' => $order->api_id,
         ];
 
-        $method = strtolower((string) $order->payment_method);
+        $method = ExternalPaymentAcquirer::forOrder($order);
+        $local['resolved_payment_method'] = $method;
 
         try {
             return match ($method) {
                 'surfboard' => $this->inspectSurfboard($order, $local),
                 'elavon' => $this->inspectElavon($order, $local),
                 default => [
-                    'provider' => $method !== '' ? $method : 'unknown',
+                    'provider' => (string) ($order->payment_method ?: 'unknown'),
                     'success' => false,
                     'summary' => [
                         'message' => 'No live gateway inspector for this payment method.',
+                        'stored_payment_method' => $order->payment_method,
+                        'resolved_payment_method' => $method,
                     ],
                     'local' => $local,
                     'gateway' => [],
@@ -69,7 +73,7 @@ class ExternalOrderGatewayInspector
             ]);
 
             return [
-                'provider' => $method !== '' ? $method : 'unknown',
+                'provider' => $method,
                 'success' => false,
                 'summary' => ['message' => 'Gateway request failed.'],
                 'local' => $local,

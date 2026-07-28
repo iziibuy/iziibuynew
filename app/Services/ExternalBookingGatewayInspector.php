@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Models\ExternalBooking;
 use App\Payment\External\Elavon\ExternalBookingElavonPayment;
 use App\Payment\External\Surfboard\ExternalBookingSurfboardApi;
+use App\Support\ExternalPaymentAcquirer;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -44,20 +45,25 @@ class ExternalBookingGatewayInspector
             'plugin_id' => $booking->payment_method_access_id,
             'customer_details' => $booking->customer_details,
             'service_details' => $booking->service_details,
-            'elavon_transaction_id' => $booking->elavon_transaction_id,
+            'elavon_transaction_id' => $booking->metas()
+                ->where('column_name', 'elavon_transaction_id')
+                ->value('column_value'),
         ];
 
-        $method = strtolower((string) $booking->payment_method);
+        $method = ExternalPaymentAcquirer::forBooking($booking);
+        $local['resolved_payment_method'] = $method;
 
         try {
             return match ($method) {
                 'surfboard' => $this->inspectSurfboard($booking, $local),
                 'elavon' => $this->inspectElavon($booking, $local),
                 default => [
-                    'provider' => $method !== '' ? $method : 'unknown',
+                    'provider' => (string) ($booking->payment_method ?: 'unknown'),
                     'success' => false,
                     'summary' => [
                         'message' => 'No live gateway inspector for this payment method.',
+                        'stored_payment_method' => $booking->payment_method,
+                        'resolved_payment_method' => $method,
                     ],
                     'local' => $local,
                     'gateway' => [],
@@ -71,7 +77,7 @@ class ExternalBookingGatewayInspector
             ]);
 
             return [
-                'provider' => $method !== '' ? $method : 'unknown',
+                'provider' => $method,
                 'success' => false,
                 'summary' => ['message' => 'Gateway request failed.'],
                 'local' => $local,

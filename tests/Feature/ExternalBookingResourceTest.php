@@ -8,6 +8,7 @@ use App\Models\ExternalBooking;
 use App\Models\PaymentMethodAccess;
 use App\Models\User;
 use App\Services\ExternalBookingGatewayInspector;
+use App\Support\ExternalPaymentAcquirer;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -112,4 +113,19 @@ it('inspects surfboard gateway details for a plugin booking', function (): void 
         ->and($result['provider'])->toBe('surfboard')
         ->and($result['summary']['order_status'])->toBe('PAYMENT_COMPLETED')
         ->and($result['gateway']['order'])->not->toBeNull();
+});
+
+it('resolves elavon for dual payment_method when elavon transaction exists', function (): void {
+    $booking = createExternalBookingFixture();
+    $booking->update(['payment_method' => 'elavon,surfboard']);
+    $booking->createMeta('elavon_transaction_id', 'mrtqfhgpkyx4qxh3vykjhjxppmb6');
+
+    expect(ExternalPaymentAcquirer::forBooking($booking->fresh()))->toBe('elavon')
+        ->and($booking->fresh()->resolvedPaymentMethod())->toBe('elavon')
+        ->and($booking->fresh()->usesElavon())->toBeTrue();
+});
+
+it('defaults dual payment_method without transaction evidence to elavon', function (): void {
+    expect(ExternalPaymentAcquirer::resolve('elavon,surfboard'))->toBe('elavon')
+        ->and(ExternalPaymentAcquirer::resolve('surfboard'))->toBe('surfboard');
 });

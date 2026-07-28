@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\ExternalPaymentAcquirer;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,5 +30,13 @@ class ExternalOrder extends Model
     public function paymentApi(): BelongsTo
     {
         return $this->belongsTo(PaymentApi::class, 'api_id');
+    }
+
+    /**
+     * @return 'elavon'|'surfboard'|'unknown'
+     */
+    public function resolvedPaymentMethod(): string
+    {
+        return ExternalPaymentAcquirer::forOrder($this);
     }
 }

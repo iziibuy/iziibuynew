@@ -3,21 +3,20 @@
 namespace App\Mail;
 
 use App\Models\ExternalBooking;
-use App\Payment\Elavon\ApiElavonPayment;
 use App\Payment\External\Elavon\ExternalBookingElavonPayment;
 use App\Payment\External\Surfboard\ExternalBookingSurfboardApi;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class ExternalBookingReceiptMail extends Mailable 
+class ExternalBookingReceiptMail extends Mailable
 {
     use Queueable, SerializesModels;
 
     public $externalBooking;
+
     public $response;
 
     /**
@@ -28,9 +27,9 @@ class ExternalBookingReceiptMail extends Mailable
     public function __construct(ExternalBooking $externalBooking, $response = null)
     {
         $this->externalBooking = $externalBooking;
-        if($externalBooking->payment_method == 'elavon'){
+        if ($externalBooking->usesElavon()) {
             $this->response = (new ExternalBookingElavonPayment($externalBooking))->getTransaction();
-        }else{
+        } else {
             $this->response = (new ExternalBookingSurfboardApi($externalBooking))->getTransaction();
         }
 
@@ -39,19 +38,19 @@ class ExternalBookingReceiptMail extends Mailable
     /**
      * Get the message envelope.
      *
-     * @return \Illuminate\Mail\Mailables\Envelope
+     * @return Envelope
      */
     public function envelope()
     {
         return new Envelope(
-            subject: 'Payment Receipt - Order #' . $this->externalBooking->booking_number,
+            subject: 'Payment Receipt - Order #'.$this->externalBooking->booking_number,
         );
     }
 
     /**
      * Get the message content definition.
      *
-     * @return \Illuminate\Mail\Mailables\Content
+     * @return Content
      */
     public function content()
     {

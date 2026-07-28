@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Casts\Price;
 use App\Models\Traits\HasMeta;
+use App\Support\ExternalPaymentAcquirer;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -20,7 +21,7 @@ class ExternalBooking extends Model
         'subtotal' => Price::class,
         'total' => Price::class,
         'paid_at' => 'datetime',
-        
+
     ];
 
     public $meta_attributes = [
@@ -31,10 +32,31 @@ class ExternalBooking extends Model
     {
         return $this->belongsTo(PaymentMethodAccess::class);
     }
+
+    /**
+     * Single acquirer used for this booking (never "elavon,surfboard").
+     *
+     * @return 'elavon'|'surfboard'|'unknown'
+     */
+    public function resolvedPaymentMethod(): string
+    {
+        return ExternalPaymentAcquirer::forBooking($this);
+    }
+
+    public function usesSurfboard(): bool
+    {
+        return $this->resolvedPaymentMethod() === 'surfboard';
+    }
+
+    public function usesElavon(): bool
+    {
+        return $this->resolvedPaymentMethod() === 'elavon';
+    }
+
     public function status()
     {
         $map = [
-            'PENDING'   => 'words.pending',
+            'PENDING' => 'words.pending',
             'COMPLETED' => 'words.completed',
         ];
 
@@ -45,16 +67,18 @@ class ExternalBooking extends Model
     {
         $map = [
             'PENDING' => 'words.pending',
-            'PAID'    => 'words.paid',
+            'PAID' => 'words.paid',
         ];
 
         return $map[$this->payment_status] ?? 'words.unknown_payment_status';
     }
+
     public function taxPercentage()
     {
         if ($this->subtotal == 0) {
             return 0;
         }
+
         return (int) round(($this->tax / $this->subtotal) * 100, 2);
     }
 }

@@ -81,6 +81,15 @@ class ExternalBookingInfolist
                         TextEntry::make('payment_method')
                             ->badge()
                             ->placeholder('-'),
+                        TextEntry::make('resolvedPaymentMethod')
+                            ->label(__('Resolved acquirer'))
+                            ->badge()
+                            ->state(fn ($record): string => $record->resolvedPaymentMethod())
+                            ->color(fn (string $state): string => match ($state) {
+                                'elavon' => 'info',
+                                'surfboard' => 'success',
+                                default => 'gray',
+                            }),
                         TextEntry::make('payment_id')
                             ->label(__('Gateway payment / session ID'))
                             ->placeholder('-')
