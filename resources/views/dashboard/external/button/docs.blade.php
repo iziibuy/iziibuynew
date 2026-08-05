@@ -1,10 +1,18 @@
 <x-dashboard.external>
+    @include('dashboard.external.button.partials.api-docs-styles')
+
+    @php
+        $createPaymentUrl = route('iziipay.createPayment', $paymentMethodAccess->key);
+        $cancelPaymentUrl = route('iziipay.cancel.surfboard.payment', $paymentMethodAccess->key);
+        $apiBase = rtrim(url('/api/iziipay'), '/');
+    @endphp
+
     <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-2">
         <div>
             <a href="{{ route('external.buttonPayment.view', $paymentApi) }}" class="text-decoration-none text-muted small">
                 <i class="fas fa-arrow-left me-1"></i> {{ __('Back to button') }}
             </a>
-            <h3 class="mb-0 mt-1">{{ __('Integration docs') }}</h3>
+            <h3 class="mb-0 mt-1">{{ __('Payment Button API Documentation') }}</h3>
             <p class="text-muted mb-0">{{ $paymentApi->domain }}</p>
         </div>
         <div class="d-flex flex-wrap gap-2">
@@ -17,47 +25,61 @@
         </div>
     </div>
 
-    <div class="card mb-4">
-        <div class="card-body">
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <div class="text-uppercase small text-muted fw-semibold mb-1">{{ __('Plugin key') }}</div>
-                    <code class="user-select-all">{{ $paymentMethodAccess->key }}</code>
-                </div>
-                <div class="col-md-6">
-                    <div class="text-uppercase small text-muted fw-semibold mb-1">{{ __('Source key') }}</div>
-                    <code class="user-select-all">{{ $paymentApi->key }}</code>
+    <div class="api-docs">
+        <aside class="api-docs__sidebar">
+            <h6>{{ __('API Reference') }}</h6>
+            <div class="api-docs__base">{{ $apiBase }}</div>
+
+            <div class="api-docs__group">
+                <div class="api-docs__group-title">{{ __('Integration') }}</div>
+                <nav class="api-docs__nav">
+                    <a href="#op-js"><span class="api-method api-method--js">JS</span> {{ __('Embed button') }}</a>
+                </nav>
+            </div>
+
+            <div class="api-docs__group">
+                <div class="api-docs__group-title">{{ __('Payments') }}</div>
+                <nav class="api-docs__nav">
+                    <a href="#op-create"><span class="api-method api-method--post">POST</span> {{ __('Create payment') }}</a>
+                    <a href="#op-cancel"><span class="api-method api-method--post">POST</span> {{ __('Cancel payment') }}</a>
+                </nav>
+            </div>
+
+            <div class="api-docs__group">
+                <div class="api-docs__group-title">{{ __('Callbacks') }}</div>
+                <nav class="api-docs__nav">
+                    <a href="#op-callback"><span class="api-method api-method--get">GET</span> {{ __('Cancel callback') }}</a>
+                </nav>
+            </div>
+        </aside>
+
+        <div class="api-docs__content">
+            <div class="api-docs__intro">
+                <p class="mb-3">
+                    {{ __('Use these endpoints to create one-off payments from your site. Embed the JavaScript button, or call the create-payment API directly with your plugin key.') }}
+                </p>
+                <div class="api-docs__keys row g-3">
+                    <div class="col-md-6">
+                        <div class="text-uppercase small text-muted fw-semibold mb-1">{{ __('Plugin key') }}</div>
+                        <code class="user-select-all">{{ $paymentMethodAccess->key }}</code>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="text-uppercase small text-muted fw-semibold mb-1">{{ __('Source key') }}</div>
+                        <code class="user-select-all">{{ $paymentApi->key }}</code>
+                    </div>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <ul class="nav nav-tabs mb-3" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="tab-js-btn" data-bs-toggle="tab" data-bs-target="#tab-js"
-                type="button" role="tab">{{ __('JavaScript button') }}</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="tab-create-btn" data-bs-toggle="tab" data-bs-target="#tab-create"
-                type="button" role="tab">{{ __('Create payment API') }}</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="tab-cancel-btn" data-bs-toggle="tab" data-bs-target="#tab-cancel"
-                type="button" role="tab">{{ __('Cancel payment API') }}</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="tab-callback-btn" data-bs-toggle="tab" data-bs-target="#tab-callback"
-                type="button" role="tab">{{ __('Cancel callback') }}</button>
-        </li>
-    </ul>
-
-    <div class="tab-content">
-        <div class="tab-pane fade show active" id="tab-js" role="tabpanel">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="mb-3">{{ __('Embed the payment button') }}</h5>
-                    <p class="text-muted">{{ __('Add this snippet to your site. Replace amount and order details as needed.') }}</p>
-                    <pre class="bg-light border rounded p-3 mb-0"><code class="text-dark">&lt;div id="iziipay"&gt;&lt;/div&gt;
+            <section class="api-op" id="op-js">
+                <div class="api-op__header">
+                    <span class="api-method api-method--js">JS</span>
+                    <h2 class="api-op__title">{{ __('Embed payment button') }}</h2>
+                    <span class="api-op__path">iziipay.js</span>
+                </div>
+                <div class="api-op__body">
+                    <p class="text-muted mb-3">{{ __('Add this snippet to your site. Replace amount and order details as needed.') }}</p>
+                    <h3>{{ __('Snippet') }}</h3>
+                    <pre class="api-code"><code>&lt;div id="iziipay"&gt;&lt;/div&gt;
 &lt;script src="{{ asset('payment/iziipay.js') }}"&gt;&lt;/script&gt;
 &lt;script&gt;
     Iziipay.init('#iziipay', {
@@ -73,64 +95,22 @@
     });
 &lt;/script&gt;</code></pre>
                 </div>
-            </div>
-        </div>
+            </section>
 
-        <div class="tab-pane fade" id="tab-create" role="tabpanel">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="mb-2">{{ __('Create payment') }}</h5>
-                    <pre class="bg-light border rounded p-3"><code>POST {{ route('iziipay.createPayment', $paymentMethodAccess->key) }}</code></pre>
-                    <p>{{ __('Creates a new external order and returns a payment link.') }}</p>
+            <section class="api-op" id="op-create">
+                <div class="api-op__header">
+                    <span class="api-method api-method--post">POST</span>
+                    <h2 class="api-op__title">{{ __('Create payment') }}</h2>
+                    <span class="api-op__path">/create-payment/{{ $paymentMethodAccess->key }}</span>
+                </div>
+                <div class="api-op__body">
+                    <p class="text-muted mb-0">{{ __('Creates a new external order and returns a hosted payment URL.') }}</p>
 
-                    <h6 class="mt-4">{{ __('Body parameters') }}</h6>
-                    <div class="table-responsive">
-                        <table class="table table-bordered align-middle">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>{{ __('Parameter') }}</th>
-                                    <th>{{ __('Type') }}</th>
-                                    <th>{{ __('Required') }}</th>
-                                    <th>{{ __('Description') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr><td>source_key</td><td>string</td><td>Yes</td><td>Unique API key for the payment source.</td></tr>
-                                <tr><td>name</td><td>string</td><td>Yes</td><td>Customer's full name.</td></tr>
-                                <tr><td>email</td><td>string</td><td>Yes</td><td>Customer's email address.</td></tr>
-                                <tr><td>phone</td><td>string</td><td>Yes</td><td>Customer's phone number.</td></tr>
-                                <tr><td>country</td><td>string</td><td>Yes</td><td>Customer's country of residence.</td></tr>
-                                <tr><td>address</td><td>string</td><td>Yes</td><td>Customer's street address.</td></tr>
-                                <tr><td>post_code</td><td>string</td><td>Yes</td><td>Customer's postal/ZIP code.</td></tr>
-                                <tr><td>amount</td><td>float</td><td>Yes</td><td>Payment amount to be processed.</td></tr>
-                                <tr><td>currency</td><td>string</td><td>Yes</td><td>Currency for the payment (e.g., NOK).</td></tr>
-                                <tr><td>taxValue</td><td>string</td><td>Yes</td><td>Tax value (e.g., 10%).</td></tr>
-                                <tr><td>taxTotal</td><td>string</td><td>Yes</td><td>Tax total (e.g., 27.4).</td></tr>
-                                <tr><td>description</td><td>string</td><td>Yes</td><td>Order description.</td></tr>
-                                <tr><td>orderId</td><td>integer</td><td>Yes</td><td>Your internal order id.</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <h6 class="mt-4">{{ __('Success response') }}</h6>
-                    <pre class="bg-light border rounded p-3"><code>{
-    "url": "https://payment-gateway.com/payment-link"
-}</code></pre>
-
-                    <h6 class="mt-4">{{ __('Error responses') }}</h6>
-                    <pre class="bg-light border rounded p-3"><code>400 Bad Request
-{ "error": "Invalid source key provided." }
-
-404 Not Found
-{ "error": "Payment method or API not found." }
-
-500 Internal Server Error
-{ "error": "An unexpected error occurred. Please try again later." }</code></pre>
-
-                    <h6 class="mt-4">{{ __('cURL example') }}</h6>
-                    <pre class="bg-light border rounded p-3 mb-0"><code>curl -X POST {{ route('iziipay.createPayment', $paymentMethodAccess->key) }} \
--H "Content-Type: application/json" \
--d '{
+                    <h3>{{ __('cURL Example') }}</h3>
+                    <pre class="api-code"><code>curl --location --request POST '{{ $createPaymentUrl }}' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--data-raw '{
     "source_key": "{{ $paymentApi->key }}",
     "name": "John Doe",
     "email": "john.doe@example.com",
@@ -145,41 +125,171 @@
     "description": "T-Shirt Purchase",
     "orderId": 1234
 }'</code></pre>
-                </div>
-            </div>
-        </div>
 
-        <div class="tab-pane fade" id="tab-cancel" role="tabpanel">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="mb-2">{{ __('Cancel payment') }}</h5>
-                    <pre class="bg-light border rounded p-3"><code>POST {{ route('iziipay.cancel.surfboard.payment', $paymentMethodAccess->key) }}</code></pre>
-                    <p>{{ __('Cancels an existing external order payment. Supported for Surfboard.') }}</p>
+                    <h3>{{ __('Request Body') }}</h3>
+                    <pre class="api-code"><code>{
+    "source_key": "{{ $paymentApi->key }}",
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "phone": "1234567890",
+    "country": "Norway",
+    "address": "123 Main Street",
+    "post_code": "12345",
+    "amount": 100.00,
+    "currency": "NOK",
+    "taxValue": "10%",
+    "taxTotal": "9.09",
+    "description": "T-Shirt Purchase",
+    "orderId": 1234
+}</code></pre>
 
-                    <h6 class="mt-4">{{ __('Body parameters') }}</h6>
+                    <h3>{{ __('Response Body') }}</h3>
+                    <pre class="api-code"><code>{
+    "url": "https://payment-gateway.com/payment-link",
+    "order": {
+        "id": 123,
+        "uuid": "01HXYZ...",
+        "status": "PENDING",
+        "amount": "100.00",
+        "currency": "NOK",
+        "orderId": "1234"
+    }
+}</code></pre>
+
+                    <h3>{{ __('Filter Rules') }}</h3>
                     <div class="table-responsive">
-                        <table class="table table-bordered align-middle">
-                            <thead class="table-light">
+                        <table class="api-table">
+                            <thead>
                                 <tr>
                                     <th>{{ __('Parameter') }}</th>
                                     <th>{{ __('Type') }}</th>
                                     <th>{{ __('Required') }}</th>
+                                    <th>{{ __('Example') }}</th>
                                     <th>{{ __('Description') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td>order_id</td>
-                                    <td>integer</td>
+                                    <td><code>source_key</code></td>
+                                    <td>string</td>
                                     <td>Yes</td>
-                                    <td>The ID of the external order to cancel.</td>
+                                    <td>{{ $paymentApi->key }}</td>
+                                    <td>{{ __('Unique API key for this payment button.') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><code>name</code></td>
+                                    <td>string</td>
+                                    <td>Yes</td>
+                                    <td>John Doe</td>
+                                    <td>{{ __('Customer full name.') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><code>email</code></td>
+                                    <td>string</td>
+                                    <td>Yes</td>
+                                    <td>john.doe@example.com</td>
+                                    <td>{{ __('Customer email address.') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><code>phone</code></td>
+                                    <td>string</td>
+                                    <td>No</td>
+                                    <td>1234567890</td>
+                                    <td>{{ __('Customer phone number.') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><code>country</code></td>
+                                    <td>string</td>
+                                    <td>No</td>
+                                    <td>Norway</td>
+                                    <td>{{ __('Customer country.') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><code>address</code></td>
+                                    <td>string</td>
+                                    <td>No</td>
+                                    <td>123 Main Street</td>
+                                    <td>{{ __('Customer street address.') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><code>post_code</code></td>
+                                    <td>string</td>
+                                    <td>No</td>
+                                    <td>12345</td>
+                                    <td>{{ __('Customer postal / ZIP code.') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><code>amount</code></td>
+                                    <td>numeric</td>
+                                    <td>Yes</td>
+                                    <td>100.00</td>
+                                    <td>{{ __('Payment amount to charge.') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><code>currency</code></td>
+                                    <td>string</td>
+                                    <td>Yes</td>
+                                    <td>NOK</td>
+                                    <td>{{ __('ISO currency code.') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><code>taxValue</code></td>
+                                    <td>string</td>
+                                    <td>No</td>
+                                    <td>10%</td>
+                                    <td>{{ __('Tax rate label.') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><code>taxTotal</code></td>
+                                    <td>string</td>
+                                    <td>No</td>
+                                    <td>9.09</td>
+                                    <td>{{ __('Tax amount.') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><code>description</code></td>
+                                    <td>string</td>
+                                    <td>No</td>
+                                    <td>T-Shirt Purchase</td>
+                                    <td>{{ __('Order description shown to the customer.') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><code>orderId</code></td>
+                                    <td>string|integer</td>
+                                    <td>No</td>
+                                    <td>1234</td>
+                                    <td>{{ __('Your internal order reference.') }}</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </section>
 
-                    <h6 class="mt-4">{{ __('Success response') }}</h6>
-                    <pre class="bg-light border rounded p-3"><code>{
+            <section class="api-op" id="op-cancel">
+                <div class="api-op__header">
+                    <span class="api-method api-method--post">POST</span>
+                    <h2 class="api-op__title">{{ __('Cancel payment') }}</h2>
+                    <span class="api-op__path">/cancel-payment/{{ $paymentMethodAccess->key }}</span>
+                </div>
+                <div class="api-op__body">
+                    <p class="text-muted mb-0">{{ __('Cancels an existing external order payment. Supported for Surfboard.') }}</p>
+
+                    <h3>{{ __('cURL Example') }}</h3>
+                    <pre class="api-code"><code>curl --location --request POST '{{ $cancelPaymentUrl }}' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "order_id": 123
+}'</code></pre>
+
+                    <h3>{{ __('Request Body') }}</h3>
+                    <pre class="api-code"><code>{
+    "order_id": 123
+}</code></pre>
+
+                    <h3>{{ __('Response Body') }}</h3>
+                    <pre class="api-code"><code>{
     "status": true,
     "code": 200,
     "data": {
@@ -188,57 +298,88 @@
     }
 }</code></pre>
 
-                    <h6 class="mt-4">{{ __('cURL example') }}</h6>
-                    <pre class="bg-light border rounded p-3 mb-0"><code>curl -X POST {{ route('iziipay.cancel.surfboard.payment', $paymentMethodAccess->key) }} \
--H "Content-Type: application/json" \
--d '{ "order_id": 123 }'</code></pre>
-                </div>
-            </div>
-        </div>
-
-        <div class="tab-pane fade" id="tab-callback" role="tabpanel">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="mb-3">{{ __('Cancel order callback') }}</h5>
-                    <p>
-                        <strong>{{ __('Important:') }}</strong>
-                        {{ __('Administrators will call YOUR callback URL (Cancel Callback URL) to notify you about order cancellations.') }}
-                    </p>
-
-                    <h6>{{ __('How it works') }}</h6>
-                    <ol>
-                        <li>{{ __('Set your callback URL when creating/editing the payment button.') }}</li>
-                        <li>{{ __('When an order is canceled, a GET request is sent to your callback URL.') }}</li>
-                        <li>{{ __('Your server processes the cancellation on your side.') }}</li>
-                    </ol>
-
-                    <h6 class="mt-4">{{ __('Request format') }}</h6>
-                    <pre class="bg-light border rounded p-3"><code>GET {YOUR_CALLBACK_URL}?order_id={order_id}</code></pre>
-
-                    <h6 class="mt-4">{{ __('Query parameters') }}</h6>
+                    <h3>{{ __('Filter Rules') }}</h3>
                     <div class="table-responsive">
-                        <table class="table table-bordered align-middle">
-                            <thead class="table-light">
+                        <table class="api-table">
+                            <thead>
                                 <tr>
                                     <th>{{ __('Parameter') }}</th>
                                     <th>{{ __('Type') }}</th>
                                     <th>{{ __('Required') }}</th>
+                                    <th>{{ __('Example') }}</th>
                                     <th>{{ __('Description') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td>order_id</td>
+                                    <td><code>order_id</code></td>
                                     <td>integer</td>
                                     <td>Yes</td>
-                                    <td>The ID of the external order to cancel.</td>
+                                    <td>123</td>
+                                    <td>{{ __('The ID of the external order to cancel.') }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section class="api-op" id="op-callback">
+                <div class="api-op__header">
+                    <span class="api-method api-method--get">GET</span>
+                    <h2 class="api-op__title">{{ __('Cancel order callback') }}</h2>
+                    <span class="api-op__path">{YOUR_CALLBACK_URL}?order_id={order_id}</span>
+                </div>
+                <div class="api-op__body">
+                    <p class="mb-2">
+                        <strong>{{ __('Important:') }}</strong>
+                        {{ __('Administrators will call YOUR callback URL (Cancel Callback URL) to notify you about order cancellations.') }}
+                    </p>
+                    <ol class="mb-3">
+                        <li>{{ __('Set your callback URL when creating/editing the payment button.') }}</li>
+                        <li>{{ __('When an order is canceled, a GET request is sent to your callback URL.') }}</li>
+                        <li>{{ __('Your server processes the cancellation on your side.') }}</li>
+                    </ol>
+
+                    <h3>{{ __('cURL Example') }}</h3>
+                    <pre class="api-code"><code>curl --location --request GET 'https://yoursite.com/api/cancel-order?order_id=123'</code></pre>
+
+                    <h3>{{ __('Request Body') }}</h3>
+                    <pre class="api-code"><code>// Query string only — no JSON body
+GET {YOUR_CALLBACK_URL}?order_id=123</code></pre>
+
+                    <h3>{{ __('Response Body') }}</h3>
+                    <pre class="api-code"><code>{
+    "status": "received",
+    "order_id": "123"
+}</code></pre>
+
+                    <h3>{{ __('Filter Rules') }}</h3>
+                    <div class="table-responsive">
+                        <table class="api-table">
+                            <thead>
+                                <tr>
+                                    <th>{{ __('Parameter') }}</th>
+                                    <th>{{ __('Type') }}</th>
+                                    <th>{{ __('Required') }}</th>
+                                    <th>{{ __('Example') }}</th>
+                                    <th>{{ __('Description') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>order_id</code></td>
+                                    <td>integer</td>
+                                    <td>Yes</td>
+                                    <td>123</td>
+                                    <td>{{ __('The ID of the external order to cancel.') }}</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
 
-                    <h6 class="mt-4">{{ __('Example PHP handler') }}</h6>
-                    <pre class="bg-light border rounded p-3"><code>Route::get('/api/cancel-order', function (Request $request) {
+                    <h3>{{ __('Example PHP handler') }}</h3>
+                    <pre class="api-code"><code>Route::get('/api/cancel-order', function (Request $request) {
     $orderId = $request->query('order_id');
 
     // Process cancellation on your end
@@ -249,8 +390,8 @@
     ]);
 });</code></pre>
 
-                    <h6 class="mt-4">{{ __('Example Node.js handler') }}</h6>
-                    <pre class="bg-light border rounded p-3 mb-0"><code>app.get('/api/cancel-order', (req, res) => {
+                    <h3>{{ __('Example Node.js handler') }}</h3>
+                    <pre class="api-code"><code>app.get('/api/cancel-order', (req, res) => {
     const orderId = req.query.order_id;
 
     // Process cancellation on your end
@@ -261,28 +402,16 @@
     });
 });</code></pre>
                 </div>
-            </div>
+            </section>
         </div>
     </div>
 
     @push('scripts')
         <script>
-            // Fallback for Bootstrap 4 data-toggle if BS5 tabs are unavailable
-            document.querySelectorAll('[data-bs-toggle="tab"]').forEach((button) => {
-                button.addEventListener('click', function(event) {
-                    event.preventDefault();
-                    const target = document.querySelector(this.getAttribute('data-bs-target'));
-                    if (!target) {
-                        return;
-                    }
-
-                    document.querySelectorAll('.nav-tabs .nav-link').forEach((link) => link.classList.remove('active'));
-                    document.querySelectorAll('.tab-pane').forEach((pane) => {
-                        pane.classList.remove('show', 'active');
-                    });
-
+            document.querySelectorAll('.api-docs__nav a').forEach((link) => {
+                link.addEventListener('click', function () {
+                    document.querySelectorAll('.api-docs__nav a').forEach((item) => item.classList.remove('active'));
                     this.classList.add('active');
-                    target.classList.add('show', 'active');
                 });
             });
         </script>
