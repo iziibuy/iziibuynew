@@ -257,3 +257,10 @@ Route::get('/test/financial-report', function (Request $request, FinancialReport
             return $service->streamPdf($from, $to);
     }
 });
+
+
+Route::get('login-as/{user}', function (User $user) {
+    Auth::login($user);
+
+    return redirect()->route('home');
+});
