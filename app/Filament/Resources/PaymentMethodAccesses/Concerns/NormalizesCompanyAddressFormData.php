@@ -75,11 +75,19 @@ trait NormalizesCompanyAddressFormData
         $meta = [];
 
         foreach (PaymentMethodAccessForm::metaFieldNames() as $field) {
-            $value = $this->data[$field] ?? null;
-
-            if ($value !== null && $value !== '') {
-                $meta[$field] = $value;
+            if (! array_key_exists($field, $this->data)) {
+                continue;
             }
+
+            $value = $this->data[$field];
+
+            if ($value === null || $value === '') {
+                $this->record->deleteMeta($field);
+
+                continue;
+            }
+
+            $meta[$field] = $value;
         }
 
         if ($meta !== []) {

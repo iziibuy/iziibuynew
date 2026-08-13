@@ -137,8 +137,10 @@ class PaymentMethodAccessForm
                             ->visible(fn (Get $get): bool => $get('paymentMethod') === 'surfboard'),
                         TextInput::make('surfboard_mit_terminalId')
                             ->label(__('Surfboard MIT terminal ID'))
-                            ->helperText(__('MerchantInitiated terminal used for subscription renewals.'))
+                            ->helperText(__('MerchantInitiated terminal used for subscription renewals. Leave blank to clear.'))
                             ->maxLength(255)
+                            ->nullable()
+                            ->dehydrated(fn (Get $get): bool => str_contains((string) $get('paymentMethod'), 'surfboard'))
                             ->visible(fn (Get $get): bool => str_contains((string) $get('paymentMethod'), 'surfboard')),
                         TextInput::make('surfboard_merchantId')
                             ->label(__('words.surfboard_merchantId'))

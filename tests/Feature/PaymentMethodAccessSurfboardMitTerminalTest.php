@@ -2,11 +2,18 @@
 
 declare(strict_types=1);
 
+use App\Filament\Resources\PaymentMethodAccesses\Pages\EditPaymentMethodAccess;
 use App\Filament\Resources\PaymentMethodAccesses\Schemas\PaymentMethodAccessForm;
 use App\Models\PaymentMethodAccess;
 use App\Models\User;
+use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Livewire\Livewire;
+
+beforeEach(function (): void {
+    $this->seed(RoleSeeder::class);
+});
 
 it('treats surfboard mit terminal id as meta, not a table column', function (): void {
     expect(PaymentMethodAccessForm::metaFieldNames())->toContain('surfboard_mit_terminalId')
@@ -46,4 +53,70 @@ it('reads and writes surfboard mit terminal id through metas', function (): void
     expect($plugin->surfboard_mit_terminalId)->toBe('terminal-mit-123')
         ->and($plugin->metas()->where('column_name', 'surfboard_mit_terminalId')->value('column_value'))
         ->toBe('terminal-mit-123');
+});
+
+it('clears surfboard mit terminal id when emptied on the plugin edit form', function (): void {
+    if (! Schema::hasColumn('payment_method_accesses', 'site_mode')) {
+        Schema::table('payment_method_accesses', function (\Illuminate\Database\Schema\Blueprint $table): void {
+            $table->string('site_mode')->nullable();
+        });
+    }
+
+    $admin = User::factory()->create([
+        'role_id' => User::ROLES['Admin'],
+        'password' => bcrypt('password'),
+        'service_type' => 'both',
+        'pt_free_tier' => false,
+    ]);
+    $admin->assignRole('admin');
+
+    $owner = User::factory()->create([
+        'role_id' => User::ROLES['External'],
+        'service_type' => 'both',
+        'pt_free_tier' => false,
+    ]);
+
+    $plugin = PaymentMethodAccess::query()->create([
+        'user_id' => $owner->id,
+        'company_name' => 'Surfboard MIT Clear Plugin',
+        'company_email' => 'plugin-mit-clear-'.uniqid().'@example.com',
+        'company_address' => [
+            'city' => 'Oslo',
+            'street' => 'Main',
+            'zip' => '0001',
+            'contact_number' => '123',
+            'country' => 'Norway',
+        ],
+        'company_registration' => '123456',
+        'company_domain' => 'https://plugin-mit-clear-'.uniqid().'.example.com',
+        'key' => (string) Str::uuid(),
+        'paymentMethod' => 'surfboard',
+        'subscriptionMethod' => 'surfboard',
+        'site_mode' => 'test',
+        'status' => 0,
+        'fee' => 0,
+    ]);
+
+    $plugin->createMetas([
+        'surfboard_mit_terminalId' => 'terminal-mit-to-clear',
+        'surfboard_terminalId' => 'terminal-cit',
+        'surfboard_merchantId' => 'merchant-1',
+        'surfboard_storeId' => 'store-1',
+    ]);
+
+    expect($plugin->fresh()->surfboard_mit_terminalId)->toBe('terminal-mit-to-clear');
+
+    Livewire::actingAs($admin)
+        ->test(EditPaymentMethodAccess::class, ['record' => $plugin->getRouteKey()])
+        ->assertSchemaStateSet([
+            'surfboard_mit_terminalId' => 'terminal-mit-to-clear',
+        ])
+        ->fillForm([
+            'surfboard_mit_terminalId' => null,
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($plugin->fresh()->surfboard_mit_terminalId)->toBeNull()
+        ->and($plugin->metas()->where('column_name', 'surfboard_mit_terminalId')->exists())->toBeFalse();
 });

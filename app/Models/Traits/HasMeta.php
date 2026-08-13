@@ -64,6 +64,18 @@ trait HasMeta
         }
     }
 
+    public function deleteMeta(string $key): bool
+    {
+        try {
+            $this->metas()->where('column_name', $key)->delete();
+            $this->forgetMetaAttributeCache($key);
+
+            return true;
+        } catch (Exception|Error) {
+            return false;
+        }
+    }
+
     public function __get($key)
     {
         if (in_array($key, $this->meta_attributes)) {
