@@ -24,6 +24,7 @@ class PaymentMethodAccessForm
             'elavon_public_key',
             'elavon_secret_key',
             'surfboard_terminalId',
+            'surfboard_mit_terminalId',
             'surfboard_merchantId',
             'surfboard_storeId',
         ];
