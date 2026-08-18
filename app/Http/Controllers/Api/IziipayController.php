@@ -35,7 +35,19 @@ class IziipayController extends Controller
         $request->validate([
             'name' => ['required'],
             'email' => ['required', 'email'],
+            'company_name' => ['nullable', 'string', 'max:255'],
+            'organization_number' => ['nullable', 'string', 'max:255'],
         ]);
+
+        $profileUpdates = array_filter([
+            'company_name' => $request->input('company_name'),
+            'company_registration' => $request->input('organization_number'),
+        ], fn ($value): bool => filled($value));
+
+        if ($profileUpdates !== []) {
+            $paymentMethodAccess->update($profileUpdates);
+        }
+
         $order = ExternalOrder::create([
             'uuid' => Str::ulid(),
             'payment_method_access_id' => $paymentMethodAccess->id,

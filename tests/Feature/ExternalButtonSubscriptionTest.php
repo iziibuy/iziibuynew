@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\ExternalOrder;
 use App\Models\ExternalSubscription;
 use App\Models\PaymentApi;
 use App\Models\PaymentMethodAccess;
@@ -35,6 +36,71 @@ function createExternalButtonPlugin(): array
 
     return [$user, $access];
 }
+
+it('updates plugin profile company fields from create-payment without storing them on the order', function (): void {
+    [, $access] = createExternalButtonPlugin();
+    $access->update([
+        'company_name' => 'Old Company',
+        'company_registration' => '111111111',
+    ]);
+
+    $api = PaymentApi::query()->create([
+        'payment_method_access_id' => $access->id,
+        'domain' => 'https://example.com',
+        'success_redirect_url' => 'https://example.com/ok',
+        'failed_redirect_url' => 'https://example.com/fail',
+        'status' => true,
+        'is_subscription' => false,
+    ]);
+
+    $this->postJson(route('iziipay.createPayment', $access->key), [
+        'source_key' => $api->key,
+        'name' => 'Jane',
+        'email' => 'jane@example.com',
+        'amount' => 100,
+        'currency' => 'NOK',
+        'company_name' => 'Acme AS',
+        'organization_number' => '999888777',
+    ]);
+
+    $order = ExternalOrder::query()->latest('id')->first();
+
+    expect($access->fresh()->company_name)->toBe('Acme AS')
+        ->and($access->fresh()->company_registration)->toBe('999888777');
+
+    if ($order !== null) {
+        expect($order->customer_company)->toBeNull()
+            ->and($order->getAttributes())->not->toHaveKeys(['company_name', 'organization_number', 'company_registration']);
+    }
+});
+
+it('does not overwrite plugin profile company fields when omitted from create-payment', function (): void {
+    [, $access] = createExternalButtonPlugin();
+    $access->update([
+        'company_name' => 'Keep Company',
+        'company_registration' => '222333444',
+    ]);
+
+    $api = PaymentApi::query()->create([
+        'payment_method_access_id' => $access->id,
+        'domain' => 'https://example.com',
+        'success_redirect_url' => 'https://example.com/ok',
+        'failed_redirect_url' => 'https://example.com/fail',
+        'status' => true,
+        'is_subscription' => false,
+    ]);
+
+    $this->postJson(route('iziipay.createPayment', $access->key), [
+        'source_key' => $api->key,
+        'name' => 'Jane',
+        'email' => 'jane@example.com',
+        'amount' => 100,
+        'currency' => 'NOK',
+    ]);
+
+    expect($access->fresh()->company_name)->toBe('Keep Company')
+        ->and($access->fresh()->company_registration)->toBe('222333444');
+});
 
 it('rejects one-time create-payment for subscription source keys', function (): void {
     [, $access] = createExternalButtonPlugin();

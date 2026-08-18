@@ -92,6 +92,8 @@
         orderId: "300",
         description: "T-Shirt Purchase",
         currency: "NOK",
+        company_name: "Acme AS",
+        organization_number: "123456789",
     });
 &lt;/script&gt;</code></pre>
                 </div>
@@ -123,7 +125,9 @@
     "taxValue": "10%",
     "taxTotal": "9.09",
     "description": "T-Shirt Purchase",
-    "orderId": 1234
+    "orderId": 1234,
+    "company_name": "Acme AS",
+    "organization_number": "123456789"
 }'</code></pre>
 
                     <h3>{{ __('Request Body') }}</h3>
@@ -140,7 +144,9 @@
     "taxValue": "10%",
     "taxTotal": "9.09",
     "description": "T-Shirt Purchase",
-    "orderId": 1234
+    "orderId": 1234,
+    "company_name": "Acme AS",
+    "organization_number": "123456789"
 }</code></pre>
 
                     <h3>{{ __('Response Body') }}</h3>
@@ -259,6 +265,20 @@
                                     <td>No</td>
                                     <td>1234</td>
                                     <td>{{ __('Your internal order reference.') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><code>company_name</code></td>
+                                    <td>string</td>
+                                    <td>No</td>
+                                    <td>Acme AS</td>
+                                    <td>{{ __('Updates the plugin profile company name. Not stored on the order.') }}</td>
+                                </tr>
+                                <tr>
+                                    <td><code>organization_number</code></td>
+                                    <td>string</td>
+                                    <td>No</td>
+                                    <td>123456789</td>
+                                    <td>{{ __('Updates the plugin profile organization number. Not stored on the order.') }}</td>
                                 </tr>
                             </tbody>
                         </table>
