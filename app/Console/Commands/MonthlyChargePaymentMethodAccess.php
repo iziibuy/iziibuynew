@@ -24,22 +24,22 @@ class MonthlyChargePaymentMethodAccess extends Command
         $failStatus = (int) $this->argument('status');
         $dryRun = (bool) $this->option('dry-run');
         $onlyId = $this->option('id');
-        $prevMonth = today()->subMonthsNoOverflow()->startOfMonth();
+        $startOfMonth = today()->startOfMonth();
 
         $this->info('Payment method access (plugin) monthly charge');
         $this->line('  Mode: '.($dryRun ? 'dry-run (no charges)' : 'live'));
         $this->line('  Fail status: '.$failStatus);
-        $this->line('  Due rule: status=1 AND last_paid_at BETWEEN '.$prevMonth->toDateTimeString().' AND '.$prevMonth->copy()->endOfMonth()->toDateTimeString());
+        $this->line('  Due rule: status=1 AND (last_paid_at IS NULL OR last_paid_at < '.$startOfMonth->toDateTimeString().')');
         if (filled($onlyId)) {
             $this->line('  Filter ID: '.$onlyId);
         }
         $this->newLine();
 
-        $paymentMethods = $this->duePaymentMethodsQuery($prevMonth, $onlyId)->get();
+        $paymentMethods = $this->duePaymentMethodsQuery($startOfMonth, $onlyId)->get();
 
         if ($paymentMethods->isEmpty()) {
             $this->warn('No payment method accesses matched the due criteria.');
-            $this->explainWhyNothingMatched($prevMonth, $onlyId);
+            $this->explainWhyNothingMatched($startOfMonth, $onlyId);
 
             return self::SUCCESS;
         }
@@ -151,20 +151,19 @@ class MonthlyChargePaymentMethodAccess extends Command
     /**
      * @return Builder<PaymentMethodAccess>
      */
-    protected function duePaymentMethodsQuery(Carbon $prevMonth, mixed $onlyId): Builder
+    protected function duePaymentMethodsQuery(Carbon $startOfMonth, mixed $onlyId): Builder
     {
         return PaymentMethodAccess::query()
             ->with('subscription')
             ->where('status', 1)
-            ->whereBetween('last_paid_at', [
-                $prevMonth->toDateTimeString(),
-                $prevMonth->copy()->endOfMonth()->toDateTimeString(),
-            ])
+            ->where(fn (Builder $query) => $query
+                ->whereNull('last_paid_at')
+                ->orWhere('last_paid_at', '<', $startOfMonth->toDateTimeString()))
             ->when(filled($onlyId), fn (Builder $query) => $query->whereKey($onlyId))
             ->orderBy('id');
     }
 
-    protected function explainWhyNothingMatched(Carbon $prevMonth, mixed $onlyId): void
+    protected function explainWhyNothingMatched(Carbon $startOfMonth, mixed $onlyId): void
     {
         if (filled($onlyId)) {
             $data = PaymentMethodAccess::query()->with('subscription')->find($onlyId);
@@ -176,7 +175,7 @@ class MonthlyChargePaymentMethodAccess extends Command
 
             $this->line("  Payment method access #{$onlyId} exists but is not due:");
             $this->line('    status: '.(int) $data->status.' (need 1)');
-            $this->line('    last_paid_at: '.$this->formatTimestamp($data->last_paid_at).' (need between '.$prevMonth->toDateString().' and '.$prevMonth->copy()->endOfMonth()->toDateString().')');
+            $this->line('    last_paid_at: '.$this->formatTimestamp($data->last_paid_at).' (need null or before '.$startOfMonth->toDateString().')');
 
             return;
         }
@@ -184,14 +183,18 @@ class MonthlyChargePaymentMethodAccess extends Command
         $active = PaymentMethodAccess::query()->where('status', 1)->count();
         $dueByLastPaidAt = PaymentMethodAccess::query()
             ->where('status', 1)
-            ->whereBetween('last_paid_at', [
-                $prevMonth->toDateTimeString(),
-                $prevMonth->copy()->endOfMonth()->toDateTimeString(),
-            ])
+            ->where(fn (Builder $query) => $query
+                ->whereNull('last_paid_at')
+                ->orWhere('last_paid_at', '<', $startOfMonth->toDateTimeString()))
+            ->count();
+        $paidThisMonth = PaymentMethodAccess::query()
+            ->where('status', 1)
+            ->where('last_paid_at', '>=', $startOfMonth->toDateTimeString())
             ->count();
 
         $this->line("  Active payment method accesses: {$active}");
-        $this->line("  Active + paid last month (due): {$dueByLastPaidAt}");
+        $this->line("  Active + not paid this month (due): {$dueByLastPaidAt}");
+        $this->line("  Active + already paid this month: {$paidThisMonth}");
     }
 
     protected function paymentMethodLabel(PaymentMethodAccess $data): string
