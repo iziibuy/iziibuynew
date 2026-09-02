@@ -161,7 +161,7 @@ class ElavonShopSubscription
                 'shop_id' => (string) $this->shop->id,
             ],
             'createdBy' => config('app.name'),
-            'orderReference' => uniqid('shop_', true),
+            'orderReference' => ElavonRecurringTransaction::shortOrderReference(),
             'storedCard' => $this->convergeResourceUrl(Endpoint::STORED_CARD, (string) $this->shop->subscription_id),
         ];
 

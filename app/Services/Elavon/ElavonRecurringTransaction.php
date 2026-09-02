@@ -74,6 +74,17 @@ class ElavonRecurringTransaction
         return $body;
     }
 
+    /**
+     * A unique orderReference for a Converge2 transaction. Elavon rejects the
+     * request outright ("size must be between 0 and 13") once this exceeds 13
+     * characters, so this stays well under that — do not swap back to
+     * uniqid($prefix, true), which routinely runs to 25+ characters.
+     */
+    public static function shortOrderReference(): string
+    {
+        return substr(dechex(time()).bin2hex(random_bytes(2)), 0, 13);
+    }
+
     public static function transactionResourceUrl(string $apiBase, string $transactionId): string
     {
         $transactionId = trim($transactionId);
@@ -123,9 +134,11 @@ class ElavonRecurringTransaction
         if ($response->hasFailures()) {
             foreach ($response->getFailures() as $failure) {
                 $description = method_exists($failure, 'getDescription') ? (string) $failure->getDescription() : '';
-                if ($description !== '') {
-                    $parts[] = $description;
+                $field = method_exists($failure, 'getField') ? (string) $failure->getField() : '';
+                if ($description === '') {
+                    continue;
                 }
+                $parts[] = $field !== '' ? "{$field}: {$description}" : $description;
             }
         }
 

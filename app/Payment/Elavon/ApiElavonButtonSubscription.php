@@ -377,7 +377,7 @@ class ApiElavonButtonSubscription
             'shopperLanguageTag' => app()->getLocale(),
             'shopperTimeZone' => config('app.timezone'),
             'createdBy' => config('app.name'),
-            'orderReference' => uniqid('extsub_', true),
+            'orderReference' => ElavonRecurringTransaction::shortOrderReference(),
             'storedCard' => $this->resourceUrl(Endpoint::STORED_CARD, $storedCardId),
         ];
 

@@ -280,7 +280,7 @@ class ElavonEnterpriseOnboardingSubscription
                 'enterprise_onboarding_id' => (string) $this->onboarding->id,
             ],
             'createdBy' => config('app.name'),
-            'orderReference' => uniqid('ext_', true),
+            'orderReference' => ElavonRecurringTransaction::shortOrderReference(),
             'storedCard' => $this->convergeResourceUrl(Endpoint::STORED_CARD, $storedCardId),
         ];
 
@@ -677,17 +677,6 @@ class ElavonEnterpriseOnboardingSubscription
 
     protected function extractFailureMessage(ResponseInterface $response): string
     {
-        $parts = [];
-
-        if ($response->hasFailures()) {
-            foreach ($response->getFailures() as $failure) {
-                $description = method_exists($failure, 'getDescription') ? (string) $failure->getDescription() : '';
-                if ($description !== '') {
-                    $parts[] = $description;
-                }
-            }
-        }
-
-        return $parts !== [] ? implode(' | ', $parts) : '';
+        return ElavonRecurringTransaction::extractFailureMessage($response);
     }
 }

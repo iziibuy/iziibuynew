@@ -11,6 +11,7 @@ use App\Elavon\Converge2\Response\ResponseInterface;
 use App\Elavon\Converge2\Response\StoredCardResponse;
 use App\Models\Enterprise;
 use App\Models\Subscription;
+use App\Services\Elavon\ElavonRecurringTransaction;
 use Illuminate\Support\Facades\Log;
 
 class ElavonEnterpriseSubscription
@@ -297,7 +298,7 @@ class ElavonEnterpriseSubscription
                 'enterprise_uid' => (string) $this->enterprise->unqid,
             ],
             'createdBy' => config('app.name'),
-            'orderReference' => uniqid('ent_', true),
+            'orderReference' => ElavonRecurringTransaction::shortOrderReference(),
             'storedCard' => $this->convergeResourceUrl(Endpoint::STORED_CARD, $storedCardId),
         ];
     }
@@ -671,17 +672,6 @@ class ElavonEnterpriseSubscription
 
     protected function extractFailureMessage(ResponseInterface $response): string
     {
-        $parts = [];
-
-        if ($response->hasFailures()) {
-            foreach ($response->getFailures() as $failure) {
-                $description = method_exists($failure, 'getDescription') ? (string) $failure->getDescription() : '';
-                if ($description !== '') {
-                    $parts[] = $description;
-                }
-            }
-        }
-
-        return $parts !== [] ? implode(' | ', $parts) : '';
+        return ElavonRecurringTransaction::extractFailureMessage($response);
     }
 }

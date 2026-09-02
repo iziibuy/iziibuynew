@@ -280,7 +280,7 @@ class ElavonExternalSubscription
                 'payment_method_access_id' => (string) $this->access->id,
             ],
             'createdBy' => config('app.name'),
-            'orderReference' => uniqid('ext_', true),
+            'orderReference' => ElavonRecurringTransaction::shortOrderReference(),
             'storedCard' => $this->convergeResourceUrl(Endpoint::STORED_CARD, $storedCardId),
         ];
 
@@ -677,17 +677,6 @@ class ElavonExternalSubscription
 
     protected function extractFailureMessage(ResponseInterface $response): string
     {
-        $parts = [];
-
-        if ($response->hasFailures()) {
-            foreach ($response->getFailures() as $failure) {
-                $description = method_exists($failure, 'getDescription') ? (string) $failure->getDescription() : '';
-                if ($description !== '') {
-                    $parts[] = $description;
-                }
-            }
-        }
-
-        return $parts !== [] ? implode(' | ', $parts) : '';
+        return ElavonRecurringTransaction::extractFailureMessage($response);
     }
 }
