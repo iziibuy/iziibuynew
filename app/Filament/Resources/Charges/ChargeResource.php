@@ -3,6 +3,8 @@
 namespace App\Filament\Resources\Charges;
 
 use App\Filament\Resources\Charges\Pages\ManageCharges;
+use App\Filament\Resources\Charges\Pages\ViewCharge;
+use App\Filament\Resources\Charges\Schemas\ChargeInfolist;
 use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\Charge;
 use BackedEnum;
@@ -10,6 +12,7 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -57,6 +60,11 @@ class ChargeResource extends Resource
         }
 
         return $query;
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return ChargeInfolist::configure($schema);
     }
 
     public static function form(Schema $schema): Schema
@@ -124,6 +132,7 @@ class ChargeResource extends Resource
                 ResourceTableFilters::boolean('status', __('Paid')),
             ])
             ->recordActions([
+                ViewAction::make(),
                 EditAction::make(),
                 DeleteAction::make(),
             ])
@@ -138,6 +147,7 @@ class ChargeResource extends Resource
     {
         return [
             'index' => ManageCharges::route('/'),
+            'view' => ViewCharge::route('/{record}'),
         ];
     }
 }

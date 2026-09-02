@@ -38,6 +38,8 @@ class Charge extends Model
                 return __('words.monthly_subscription_fee');
             case 'Service subscription':
                 return __('words.charge_service_subscription_fee');
+            default:
+                return $value;
         }
     }
 

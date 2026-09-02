@@ -2,8 +2,11 @@
 
 namespace App\Filament\Resources\Shops\RelationManagers;
 
+use App\Filament\Resources\Charges\ChargeResource;
 use App\Filament\Tables\Filters\ResourceTableFilters;
+use App\Models\Charge;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\ViewAction;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -19,6 +22,7 @@ class ChargesRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('order_id')
+            ->recordUrl(fn (Charge $record): string => ChargeResource::getUrl('view', ['record' => $record]))
             ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('created_at')
@@ -48,6 +52,8 @@ class ChargesRelationManager extends RelationManager
                 ResourceTableFilters::boolean('status', __('Paid')),
             ])
             ->recordActions([
+                ViewAction::make()
+                    ->url(fn (Charge $record): string => ChargeResource::getUrl('view', ['record' => $record])),
                 DeleteAction::make(),
             ]);
     }
