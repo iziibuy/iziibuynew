@@ -8,12 +8,13 @@ use Illuminate\Console\Command;
 
 class MonthlyChargePaymentMethodAccess extends Command
 {
-    protected $signature = 'payment-method-access:charge';
+    protected $signature = 'payment-method-access:charge {status=0 : Status to set on failed charge (0=deactivate, 1=keep active)}';
 
     protected $description = 'Charge active external payment method accesses via Elavon';
 
     public function handle(): int
     {
+        $failStatus = (int) $this->argument('status');
         $prevMonth = today()->subMonthsNoOverflow()->startOfMonth();
         $paymentMethods = PaymentMethodAccess::whereBetween('last_paid_at', [
             $prevMonth->toDateTimeString(),
@@ -48,10 +49,10 @@ class MonthlyChargePaymentMethodAccess extends Command
                 $data->last_paid_at = now();
                 $data->save();
             } else {
-                $subscriptionDatabase->status = false;
+                $subscriptionDatabase->status = $failStatus;
                 $subscriptionDatabase->save();
 
-                $data->status = false;
+                $data->status = $failStatus;
                 $data->save();
             }
         }
