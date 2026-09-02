@@ -211,7 +211,7 @@ class ElavonEnterpriseSubscription
             ];
         }
 
-        $response = $this->elavon->createSaleTransaction($this->makeMitTransactionBody($amountNok, $storedCardId));
+        $response = $this->elavon->createSaleTransaction($this->makeMitTransactionBody($amountNok, $storedCardId, $subscription));
 
         if (! $response->isSuccess() || ! $this->hosted->transactionIsApproved($response)) {
             return [
@@ -258,18 +258,17 @@ class ElavonEnterpriseSubscription
     }
 
     /** @return array<string, mixed> */
-    protected function makeMitTransactionBody(float $amountNok, string $storedCardId): array
+    protected function makeMitTransactionBody(float $amountNok, string $storedCardId, ?Subscription $subscription = null): array
     {
         $email = $this->enterpriseShopperEmail();
 
-        return [
+        $body = [
             'type' => 'sale',
             'total' => [
                 'amount' => $amountNok,
                 'currencyCode' => 'NOK',
             ],
             'doCapture' => 1,
-            'shopperInteraction' => 'ecommerce',
             'shipTo' => [
                 'fullName' => $this->enterprise->enterprise_name ?? 'Enterprise',
                 'company' => $this->enterprise->enterprise_name ?? '',
@@ -301,6 +300,32 @@ class ElavonEnterpriseSubscription
             'orderReference' => ElavonRecurringTransaction::shortOrderReference(),
             'storedCard' => $this->convergeResourceUrl(Endpoint::STORED_CARD, $storedCardId),
         ];
+
+        return ElavonRecurringTransaction::applySubsequentMerchantInitiated(
+            $body,
+            $this->apiBase,
+            $this->resolveInitialRecurringTransactionId($subscription)
+        );
+    }
+
+    protected function resolveInitialRecurringTransactionId(?Subscription $subscription): ?string
+    {
+        if ($subscription === null) {
+            $subscription = $this->enterprise->subscription;
+        }
+
+        if ($subscription === null) {
+            return null;
+        }
+
+        $initialCharge = $subscription->charges()
+            ->whereNotNull('elavon_transaction_id')
+            ->orderBy('id')
+            ->first();
+
+        $transactionId = $initialCharge?->elavon_transaction_id;
+
+        return filled($transactionId) ? (string) $transactionId : null;
     }
 
     protected function recordCharge(Subscription $subscription, float $amountNok, string $transactionId, array $paymentDetails): void
