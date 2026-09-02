@@ -85,6 +85,25 @@ class ElavonRecurringTransaction
         return substr(dechex(time()).bin2hex(random_bytes(2)), 0, 13);
     }
 
+    /**
+     * A bare-host statement descriptor URL for shopperStatement.url. Elavon
+     * caps this at 13 characters too, so a full "https://www.example.com"
+     * domain gets rejected the same way orderReference does — strip the
+     * scheme/www and truncate to fit.
+     */
+    public static function shortStatementUrl(?string $url): string
+    {
+        $url = trim((string) $url);
+        if ($url === '') {
+            return '';
+        }
+
+        $host = parse_url($url, PHP_URL_HOST) ?: $url;
+        $host = preg_replace('/^www\./i', '', (string) $host);
+
+        return substr($host, 0, 13);
+    }
+
     public static function transactionResourceUrl(string $apiBase, string $transactionId): string
     {
         $transactionId = trim($transactionId);

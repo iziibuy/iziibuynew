@@ -288,7 +288,7 @@ class ElavonEnterpriseSubscription
             'shopperStatement' => [
                 'name' => $this->enterprise->enterprise_name ?? 'Enterprise',
                 'phone' => '',
-                'url' => $this->enterprise->domain ?? '',
+                'url' => ElavonRecurringTransaction::shortStatementUrl($this->enterprise->domain),
             ],
             'description' => sprintf('Enterprise charge — %s', $this->enterprise->enterprise_name ?? $this->enterprise->unqid),
             'shopperLanguageTag' => app()->getLocale(),

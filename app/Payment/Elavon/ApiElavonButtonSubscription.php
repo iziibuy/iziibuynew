@@ -371,7 +371,7 @@ class ApiElavonButtonSubscription
             'shopperStatement' => [
                 'name' => (string) ($this->access->company_name ?: config('app.name')),
                 'phone' => (string) ($this->subscription->customer_phone ?: ''),
-                'url' => (string) ($this->access->company_domain ?: ''),
+                'url' => ElavonRecurringTransaction::shortStatementUrl($this->access->company_domain),
             ],
             'description' => sprintf('Subscription renewal — %s', $this->subscription->id),
             'shopperLanguageTag' => app()->getLocale(),

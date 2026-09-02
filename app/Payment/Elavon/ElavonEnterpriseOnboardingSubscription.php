@@ -270,7 +270,7 @@ class ElavonEnterpriseOnboardingSubscription
             'shopperStatement' => [
                 'name' => $this->onboarding->company_name ?? 'Enterprise',
                 'phone' => (string) ($addr->contact_number ?? ''),
-                'url' => $this->onboarding->company_domain ?? '',
+                'url' => ElavonRecurringTransaction::shortStatementUrl($this->onboarding->company_domain),
             ],
             'description' => sprintf('Enterprise charge — %s', $this->onboarding->company_name ?? $this->onboarding->id),
             'shopperLanguageTag' => app()->getLocale(),

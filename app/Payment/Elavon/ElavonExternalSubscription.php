@@ -270,7 +270,7 @@ class ElavonExternalSubscription
             'shopperStatement' => [
                 'name' => $this->access->company_name ?? 'External',
                 'phone' => (string) ($addr->contact_number ?? ''),
-                'url' => $this->access->company_domain ?? '',
+                'url' => ElavonRecurringTransaction::shortStatementUrl($this->access->company_domain),
             ],
             'description' => sprintf('External charge — %s', $this->access->company_name ?? $this->access->id),
             'shopperLanguageTag' => app()->getLocale(),
