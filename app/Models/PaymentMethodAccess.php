@@ -271,6 +271,21 @@ class PaymentMethodAccess extends Model
         return $this->morphOne(Subscription::class, 'subscribable');
     }
 
+    /**
+     * The plugin's monthly subscription charge history, via its polymorphic subscription.
+     */
+    public function subscriptionCharges()
+    {
+        return $this->hasManyThrough(
+            SubscriptionCharge::class,
+            Subscription::class,
+            'subscribable_id', // Foreign key on subscriptions table
+            'subscription_id', // Foreign key on subscription_charges table
+            'id', // Local key on payment_method_accesses table
+            'id' // Local key on subscriptions table
+        )->where('subscriptions.subscribable_type', self::class);
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);

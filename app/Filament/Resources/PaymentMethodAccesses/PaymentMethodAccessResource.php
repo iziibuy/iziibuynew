@@ -6,6 +6,7 @@ use App\Filament\Resources\PaymentMethodAccesses\Pages\CreatePaymentMethodAccess
 use App\Filament\Resources\PaymentMethodAccesses\Pages\EditPaymentMethodAccess;
 use App\Filament\Resources\PaymentMethodAccesses\Pages\ListPaymentMethodAccesses;
 use App\Filament\Resources\PaymentMethodAccesses\RelationManagers\PaymentapisRelationManager;
+use App\Filament\Resources\PaymentMethodAccesses\RelationManagers\SubscriptionChargesRelationManager;
 use App\Filament\Resources\PaymentMethodAccesses\Schemas\PaymentMethodAccessForm;
 use App\Filament\Resources\PaymentMethodAccesses\Tables\PaymentMethodAccessesTable;
 use App\Models\PaymentMethodAccess;
@@ -66,6 +67,7 @@ class PaymentMethodAccessResource extends Resource
     {
         return [
             PaymentapisRelationManager::class,
+            SubscriptionChargesRelationManager::class,
         ];
     }
 

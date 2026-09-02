@@ -8,6 +8,7 @@ use App\Filament\Resources\Shops\Pages\CreateShop;
 use App\Filament\Resources\Shops\Pages\EditShop;
 use App\Filament\Resources\Shops\Pages\ListShops;
 use App\Filament\Resources\Shops\Pages\ViewShop;
+use App\Filament\Resources\Shops\RelationManagers\ChargesRelationManager;
 use App\Filament\Resources\Users\UserResource;
 use App\Filament\Tables\Filters\ResourceTableFilters;
 use App\Models\Shop;
@@ -600,6 +601,13 @@ class ShopResource extends Resource
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            ChargesRelationManager::class,
+        ];
     }
 
     public static function getPages(): array
