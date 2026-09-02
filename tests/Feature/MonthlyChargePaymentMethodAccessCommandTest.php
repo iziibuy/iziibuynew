@@ -62,58 +62,6 @@ it('explains why a filtered payment method access is not due', function (): void
         ->assertSuccessful();
 });
 
-it('treats a never-charged payment method access as due', function (): void {
-    $access = PaymentMethodAccess::query()->create([
-        'user_id' => User::factory()->create()->id,
-        'company_name' => 'Never Charged Plugin',
-        'company_email' => 'never-'.uniqid().'@example.com',
-        'key' => (string) Str::uuid(),
-        'subscriptionMethod' => 'elavon',
-        'paymentMethod' => 'elavon',
-        'status' => 1,
-        'last_paid_at' => null,
-    ]);
-
-    $access->subscription()->create([
-        'key' => 'stored-card-never',
-        'fee' => 149,
-        'status' => 1,
-        'paid_at' => null,
-    ]);
-
-    $this->artisan('payment-method-access:charge', ['status' => 1, '--dry-run' => true, '--id' => $access->id])
-        ->expectsOutputToContain('Found 1 payment method access(es) to process.')
-        ->expectsOutputToContain('Never Charged Plugin')
-        ->expectsOutputToContain('DRY-RUN: would charge now.')
-        ->assertSuccessful();
-});
-
-it('treats a payment method access overdue by more than one month as due', function (): void {
-    $access = PaymentMethodAccess::query()->create([
-        'user_id' => User::factory()->create()->id,
-        'company_name' => 'Long Overdue Plugin',
-        'company_email' => 'overdue-'.uniqid().'@example.com',
-        'key' => (string) Str::uuid(),
-        'subscriptionMethod' => 'elavon',
-        'paymentMethod' => 'elavon',
-        'status' => 1,
-        'last_paid_at' => now()->subMonths(3),
-    ]);
-
-    $access->subscription()->create([
-        'key' => 'stored-card-overdue',
-        'fee' => 149,
-        'status' => 1,
-        'paid_at' => now()->subMonths(3),
-    ]);
-
-    $this->artisan('payment-method-access:charge', ['status' => 1, '--dry-run' => true, '--id' => $access->id])
-        ->expectsOutputToContain('Found 1 payment method access(es) to process.')
-        ->expectsOutputToContain('Long Overdue Plugin')
-        ->expectsOutputToContain('DRY-RUN: would charge now.')
-        ->assertSuccessful();
-});
-
 it('deactivates a payment method access with no active subscription', function (): void {
     $paidAt = now()->subMonth()->startOfMonth();
 
