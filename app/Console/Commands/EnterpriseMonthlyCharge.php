@@ -202,12 +202,14 @@ class EnterpriseMonthlyCharge extends Command
 
     protected function resolveFee(Enterprise $enterprise): float
     {
-        if (filled($enterprise->subscription?->fee) && is_numeric($enterprise->subscription->fee)) {
-            return (float) $enterprise->subscription->fee;
+        $subscriptionFee = $enterprise->subscription?->fee;
+        if (filled($subscriptionFee) && is_numeric($subscriptionFee) && (float) $subscriptionFee > 0) {
+            return (float) $subscriptionFee;
         }
 
-        if (filled($enterprise->subscription_fee) && is_numeric($enterprise->subscription_fee)) {
-            return (float) $enterprise->subscription_fee;
+        $enterpriseFee = $enterprise->subscription_fee;
+        if (filled($enterpriseFee) && is_numeric($enterpriseFee) && (float) $enterpriseFee > 0) {
+            return (float) $enterpriseFee;
         }
 
         try {
