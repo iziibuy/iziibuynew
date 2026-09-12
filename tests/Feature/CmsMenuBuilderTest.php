@@ -301,6 +301,59 @@ it('marks resource menu items active on nested resource pages', function (): voi
     expect($matcher->matchesResource(ShopResource::class, ShopResource::getUrl()))->toBeTrue();
 });
 
+it('adds all charges under the finance menu group during admin menu sync', function (): void {
+    $menu = CmsMenu::query()->updateOrCreate(
+        ['slug' => LegacyAdminMenuSynchronizer::ADMIN_MENU_SLUG],
+        [
+            'name' => 'admin',
+            'context' => MenuContext::Admin,
+            'is_active' => true,
+            'replaces_panel_navigation' => true,
+        ],
+    );
+
+    $finance = CmsMenuItem::query()->create([
+        'cms_menu_id' => $menu->id,
+        'title' => 'FINANCE',
+        'link_type' => MenuLinkType::Url,
+        'url' => '',
+        'icon' => 'voyager-credit-card',
+        'sort_order' => 9,
+        'is_active' => true,
+    ]);
+
+    CmsMenuItem::query()->create([
+        'cms_menu_id' => $menu->id,
+        'parent_id' => $finance->id,
+        'title' => 'Charges',
+        'link_type' => MenuLinkType::Url,
+        'url' => '/panel/charges?demo=0',
+        'sort_order' => 2,
+        'is_active' => true,
+    ]);
+
+    app(LegacyAdminMenuSynchronizer::class)->sync();
+
+    $allCharges = CmsMenuItem::query()
+        ->where('cms_menu_id', $menu->id)
+        ->where('title', 'All Charges')
+        ->first();
+
+    expect($allCharges)->not->toBeNull()
+        ->and($allCharges->parent_id)->toBe($finance->id)
+        ->and($allCharges->link_type)->toBe(MenuLinkType::Route)
+        ->and($allCharges->route_name)->toBe('filament.admin.pages.all-charges')
+        ->and($allCharges->is_active)->toBeTrue();
+
+    $navigation = app(AdminPanelNavigationBuilder::class)->build($menu->fresh())->getNavigation();
+
+    $financeGroup = collect($navigation)
+        ->first(fn (NavigationGroup $group): bool => $group->getLabel() === 'FINANCE');
+
+    expect($financeGroup)->not->toBeNull()
+        ->and(collect($financeGroup->getItems())->map(fn ($item) => $item->getLabel())->all())->toContain('All Charges');
+});
+
 it('scopes menus by context', function (): void {
     CmsMenu::query()->create([
         'name' => 'Frontend menu',

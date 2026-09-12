@@ -44,6 +44,9 @@ class AdminPanelProvider extends PanelProvider
                 'commerce' => NavigationGroup::make()
                     ->label(__('Commerce'))
                     ->icon(Heroicon::OutlinedShoppingBag),
+                'finance' => NavigationGroup::make()
+                    ->label(__('Finance'))
+                    ->icon(Heroicon::OutlinedBanknotes),
                 'site' => NavigationGroup::make()
                     ->label(__('Site & CMS'))
                     ->icon(Heroicon::OutlinedGlobeAlt),

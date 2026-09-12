@@ -55,6 +55,7 @@ final class LegacyAdminMenuSynchronizer
         'coupons' => ['type' => MenuLinkType::Resource, 'resource' => CouponResource::class],
         'charges' => ['type' => MenuLinkType::Url, 'url' => '/panel/charges?demo=0'],
         'demo charges' => ['type' => MenuLinkType::Url, 'url' => '/panel/charges?demo=1'],
+        'all charges' => ['type' => MenuLinkType::Route, 'route' => 'filament.admin.pages.all-charges'],
         'menus' => ['type' => MenuLinkType::Route, 'route' => 'filament.admin.resources.cms-menu-items.menu-builder'],
         'pages' => ['type' => MenuLinkType::Resource, 'resource' => PageResource::class],
         'settings' => ['type' => MenuLinkType::Route, 'route' => 'filament.admin.pages.settings'],
@@ -104,7 +105,53 @@ final class LegacyAdminMenuSynchronizer
             $this->syncItem($item);
         });
 
+        $this->ensureAllChargesMenuItem($menu);
+
         return $menu->fresh();
+    }
+
+    private function ensureAllChargesMenuItem(CmsMenu $menu): void
+    {
+        $items = $menu->allItems()->get();
+
+        $finance = $items->first(
+            fn (CmsMenuItem $item): bool => $this->normalizeTitle($item->title) === 'finance'
+        );
+
+        if ($finance === null) {
+            return;
+        }
+
+        $existing = $items->first(
+            fn (CmsMenuItem $item): bool => $this->normalizeTitle($item->title) === 'all charges'
+        );
+
+        if ($existing !== null) {
+            $existing->update([
+                'parent_id' => $finance->id,
+                'link_type' => MenuLinkType::Route,
+                'route_name' => 'filament.admin.pages.all-charges',
+                'resource_class' => null,
+                'url' => null,
+                'is_active' => true,
+                'icon' => $existing->icon ?: 'voyager-list',
+            ]);
+
+            return;
+        }
+
+        $sortOrder = ((int) $items->where('parent_id', $finance->id)->max('sort_order')) + 1;
+
+        CmsMenuItem::query()->create([
+            'cms_menu_id' => $menu->id,
+            'parent_id' => $finance->id,
+            'title' => 'All Charges',
+            'link_type' => MenuLinkType::Route,
+            'route_name' => 'filament.admin.pages.all-charges',
+            'icon' => 'voyager-list',
+            'sort_order' => max($sortOrder, 1),
+            'is_active' => true,
+        ]);
     }
 
     private function syncItem(CmsMenuItem $item): void

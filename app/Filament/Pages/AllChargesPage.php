@@ -34,9 +34,9 @@ class AllChargesPage extends Page implements HasTable
 
     protected static ?string $navigationLabel = 'All charges';
 
-    protected static ?int $navigationSort = 35;
+    protected static ?int $navigationSort = 10;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'commerce';
+    protected static string|\UnitEnum|null $navigationGroup = 'finance';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedQueueList;
 
