@@ -276,7 +276,7 @@ Route::middleware('Paid')->group(function () {
         })->name('status.completed');
     });
     Route::get('manager-schedule', [ManagerScheduleController::class, 'index'])->name('manage-schedule.index');
-    Route::put('manager-schedule/{booking}', [ManagerScheduleController::class, 'update']);
+    Route::put('manager-schedule/{booking}', [ManagerScheduleController::class, 'update'])->name('manager-schedule.update');
 
     Route::get('disablekyc', function () {
         auth()->user()->shop->createMeta('needKYC', false);
@@ -288,16 +288,16 @@ Route::middleware('Paid')->group(function () {
 
     Route::get('email/{order}', function (Order $order) {
         return new OrderConfirmed($order, 'This message is for test purpose');
-    });
+    })->name('debug.email.order-confirmed');
     Route::get('placed/{order}', function (Order $order) {
         return new OrderPlaced($order, 'This message is for test purpose');
-    });
+    })->name('debug.email.order-placed');
     Route::get('booking/{booking}/placed', function (Booking $booking) {
         return new BookingPlaced($booking);
-    });
+    })->name('debug.email.booking-placed');
     Route::get('ticket-email/{ticket}', function (Ticket $ticket) {
         return new TicketPlaced($ticket, 'This message is for test purpose');
-    });
+    })->name('debug.email.ticket-placed');
 
     Route::get('report', [DashboardController::class, 'reportIndex'])->name('report.index');
     Route::get('pt-report', [ReportController::class, 'ptReport'])->name('pt.report');

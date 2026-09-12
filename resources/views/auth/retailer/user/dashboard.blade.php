@@ -1,4 +1,4 @@
-<x-dashboard>
+<x-dashboard.retailer>
     <x-slot name="sidebar">
         @include('auth.retailer.user.includes.sidebar')
     </x-slot>
@@ -25,4 +25,4 @@
             </div>
         </div>
     </div>
-</x-dashboard>
+</x-dashboard.retailer>

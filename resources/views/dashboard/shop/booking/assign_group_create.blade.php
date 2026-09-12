@@ -1,4 +1,4 @@
-<x-dashboard>
+<x-dashboard.shop>
     
     <h3><span class="text-primary opacity-25"><i class="fas fa-list" aria-hidden="true"></i></span> {{__('words.assign_group_sec_title')}}
     </h3>
@@ -114,4 +114,4 @@
             }
         </script>
     @endpush
-</x-dashboard>
+</x-dashboard.shop>
