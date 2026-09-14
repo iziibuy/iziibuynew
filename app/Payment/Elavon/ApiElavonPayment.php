@@ -123,7 +123,7 @@ class ApiElavonPayment
                 'vendor_app_version' => '1.0.0',
                 'php_version' => phpversion(),
             ],
-            'doCreateTransaction' => false,
+            'doCreateTransaction' => true,
             'doThreeDSecure' => 1,
             'hppType' => 'fullPageRedirect',
         ];
