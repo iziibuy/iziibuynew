@@ -2,7 +2,9 @@
 
 namespace App\Filament\Resources\ExternalOrders\Tables;
 
+use App\Filament\Resources\PaymentMethodAccesses\PaymentMethodAccessResource;
 use App\Filament\Tables\Filters\ResourceTableFilters;
+use App\Models\ExternalOrder;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -27,7 +29,10 @@ class ExternalOrdersTable
                     ->label(__('Plugin'))
                     ->searchable()
                     ->toggleable()
-                    ->placeholder('-'),
+                    ->placeholder('-')
+                    ->url(fn (ExternalOrder $record): ?string => $record->payment_method_access_id
+                        ? PaymentMethodAccessResource::getUrl('view', ['record' => $record->payment_method_access_id])
+                        : null),
                 TextColumn::make('customer_name')
                     ->searchable()
                     ->placeholder('-'),

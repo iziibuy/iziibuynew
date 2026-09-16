@@ -32,6 +32,9 @@
                                     @else
                                         <span class="badge badge-secondary">{{ __('One-time') }}</span>
                                     @endif
+                                    @if (($api->elavon_link_mode ?? 'hosted') === 'checkoutjs')
+                                        <span class="badge badge-primary ml-1">{{ __('CheckoutJS') }}</span>
+                                    @endif
                                 </td>
                                 <td>{{ $api->domain }}</td>
                                 <td class="small">{{ $api->success_redirect_url }}</td>

@@ -295,4 +295,28 @@ class PaymentMethodAccess extends Model
     {
         return $this->hasMany(PaymentApi::class, 'payment_method_access_id');
     }
+
+    /**
+     * Button payment orders placed through this plugin.
+     */
+    public function externalOrders()
+    {
+        return $this->hasMany(ExternalOrder::class);
+    }
+
+    /**
+     * Bookings placed through this plugin.
+     */
+    public function externalBookings()
+    {
+        return $this->hasMany(ExternalBooking::class);
+    }
+
+    /**
+     * Customer recurring subscriptions set up through this plugin's button.
+     */
+    public function externalSubscriptions()
+    {
+        return $this->hasMany(ExternalSubscription::class);
+    }
 }

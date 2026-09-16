@@ -5,9 +5,14 @@ namespace App\Filament\Resources\PaymentMethodAccesses;
 use App\Filament\Resources\PaymentMethodAccesses\Pages\CreatePaymentMethodAccess;
 use App\Filament\Resources\PaymentMethodAccesses\Pages\EditPaymentMethodAccess;
 use App\Filament\Resources\PaymentMethodAccesses\Pages\ListPaymentMethodAccesses;
+use App\Filament\Resources\PaymentMethodAccesses\Pages\ViewPaymentMethodAccess;
+use App\Filament\Resources\PaymentMethodAccesses\RelationManagers\ExternalBookingsRelationManager;
+use App\Filament\Resources\PaymentMethodAccesses\RelationManagers\ExternalOrdersRelationManager;
+use App\Filament\Resources\PaymentMethodAccesses\RelationManagers\ExternalSubscriptionsRelationManager;
 use App\Filament\Resources\PaymentMethodAccesses\RelationManagers\PaymentapisRelationManager;
 use App\Filament\Resources\PaymentMethodAccesses\RelationManagers\SubscriptionChargesRelationManager;
 use App\Filament\Resources\PaymentMethodAccesses\Schemas\PaymentMethodAccessForm;
+use App\Filament\Resources\PaymentMethodAccesses\Schemas\PaymentMethodAccessInfolist;
 use App\Filament\Resources\PaymentMethodAccesses\Tables\PaymentMethodAccessesTable;
 use App\Models\PaymentMethodAccess;
 use BackedEnum;
@@ -58,6 +63,11 @@ class PaymentMethodAccessResource extends Resource
         return PaymentMethodAccessForm::configure($schema);
     }
 
+    public static function infolist(Schema $schema): Schema
+    {
+        return PaymentMethodAccessInfolist::configure($schema);
+    }
+
     public static function table(Table $table): Table
     {
         return PaymentMethodAccessesTable::configure($table);
@@ -68,6 +78,9 @@ class PaymentMethodAccessResource extends Resource
         return [
             PaymentapisRelationManager::class,
             SubscriptionChargesRelationManager::class,
+            ExternalOrdersRelationManager::class,
+            ExternalBookingsRelationManager::class,
+            ExternalSubscriptionsRelationManager::class,
         ];
     }
 
@@ -76,6 +89,7 @@ class PaymentMethodAccessResource extends Resource
         return [
             'index' => ListPaymentMethodAccesses::route('/'),
             'create' => CreatePaymentMethodAccess::route('/create'),
+            'view' => ViewPaymentMethodAccess::route('/{record}'),
             'edit' => EditPaymentMethodAccess::route('/{record}/edit'),
         ];
     }
