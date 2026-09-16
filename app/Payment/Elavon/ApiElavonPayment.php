@@ -560,119 +560,119 @@ class ApiElavonPayment
         return $payload;
     }
 
-    // public function processPayment($id)
-    // {
-
-    //     if ($this->order->elavon_transaction_id) {
-    //         $sale_transcation_create_response = $this->elavon->getTransaction($this->order->elavon_transaction_id);
-    //     } else {
-
-    //         $payment_session_response = $this->elavon->getPaymentSession($id);
-
-    //         $sale_transcation_create_body = $this->makeTransactionCreateBody($payment_session_response);
-    //         $sale_transcation_create_response = $this->elavon->createSaleTransaction($sale_transcation_create_body);
-    //     }
-
-    //     return [
-    //         'id' => $sale_transcation_create_response->getId(),
-    //         'state' => $sale_transcation_create_response->getState()->isCaptured() || $sale_transcation_create_response->getState()->isAuthorized(),
-    //     ];
-    // }
-
     public function processPayment($id)
     {
-        try {
-            if ($this->order->elavon_transaction_id) {
-                Log::info('Elavon Order: fetching existing transaction', [
-                    'order_id'            => $this->order->id,
-                    'elavon_transaction_id' => $this->order->elavon_transaction_id,
-                ]);
 
-                $tx = $this->elavon->getTransaction($this->order->elavon_transaction_id);
-            } else {
-                Log::info('Elavon Order: processing new payment session', [
-                    'order_id' => $this->order->id,
-                    'session_id' => $id,
-                ]);
+        if ($this->order->elavon_transaction_id) {
+            $sale_transcation_create_response = $this->elavon->getTransaction($this->order->elavon_transaction_id);
+        } else {
 
-                $session = $this->elavon->getPaymentSession($id);
-                $transactionUrl = $session->getTransaction();
+            $payment_session_response = $this->elavon->getPaymentSession($id);
 
-                if (!$transactionUrl) {
-                    Log::info('Elavon Order: transaction not yet available for session', [
-                        'order_id' => $this->order->id,
-                        'session_id' => $id,
-                    ]);
-
-                    return [
-                        'id'      => null,
-                        'state'   => false,
-                        'pending' => true,
-                        'message' => 'Transaction not yet available; retry shortly.',
-                    ];
-                }
-
-                $transactionId = $this->parseUrl($transactionUrl);
-                $tx = $this->elavon->getTransaction($transactionId);
-
-            // Robust success evaluation: captured, authorized, or issuer/proc codes indicate success
-            // Normalize transaction data to array to avoid stdClass property issues
-            $dataRaw = $tx->getData();
-            $data = is_array($dataRaw) ? $dataRaw : json_decode(json_encode($dataRaw), true);
-            $state = $tx->getState();
-
-            $isCaptured   = method_exists($state, 'isCaptured') ? $state->isCaptured() : false;
-            $isAuthorized = method_exists($state, 'isAuthorized') ? $state->isAuthorized() : false;
-
-            $issuerCode = $data['issuerResponseCode'] ?? $data['processorResponseCode'] ?? null;
-            $issuerMsg  = $data['issuerResponseMessage'] ?? $data['processorResponseMessage'] ?? null;
-
-            // Some gateways use '00' or '0' as success code
-            $codeIndicatesSuccess = in_array((string) $issuerCode, ['00', '0', '000'], true);
-
-            // Check state history for explicit successful states
-            $history = $data['state']['history'] ?? [];
-            $historyHasSuccess = false;
-            foreach ($history as $h) {
-                $s = is_array($h) ? ($h['state'] ?? null) : (is_object($h) && isset($h->state) ? $h->state : null);
-                if (in_array($s, ['captured', 'authorized'], true)) {
-                    $historyHasSuccess = true;
-                    break;
-                }
-            }
-
-            $successful = ($isCaptured || $isAuthorized || $codeIndicatesSuccess || $historyHasSuccess);
-
-            Log::info('Elavon Order: transaction state evaluation', [
-                'order_id'     => $this->order->id,
-                'tx_id'          => $tx->getId(),
-                'isCaptured'     => $isCaptured,
-                'isAuthorized'   => $isAuthorized,
-                'issuerCode'     => $issuerCode,
-                'issuerMessage'  => $issuerMsg,
-                'historySuccess' => $historyHasSuccess,
-                'successful'     => $successful,
-                'data'           => $dataRaw,
-            ]);
-
-            return [
-                'id'      => $tx->getId(),
-                'state'   => $successful,
-                'pending' => false,
-            ];
+            $sale_transcation_create_body = $this->makeTransactionCreateBody($payment_session_response);
+            $sale_transcation_create_response = $this->elavon->createSaleTransaction($sale_transcation_create_body);
         }
-        } catch (\Throwable $e) {
-            Log::warning('Elavon Order: processPayment failed', [
-                'order_id' => $this->order->id,
-                'session_id' => $id,
-                'error'      => $e->getMessage(),
-            ]);
 
-            return [
-                'id'    => null,
-                'state' => false,
-                'error' => $e->getMessage(),
-            ];
-        }
+        return [
+            'id' => $sale_transcation_create_response->getId(),
+            'state' => $sale_transcation_create_response->getState()->isCaptured() || $sale_transcation_create_response->getState()->isAuthorized(),
+        ];
     }
+
+    // public function processPayment($id)
+    // {
+    //     try {
+    //         if ($this->order->elavon_transaction_id) {
+    //             Log::info('Elavon Order: fetching existing transaction', [
+    //                 'order_id'            => $this->order->id,
+    //                 'elavon_transaction_id' => $this->order->elavon_transaction_id,
+    //             ]);
+
+    //             $tx = $this->elavon->getTransaction($this->order->elavon_transaction_id);
+    //         } else {
+    //             Log::info('Elavon Order: processing new payment session', [
+    //                 'order_id' => $this->order->id,
+    //                 'session_id' => $id,
+    //             ]);
+
+    //             $session = $this->elavon->getPaymentSession($id);
+    //             $transactionUrl = $session->getTransaction();
+
+    //             if (!$transactionUrl) {
+    //                 Log::info('Elavon Order: transaction not yet available for session', [
+    //                     'order_id' => $this->order->id,
+    //                     'session_id' => $id,
+    //                 ]);
+
+    //                 return [
+    //                     'id'      => null,
+    //                     'state'   => false,
+    //                     'pending' => true,
+    //                     'message' => 'Transaction not yet available; retry shortly.',
+    //                 ];
+    //             }
+
+    //             $transactionId = $this->parseUrl($transactionUrl);
+    //             $tx = $this->elavon->getTransaction($transactionId);
+
+    //         // Robust success evaluation: captured, authorized, or issuer/proc codes indicate success
+    //         // Normalize transaction data to array to avoid stdClass property issues
+    //         $dataRaw = $tx->getData();
+    //         $data = is_array($dataRaw) ? $dataRaw : json_decode(json_encode($dataRaw), true);
+    //         $state = $tx->getState();
+
+    //         $isCaptured   = method_exists($state, 'isCaptured') ? $state->isCaptured() : false;
+    //         $isAuthorized = method_exists($state, 'isAuthorized') ? $state->isAuthorized() : false;
+
+    //         $issuerCode = $data['issuerResponseCode'] ?? $data['processorResponseCode'] ?? null;
+    //         $issuerMsg  = $data['issuerResponseMessage'] ?? $data['processorResponseMessage'] ?? null;
+
+    //         // Some gateways use '00' or '0' as success code
+    //         $codeIndicatesSuccess = in_array((string) $issuerCode, ['00', '0', '000'], true);
+
+    //         // Check state history for explicit successful states
+    //         $history = $data['state']['history'] ?? [];
+    //         $historyHasSuccess = false;
+    //         foreach ($history as $h) {
+    //             $s = is_array($h) ? ($h['state'] ?? null) : (is_object($h) && isset($h->state) ? $h->state : null);
+    //             if (in_array($s, ['captured', 'authorized'], true)) {
+    //                 $historyHasSuccess = true;
+    //                 break;
+    //             }
+    //         }
+
+    //         $successful = ($isCaptured || $isAuthorized || $codeIndicatesSuccess || $historyHasSuccess);
+
+    //         Log::info('Elavon Order: transaction state evaluation', [
+    //             'order_id'     => $this->order->id,
+    //             'tx_id'          => $tx->getId(),
+    //             'isCaptured'     => $isCaptured,
+    //             'isAuthorized'   => $isAuthorized,
+    //             'issuerCode'     => $issuerCode,
+    //             'issuerMessage'  => $issuerMsg,
+    //             'historySuccess' => $historyHasSuccess,
+    //             'successful'     => $successful,
+    //             'data'           => $dataRaw,
+    //         ]);
+
+    //         return [
+    //             'id'      => $tx->getId(),
+    //             'state'   => $successful,
+    //             'pending' => false,
+    //         ];
+    //     }
+    //     } catch (\Throwable $e) {
+    //         Log::warning('Elavon Order: processPayment failed', [
+    //             'order_id' => $this->order->id,
+    //             'session_id' => $id,
+    //             'error'      => $e->getMessage(),
+    //         ]);
+
+    //         return [
+    //             'id'    => null,
+    //             'state' => false,
+    //             'error' => $e->getMessage(),
+    //         ];
+    //     }
+    // }
 }
