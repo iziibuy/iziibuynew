@@ -156,6 +156,8 @@ class CallbackController extends Controller
     public function elavonApiPaymentSuccess(Request $request)
     {
 
+        $order = null;
+
         try {
 
             $order = ExternalOrder::where('payment_id', $request->sessionId)->first();
@@ -182,8 +184,26 @@ class CallbackController extends Controller
                 throw new Exception('Payment is not accepted');
             }
         } catch (Exception $e) {
+            Log::error('elavonApiPaymentSuccess failed', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+                'sessionId' => $request->sessionId,
+                'order_id' => $order->id ?? null,
+            ]);
+
             return redirect($order->failed_redirect_url.'?order='.$order->orderId.'&payment_id='.$order->payment_id);
         } catch (Error $e) {
+            Log::error('elavonApiPaymentSuccess failed', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+                'sessionId' => $request->sessionId,
+                'order_id' => $order->id ?? null,
+            ]);
+
             return redirect($order->failed_redirect_url.'?order='.$order->orderId.'&payment_id='.$order->payment_id);
         }
     }
