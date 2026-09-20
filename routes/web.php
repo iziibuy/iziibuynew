@@ -14,6 +14,7 @@ use App\Http\Controllers\ElavonCheckoutJsController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\SurfboardPaymentCallback;
+use App\Http\Controllers\Test\ElavonCheckoutJsTestController;
 use App\Http\Controllers\Test\ElavonShopSubscriptionTestController;
 use App\Http\Controllers\Test\SurfboardPaymentTestController;
 use App\Models\EnterpriseOnboarding;
@@ -246,6 +247,14 @@ Route::get('/test/surfboard/{id}', SurfboardPaymentTestController::class)
     ->name('test.surfboard.payment');
 Route::get('/test/elavon/shop/{shop}', ElavonShopSubscriptionTestController::class)
     ->name('test.elavon.shop.subscription');
+Route::get('/test/elavon/checkoutjs', [ElavonCheckoutJsTestController::class, 'index'])
+    ->name('test.elavon.checkoutjs');
+Route::post('/test/elavon/checkoutjs/start', [ElavonCheckoutJsTestController::class, 'start'])
+    ->name('test.elavon.checkoutjs.start');
+Route::get('/test/elavon/checkoutjs/success', [ElavonCheckoutJsTestController::class, 'success'])
+    ->name('test.elavon.checkoutjs.success');
+Route::get('/test/elavon/checkoutjs/failed', [ElavonCheckoutJsTestController::class, 'failed'])
+    ->name('test.elavon.checkoutjs.failed');
 
 // Financial report test route
 Route::get('/test/financial-report', function (Request $request, FinancialReportService $service) {
