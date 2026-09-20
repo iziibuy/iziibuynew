@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ExternalOrder;
 use App\Models\PaymentApi;
 use App\Models\PaymentMethodAccess;
+use App\Models\User;
 use App\Payment\Elavon\ApiElavonPayment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -153,6 +154,12 @@ class ElavonCheckoutJsTestController extends Controller
     protected function ensureAllowed(): void
     {
         if (app()->environment('local', 'testing', 'staging') || (bool) config('app.debug')) {
+            return;
+        }
+
+        $user = auth()->user();
+
+        if ($user instanceof User && $user->isAdmin()) {
             return;
         }
 
