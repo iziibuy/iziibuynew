@@ -99,6 +99,34 @@ it('shows the checkoutjs test page in local environments', function (): void {
         ->assertSee('Create temporary order', false);
 });
 
+it('hides the checkoutjs test page from guests in production', function (): void {
+    app()->detectEnvironment(fn (): string => 'production');
+    config(['app.debug' => false]);
+
+    $this->get(route('test.elavon.checkoutjs'))
+        ->assertNotFound();
+});
+
+it('allows admins to open the checkoutjs test page in production', function (): void {
+    app()->detectEnvironment(fn (): string => 'production');
+    config(['app.debug' => false]);
+
+    createCheckoutJsTestPlugin();
+
+    $admin = User::factory()->create([
+        'role_id' => User::ROLES['Admin'],
+        'password' => bcrypt('password'),
+        'service_type' => 'both',
+        'pt_free_tier' => false,
+    ]);
+    $admin->assignRole('admin');
+
+    $this->actingAs($admin)
+        ->get(route('test.elavon.checkoutjs'))
+        ->assertSuccessful()
+        ->assertSee('Elavon CheckoutJS test', false);
+});
+
 it('validates plugin selection when starting a checkoutjs test payment', function (): void {
     $this->from(route('test.elavon.checkoutjs'))
         ->post(route('test.elavon.checkoutjs.start'), [
