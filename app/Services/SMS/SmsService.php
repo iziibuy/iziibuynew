@@ -1,39 +1,33 @@
 <?php
+
 namespace App\Services\SMS;
 
-use Carbon\Carbon;
-use Illuminate\Support\Facades\App;
-use Illuminate\Support\Facades\Auth;
- 
 use Twilio\Rest\Client;
 
 class SmsService
 {
-    private $client;
+    private Client $client;
 
-    public function __construct()
+    public function __construct(?Client $client = null)
     {
-        $this->client = new Client(env('TWILIO_SID'), env('TWILIO_TOKEN'));
+        $this->client = $client ?? new Client(
+            (string) config('services.twilio.sid'),
+            (string) config('services.twilio.token'),
+        );
     }
-    public function send($phone, $message)
-    {
 
-            if (!str_starts_with($phone, '+')) {
-                $phone = '+' . $phone;
-            }
-            
-            $this->client->messages->create(
-                $phone,
-                array(
-                    'from' => env('TWILIO_FROM'),
-                    'body' => $message,
-                )
-            );
+    public function send(string $phone, string $message): void
+    {
+        if (! str_starts_with($phone, '+')) {
+            $phone = '+'.$phone;
+        }
+
+        $this->client->messages->create(
+            $phone,
+            [
+                'from' => config('services.twilio.from'),
+                'body' => $message,
+            ]
+        );
     }
 }
-
-
-
-
-
-?>

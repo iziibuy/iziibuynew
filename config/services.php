@@ -80,4 +80,10 @@ return [
         'store_id' => env('SURFBOARD_STORE_ID'),
     ],
 
+    'twilio' => [
+        'sid' => env('TWILIO_SID'),
+        'token' => env('TWILIO_TOKEN'),
+        'from' => env('TWILIO_FROM'),
+    ],
+
 ];
