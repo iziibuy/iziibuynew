@@ -17,6 +17,7 @@ use App\Http\Controllers\SurfboardPaymentCallback;
 use App\Http\Controllers\Test\ElavonCheckoutJsTestController;
 use App\Http\Controllers\Test\ElavonShopSubscriptionTestController;
 use App\Http\Controllers\Test\SurfboardPaymentTestController;
+use App\Http\Controllers\Test\TwilioSmsTestController;
 use App\Models\EnterpriseOnboarding;
 use App\Models\ExternalBooking;
 use App\Models\Product;
@@ -255,6 +256,10 @@ Route::get('/test/elavon/checkoutjs/success', [ElavonCheckoutJsTestController::c
     ->name('test.elavon.checkoutjs.success');
 Route::get('/test/elavon/checkoutjs/failed', [ElavonCheckoutJsTestController::class, 'failed'])
     ->name('test.elavon.checkoutjs.failed');
+Route::get('/test/twilio/sms', [TwilioSmsTestController::class, 'index'])
+    ->name('test.twilio.sms');
+Route::post('/test/twilio/sms/send', [TwilioSmsTestController::class, 'send'])
+    ->name('test.twilio.sms.send');
 
 // Financial report test route
 Route::get('/test/financial-report', function (Request $request, FinancialReportService $service) {
