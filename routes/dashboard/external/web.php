@@ -54,6 +54,9 @@ Route::middleware('ExternalPaid')->group(function () {
 
         Route::delete('{externalBooking}', [ExternalBookingController::class, 'destroy'])->name('destroy');
         Route::get('{externalBooking}/invoice', [ExternalBookingController::class, 'invoice'])->name('invoice');
+        Route::post('{externalBooking}/send-sms', [ExternalBookingController::class, 'sendSms'])->name('send-sms');
+        Route::post('{externalBooking}/ensure-payment-link', [ExternalBookingController::class, 'ensurePaymentLink'])->name('ensure-payment-link');
+        Route::post('{externalBooking}/send-email', [ExternalBookingController::class, 'sendEmail'])->name('send-email');
 
         Route::get('/external/bookings/export', [ExternalBookingController::class, 'exportBookings'])->name('export');
     });

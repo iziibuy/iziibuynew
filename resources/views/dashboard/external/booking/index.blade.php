@@ -279,14 +279,30 @@
                                                 <img src="{{ asset('assets/dashboard/invoice.png') }}" width="36"
                                                     alt="{{ __('words.view_invoice') }}">
                                             </a>
-                                            @if ($booking->payment_url)
-                                                <button class="btn btn-sm btn-outline-light btn-copy-url p-0"
-                                                    data-url="{{ route('external-payment-page', $booking) }}"
-                                                    title="{{ __('words.copy_payment_link') }}">
-                                                    <img src="{{ asset('assets/dashboard/copy.png') }}" width="36"
-                                                        alt="{{ __('words.copy_payment_link') }}">
-                                                </button>
-                                            @endif
+                                            <button type="button"
+                                                class="btn btn-sm btn-outline-light btn-send-sms p-0"
+                                                data-url="{{ route('external.booking.send-sms', $booking) }}"
+                                                title="Sms fra oversikt"
+                                                style="width:36px;height:36px;">
+                                                <i class="fas fa-sms" style="font-size:18px;color:#2a6495;"></i>
+                                            </button>
+                                            <button type="button"
+                                                class="btn btn-sm btn-outline-light btn-copy-url p-0"
+                                                data-ensure-url="{{ route('external.booking.ensure-payment-link', $booking) }}"
+                                                title="{{ __('words.copy_payment_link') }}"
+                                                style="width:36px;height:36px;">
+                                                <img src="{{ asset('assets/dashboard/copy.png') }}" width="36"
+                                                    alt="{{ __('words.copy_payment_link') }}">
+                                            </button>
+                                            <button type="button"
+                                                class="btn btn-sm btn-outline-light btn-send-email p-0"
+                                                data-url="{{ route('external.booking.send-email', $booking) }}"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#emailModal"
+                                                title="Epost fra system"
+                                                style="width:36px;height:36px;">
+                                                <i class="fas fa-envelope" style="font-size:18px;color:#2a6495;"></i>
+                                            </button>
                                             {{-- <x-helpers.delete :url="route('external.booking.destroy', $booking)" :id="$booking->id" /> --}}
                                         </div>
                                     </td>
@@ -403,30 +419,195 @@
             </form>
         </div>
     </div>
+    <div class="modal fade" id="emailModal" tabindex="-1" aria-labelledby="emailModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content shadow-lg border-0 rounded-4">
+                <div class="modal-header border-bottom-0 pt-4 px-4 pb-2">
+                    <h5 class="modal-title fw-bold text-dark" id="emailModalLabel">
+                        Epost fra system
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body px-4 py-3">
+                    <label for="overview_email" class="form-label text-muted small mb-1">Email</label>
+                    <input type="email" class="form-control form-control-lg rounded-3" id="overview_email"
+                        placeholder="customer@example.com" required>
+                    <div class="invalid-feedback">Please enter a valid email address.</div>
+                </div>
+                <div class="modal-footer justify-content-between border-top-0 pt-2 pb-4 px-4">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">
+                        Cancel
+                    </button>
+                    <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" id="btn-confirm-send-email">
+                        Send
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
     <script>
-        // Copy payment link functionality
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        var pendingEmailUrl = null;
+
+        function postJson(url, body) {
+            return fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: body ? JSON.stringify(body) : JSON.stringify({})
+            }).then(function(response) {
+                return response.json().then(function(data) {
+                    return { ok: response.ok, status: response.status, data: data };
+                });
+            });
+        }
+
+        function showCopiedToast() {
+            Swal.fire({
+                icon: 'success',
+                title: 'Copied!',
+                text: 'Payment link copied to clipboard',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+
+        function copyText(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                return navigator.clipboard.writeText(text).then(function() {
+                    showCopiedToast();
+                }).catch(function() {
+                    fallbackCopy(text);
+                });
+            }
+
+            fallbackCopy(text);
+            return Promise.resolve();
+        }
+
         document.addEventListener('click', function(event) {
+            var smsTrigger = event.target.closest('.btn-send-sms');
+            if (smsTrigger) {
+                event.preventDefault();
+                var smsUrl = smsTrigger.getAttribute('data-url');
+                if (!smsUrl) return;
+
+                smsTrigger.disabled = true;
+                postJson(smsUrl).then(function(result) {
+                    if (result.ok && result.data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Sent!',
+                            text: result.data.message || 'SMS sent successfully.',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: (result.data && result.data.message) || 'Failed to send SMS'
+                        });
+                    }
+                }).catch(function() {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Failed to send SMS'
+                    });
+                }).finally(function() {
+                    smsTrigger.disabled = false;
+                });
+                return;
+            }
+
+            var emailTrigger = event.target.closest('.btn-send-email');
+            if (emailTrigger) {
+                pendingEmailUrl = emailTrigger.getAttribute('data-url');
+                var emailInput = document.getElementById('overview_email');
+                if (emailInput) {
+                    emailInput.value = '';
+                    emailInput.classList.remove('is-invalid');
+                }
+                return;
+            }
+
             var trigger = event.target.closest('.btn-copy-url');
             if (!trigger) return;
 
-            var url = trigger.getAttribute('data-url') || '';
-            if (!url) return;
+            event.preventDefault();
+            var ensureUrl = trigger.getAttribute('data-ensure-url') || '';
+            if (!ensureUrl) return;
 
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(url).then(function() {
+            trigger.disabled = true;
+            postJson(ensureUrl).then(function(result) {
+                if (result.ok && result.data.success && result.data.url) {
+                    return copyText(result.data.url);
+                }
+
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: (result.data && result.data.message) || 'Failed to get payment link'
+                });
+            }).catch(function() {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to get payment link'
+                });
+            }).finally(function() {
+                trigger.disabled = false;
+            });
+        });
+
+        document.getElementById('btn-confirm-send-email')?.addEventListener('click', function() {
+            var emailInput = document.getElementById('overview_email');
+            var email = (emailInput?.value || '').trim();
+            if (!email || !emailInput.checkValidity()) {
+                emailInput.classList.add('is-invalid');
+                return;
+            }
+            emailInput.classList.remove('is-invalid');
+
+            if (!pendingEmailUrl) return;
+
+            var sendBtn = this;
+            sendBtn.disabled = true;
+            postJson(pendingEmailUrl, { email: email }).then(function(result) {
+                if (result.ok && result.data.success) {
+                    var modalEl = document.getElementById('emailModal');
+                    if (modalEl && window.bootstrap) {
+                        var modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+                        modal.hide();
+                    }
                     Swal.fire({
                         icon: 'success',
-                        title: 'Copied!',
-                        text: 'Payment link copied to clipboard',
+                        title: 'Sent!',
+                        text: result.data.message || 'Email sent successfully.',
                         timer: 2000,
                         showConfirmButton: false
                     });
-                }).catch(function() {
-                    fallbackCopy(url);
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: (result.data && result.data.message) || 'Failed to send email'
+                    });
+                }
+            }).catch(function() {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to send email'
                 });
-            } else {
-                fallbackCopy(url);
-            }
+            }).finally(function() {
+                sendBtn.disabled = false;
+            });
         });
 
         function fallbackCopy(text) {
@@ -439,13 +620,7 @@
             textarea.select();
             try {
                 document.execCommand('copy');
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Copied!',
-                    text: 'Payment link copied to clipboard',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
+                showCopiedToast();
             } catch (e) {
                 Swal.fire({
                     icon: 'error',

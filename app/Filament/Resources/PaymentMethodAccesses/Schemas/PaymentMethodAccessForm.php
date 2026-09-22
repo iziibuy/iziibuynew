@@ -6,6 +6,7 @@ use App\Constants\Constants;
 use App\Models\PaymentMethodAccess;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
@@ -27,6 +28,7 @@ class PaymentMethodAccessForm
             'surfboard_mit_terminalId',
             'surfboard_merchantId',
             'surfboard_storeId',
+            'sms_text',
         ];
     }
 
@@ -192,6 +194,16 @@ class PaymentMethodAccessForm
                             ->label(__('Demo subscription (Elavon sandbox)'))
                             ->helperText(__('Uses ELAVON_ENTERPRISE_SANDBOX_* from .env. When off, uses ELAVON_ENTERPRISE_* production keys.'))
                             ->default(false),
+                    ])
+                    ->columnSpanFull(),
+                Section::make(__('Booking messaging'))
+                    ->description(__('Template used for payment SMS and the matching overview email. Placeholders: {TOTAL}, {BOOKING_NUMBER}, {LINK}.'))
+                    ->schema([
+                        Textarea::make('sms_text')
+                            ->label(__('words.sms_text'))
+                            ->rows(6)
+                            ->columnSpanFull()
+                            ->helperText(__('One template drives both SMS and email body text from the booking overview.')),
                     ])
                     ->columnSpanFull(),
                 Section::make(__('Status'))

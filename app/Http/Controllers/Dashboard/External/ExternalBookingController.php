@@ -3,20 +3,28 @@
 namespace App\Http\Controllers\Dashboard\External;
 
 use App\Http\Controllers\Controller;
+use App\Mail\ExternalBookingPaymentMessage;
 use App\Models\ExternalBooking;
 use App\Payment\External\Elavon\ExternalBookingElavonPayment;
 use App\Payment\External\Surfboard\ExternalBookingSurfboardApi;
 use App\Services\SMS\SmsService;
 use App\Support\ExternalPaymentAcquirer;
 use Error;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
 
 class ExternalBookingController extends Controller
 {
+    private const DEFAULT_SMS_TEXT = 'Dear customer, please complete your payment of {TOTAL} for booking {BOOKING_NUMBER}. Pay securely here: {LINK}
+
+More text for 2izii: https://iziibuy.com';
+
     public function index(Request $request)
     {
         $query = ExternalBooking::where('payment_method_access_id', auth()->user()->paymentMethodAccess->id)->latest();
@@ -90,22 +98,13 @@ class ExternalBookingController extends Controller
             });
 
             $booking->refresh();
-            $sms_text = auth()->user()->paymentMethodAccess->sms_text
-                ?: 'Dear customer, please complete your payment of {TOTAL} for booking {BOOKING_NUMBER}. Pay securely here: {LINK}
 
-More text for 2izii: https://iziibuy.com';
-
-            if (env('APP_ENV') === 'production' && ! empty($sms_text)) {
+            if (env('APP_ENV') === 'production') {
                 try {
-                    $link = route('external-payment', $booking);
-                    $message = str_replace(
-                        ['{BOOKING_NUMBER}', '{TOTAL}', '{LINK}'],
-                        [$booking->booking_number, $booking->total.' '.$booking->currency, $link],
-                        $sms_text
-                    );
-
-                    $sms = new SmsService;
-                    $sms->send($booking->phone_number, $message);
+                    $message = $this->renderPaymentMessage($booking);
+                    if ($message !== '') {
+                        app(SmsService::class)->send($booking->phone_number, $message);
+                    }
                 } catch (\Exception|Error $e) {
                 }
             }
@@ -172,6 +171,108 @@ More text for 2izii: https://iziibuy.com';
         }
     }
 
+    public function sendSms(ExternalBooking $externalBooking): JsonResponse
+    {
+        $this->authorizeBooking($externalBooking);
+
+        if (empty($externalBooking->phone_number)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Booking has no phone number.',
+            ], 422);
+        }
+
+        try {
+            $message = $this->renderPaymentMessage($externalBooking);
+            app(SmsService::class)->send($externalBooking->phone_number, $message);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'SMS sent successfully.',
+            ]);
+        } catch (\Exception|Error $e) {
+            Log::error('External booking SMS failed: '.$e->getMessage(), [
+                'booking_id' => $externalBooking->id,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send SMS.',
+            ], 500);
+        }
+    }
+
+    public function ensurePaymentLink(ExternalBooking $externalBooking): JsonResponse
+    {
+        $this->authorizeBooking($externalBooking);
+
+        if ($externalBooking->payment_status === 'PAID') {
+            return response()->json([
+                'success' => true,
+                'url' => route('external-payment-page', $externalBooking),
+            ]);
+        }
+
+        if (! ($externalBooking->payment_id && $externalBooking->payment_url)) {
+            if ($externalBooking->usesSurfboard()) {
+                $payment = (new ExternalBookingSurfboardApi($externalBooking))->getPaymentLink();
+                $acquirer = 'surfboard';
+            } else {
+                $payment = (new ExternalBookingElavonPayment($externalBooking))->getPaymentLink();
+                $acquirer = 'elavon';
+            }
+
+            if (! ($payment['status'] ?? false)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Could not create payment link.',
+                ], 500);
+            }
+
+            $externalBooking->update([
+                'payment_id' => $payment['data']['payment_id'],
+                'payment_url' => $payment['data']['url'],
+                'payment_method' => $acquirer,
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'url' => route('external-payment', $externalBooking),
+        ]);
+    }
+
+    public function sendEmail(Request $request, ExternalBooking $externalBooking): JsonResponse
+    {
+        $this->authorizeBooking($externalBooking);
+
+        $validated = $request->validate([
+            'email' => ['required', 'email'],
+        ]);
+
+        try {
+            $message = $this->renderPaymentMessage($externalBooking);
+
+            Mail::to($validated['email'])->send(
+                new ExternalBookingPaymentMessage($message, (string) $externalBooking->booking_number)
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Email sent successfully.',
+            ]);
+        } catch (\Exception|Error $e) {
+            Log::error('External booking email failed: '.$e->getMessage(), [
+                'booking_id' => $externalBooking->id,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send email.',
+            ], 500);
+        }
+    }
+
     public function destroy(ExternalBooking $externalBooking)
     {
         if ($externalBooking->payment_method_access_id !== auth()->user()->paymentMethodAccess->id) {
@@ -222,5 +323,26 @@ More text for 2izii: https://iziibuy.com';
         };
 
         return response()->streamDownload($callback, 'bookings.csv');
+    }
+
+    private function authorizeBooking(ExternalBooking $externalBooking): void
+    {
+        if ($externalBooking->payment_method_access_id !== auth()->user()->paymentMethodAccess->id) {
+            abort(Response::HTTP_FORBIDDEN);
+        }
+    }
+
+    private function renderPaymentMessage(ExternalBooking $booking): string
+    {
+        $booking->loadMissing('paymentMethodAccess');
+
+        $smsText = $booking->paymentMethodAccess?->sms_text ?: self::DEFAULT_SMS_TEXT;
+        $link = route('external-payment', $booking);
+
+        return str_replace(
+            ['{BOOKING_NUMBER}', '{TOTAL}', '{LINK}'],
+            [$booking->booking_number, $booking->total.' '.$booking->currency, $link],
+            $smsText
+        );
     }
 }
