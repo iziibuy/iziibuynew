@@ -66,7 +66,41 @@ function createExternalOverviewOwner(?string $smsText = null): array
     return [$owner, $access, $booking];
 }
 
-it('allows the owner to resend payment SMS from the overview', function (): void {
+it('allows the owner to send payment SMS to a chosen phone number', function (): void {
+    [$owner, $access, $booking] = createExternalOverviewOwner(
+        'Pay {TOTAL} for {BOOKING_NUMBER} at {LINK}'
+    );
+
+    $expectedLink = route('external-payment', $booking);
+    $expectedMessage = 'Pay '.$booking->total.' '.$booking->currency.' for '.$booking->booking_number.' at '.$expectedLink;
+    $overridePhone = '+4798765432';
+
+    $this->mock(SmsService::class, function (MockInterface $mock) use ($overridePhone, $expectedMessage): void {
+        $mock->shouldReceive('send')
+            ->once()
+            ->with($overridePhone, $expectedMessage);
+    });
+
+    $this->actingAs($owner)
+        ->postJson(route('external.booking.send-sms', $booking), [
+            'phone_number' => $overridePhone,
+        ])
+        ->assertSuccessful()
+        ->assertJson([
+            'success' => true,
+        ]);
+});
+
+it('validates the overview sms phone number', function (): void {
+    [$owner, $access, $booking] = createExternalOverviewOwner();
+
+    $this->actingAs($owner)
+        ->postJson(route('external.booking.send-sms', $booking), [])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['phone_number']);
+});
+
+it('returns the rendered payment message for copy and respects paid bookings', function (): void {
     [$owner, $access, $booking] = createExternalOverviewOwner(
         'Pay {TOTAL} for {BOOKING_NUMBER} at {LINK}'
     );
@@ -74,29 +108,13 @@ it('allows the owner to resend payment SMS from the overview', function (): void
     $expectedLink = route('external-payment', $booking);
     $expectedMessage = 'Pay '.$booking->total.' '.$booking->currency.' for '.$booking->booking_number.' at '.$expectedLink;
 
-    $this->mock(SmsService::class, function (MockInterface $mock) use ($booking, $expectedMessage): void {
-        $mock->shouldReceive('send')
-            ->once()
-            ->with($booking->phone_number, $expectedMessage);
-    });
-
-    $this->actingAs($owner)
-        ->postJson(route('external.booking.send-sms', $booking))
-        ->assertSuccessful()
-        ->assertJson([
-            'success' => true,
-        ]);
-});
-
-it('returns the customer payment url and respects paid bookings', function (): void {
-    [$owner, $access, $booking] = createExternalOverviewOwner();
-
     $this->actingAs($owner)
         ->postJson(route('external.booking.ensure-payment-link', $booking))
         ->assertSuccessful()
         ->assertJson([
             'success' => true,
             'url' => route('external-payment', $booking),
+            'message' => $expectedMessage,
         ]);
 
     $booking->update([
@@ -111,6 +129,7 @@ it('returns the customer payment url and respects paid bookings', function (): v
         ->assertJson([
             'success' => true,
             'url' => route('external-payment-page', $booking),
+            'message' => $expectedMessage,
         ]);
 });
 
@@ -134,10 +153,14 @@ it('emails the same rendered sms_text body from the overview', function (): void
         ]);
 
     Mail::assertSent(ExternalBookingPaymentMessage::class, function (ExternalBookingPaymentMessage $mail) use ($booking, $expectedMessage): bool {
+        $content = $mail->content();
+
         return $mail->hasTo('customer@example.com')
             && $mail->bodyText === $expectedMessage
             && $mail->bookingNumber === (string) $booking->booking_number
-            && $mail->envelope()->subject === 'Payment for booking '.$booking->booking_number;
+            && $mail->envelope()->subject === 'Payment for booking '.$booking->booking_number
+            && filled($content->htmlString)
+            && str_contains($content->htmlString, e($expectedMessage));
     });
 });
 
@@ -151,7 +174,9 @@ it('forbids overview actions on another tenants booking', function (): void {
     Mail::fake();
 
     $this->actingAs($otherOwner)
-        ->postJson(route('external.booking.send-sms', $booking))
+        ->postJson(route('external.booking.send-sms', $booking), [
+            'phone_number' => '+4711111111',
+        ])
         ->assertForbidden();
 
     $this->actingAs($otherOwner)
@@ -176,6 +201,8 @@ it('shows overview handling actions on the booking index', function (): void {
         ->assertSee('btn-send-sms', false)
         ->assertSee('btn-copy-url', false)
         ->assertSee('btn-send-email', false)
+        ->assertSee('smsModal', false)
+        ->assertSee('emailModal', false)
         ->assertSee(route('external.booking.send-sms', $booking), false)
         ->assertSee(route('external.booking.ensure-payment-link', $booking), false)
         ->assertSee(route('external.booking.send-email', $booking), false);

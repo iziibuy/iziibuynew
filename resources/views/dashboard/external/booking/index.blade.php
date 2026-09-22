@@ -282,6 +282,9 @@
                                             <button type="button"
                                                 class="btn btn-sm btn-outline-light btn-send-sms p-0"
                                                 data-url="{{ route('external.booking.send-sms', $booking) }}"
+                                                data-phone="{{ $booking->phone_number }}"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#smsModal"
                                                 title="Sms fra oversikt"
                                                 style="width:36px;height:36px;">
                                                 <i class="fas fa-sms" style="font-size:18px;color:#2a6495;"></i>
@@ -419,6 +422,32 @@
             </form>
         </div>
     </div>
+    <div class="modal fade" id="smsModal" tabindex="-1" aria-labelledby="smsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content shadow-lg border-0 rounded-4">
+                <div class="modal-header border-bottom-0 pt-4 px-4 pb-2">
+                    <h5 class="modal-title fw-bold text-dark" id="smsModalLabel">
+                        Sms fra oversikt
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body px-4 py-3">
+                    <label for="overview_phone" class="form-label text-muted small mb-1">Phone number</label>
+                    <input type="tel" class="form-control form-control-lg rounded-3" id="overview_phone"
+                        placeholder="+4712345678" required>
+                    <div class="invalid-feedback">Please enter a phone number.</div>
+                </div>
+                <div class="modal-footer justify-content-between border-top-0 pt-2 pb-4 px-4">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">
+                        Cancel
+                    </button>
+                    <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" id="btn-confirm-send-sms">
+                        Send
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="modal fade" id="emailModal" tabindex="-1" aria-labelledby="emailModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content shadow-lg border-0 rounded-4">
@@ -447,6 +476,7 @@
     </div>
     <script>
         var csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        var pendingSmsUrl = null;
         var pendingEmailUrl = null;
 
         function postJson(url, body) {
@@ -462,15 +492,25 @@
             }).then(function(response) {
                 return response.json().then(function(data) {
                     return { ok: response.ok, status: response.status, data: data };
+                }).catch(function() {
+                    return { ok: response.ok, status: response.status, data: {} };
                 });
             });
+        }
+
+        function hideModal(modalId) {
+            var modalEl = document.getElementById(modalId);
+            if (modalEl && window.bootstrap) {
+                var modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+                modal.hide();
+            }
         }
 
         function showCopiedToast() {
             Swal.fire({
                 icon: 'success',
                 title: 'Copied!',
-                text: 'Payment link copied to clipboard',
+                text: 'Payment message copied to clipboard',
                 timer: 2000,
                 showConfirmButton: false
             });
@@ -492,36 +532,12 @@
         document.addEventListener('click', function(event) {
             var smsTrigger = event.target.closest('.btn-send-sms');
             if (smsTrigger) {
-                event.preventDefault();
-                var smsUrl = smsTrigger.getAttribute('data-url');
-                if (!smsUrl) return;
-
-                smsTrigger.disabled = true;
-                postJson(smsUrl).then(function(result) {
-                    if (result.ok && result.data.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Sent!',
-                            text: result.data.message || 'SMS sent successfully.',
-                            timer: 2000,
-                            showConfirmButton: false
-                        });
-                    } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Error',
-                            text: (result.data && result.data.message) || 'Failed to send SMS'
-                        });
-                    }
-                }).catch(function() {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: 'Failed to send SMS'
-                    });
-                }).finally(function() {
-                    smsTrigger.disabled = false;
-                });
+                pendingSmsUrl = smsTrigger.getAttribute('data-url');
+                var phoneInput = document.getElementById('overview_phone');
+                if (phoneInput) {
+                    phoneInput.value = smsTrigger.getAttribute('data-phone') || '';
+                    phoneInput.classList.remove('is-invalid');
+                }
                 return;
             }
 
@@ -545,23 +561,64 @@
 
             trigger.disabled = true;
             postJson(ensureUrl).then(function(result) {
-                if (result.ok && result.data.success && result.data.url) {
-                    return copyText(result.data.url);
+                if (result.ok && result.data.success && result.data.message) {
+                    return copyText(result.data.message);
                 }
 
                 Swal.fire({
                     icon: 'error',
                     title: 'Error',
-                    text: (result.data && result.data.message) || 'Failed to get payment link'
+                    text: (result.data && result.data.message) || 'Failed to get payment message'
                 });
             }).catch(function() {
                 Swal.fire({
                     icon: 'error',
                     title: 'Error',
-                    text: 'Failed to get payment link'
+                    text: 'Failed to get payment message'
                 });
             }).finally(function() {
                 trigger.disabled = false;
+            });
+        });
+
+        document.getElementById('btn-confirm-send-sms')?.addEventListener('click', function() {
+            var phoneInput = document.getElementById('overview_phone');
+            var phone = (phoneInput?.value || '').trim();
+            if (!phone) {
+                phoneInput.classList.add('is-invalid');
+                return;
+            }
+            phoneInput.classList.remove('is-invalid');
+
+            if (!pendingSmsUrl) return;
+
+            var sendBtn = this;
+            sendBtn.disabled = true;
+            postJson(pendingSmsUrl, { phone_number: phone }).then(function(result) {
+                if (result.ok && result.data.success) {
+                    hideModal('smsModal');
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Sent!',
+                        text: result.data.message || 'SMS sent successfully.',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: (result.data && result.data.message) || 'Failed to send SMS'
+                    });
+                }
+            }).catch(function() {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to send SMS'
+                });
+            }).finally(function() {
+                sendBtn.disabled = false;
             });
         });
 
@@ -580,11 +637,7 @@
             sendBtn.disabled = true;
             postJson(pendingEmailUrl, { email: email }).then(function(result) {
                 if (result.ok && result.data.success) {
-                    var modalEl = document.getElementById('emailModal');
-                    if (modalEl && window.bootstrap) {
-                        var modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-                        modal.hide();
-                    }
+                    hideModal('emailModal');
                     Swal.fire({
                         icon: 'success',
                         title: 'Sent!',
@@ -625,7 +678,7 @@
                 Swal.fire({
                     icon: 'error',
                     title: 'Error',
-                    text: 'Failed to copy payment link'
+                    text: 'Failed to copy payment message'
                 });
             }
             document.body.removeChild(textarea);

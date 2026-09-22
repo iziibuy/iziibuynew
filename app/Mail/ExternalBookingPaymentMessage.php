@@ -27,7 +27,7 @@ class ExternalBookingPaymentMessage extends Mailable
     public function content(): Content
     {
         return new Content(
-            textString: $this->bodyText,
+            htmlString: nl2br(e($this->bodyText), false),
         );
     }
 

@@ -171,20 +171,19 @@ More text for 2izii: https://iziibuy.com';
         }
     }
 
-    public function sendSms(ExternalBooking $externalBooking): JsonResponse
+    public function sendSms(Request $request, ExternalBooking $externalBooking): JsonResponse
     {
         $this->authorizeBooking($externalBooking);
 
-        if (empty($externalBooking->phone_number)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Booking has no phone number.',
-            ], 422);
-        }
+        $validated = $request->validate([
+            'phone_number' => ['required', 'string', 'max:40'],
+        ]);
+
+        $phoneNumber = trim($validated['phone_number']);
 
         try {
             $message = $this->renderPaymentMessage($externalBooking);
-            app(SmsService::class)->send($externalBooking->phone_number, $message);
+            app(SmsService::class)->send($phoneNumber, $message);
 
             return response()->json([
                 'success' => true,
@@ -207,9 +206,12 @@ More text for 2izii: https://iziibuy.com';
         $this->authorizeBooking($externalBooking);
 
         if ($externalBooking->payment_status === 'PAID') {
+            $message = $this->renderPaymentMessage($externalBooking);
+
             return response()->json([
                 'success' => true,
                 'url' => route('external-payment-page', $externalBooking),
+                'message' => $message,
             ]);
         }
 
@@ -236,9 +238,12 @@ More text for 2izii: https://iziibuy.com';
             ]);
         }
 
+        $message = $this->renderPaymentMessage($externalBooking);
+
         return response()->json([
             'success' => true,
             'url' => route('external-payment', $externalBooking),
+            'message' => $message,
         ]);
     }
 
