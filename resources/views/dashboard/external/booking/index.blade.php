@@ -130,12 +130,30 @@
         }
 
         .btn-outline-light {
-            border-color: var(--white) !important;
+            border-color: transparent !important;
+            background: transparent !important;
+            padding: 0 !important;
+            line-height: 0;
         }
 
-        .btn-outline-light:hover {
-            background-color: var(--white) !important;
-            border-color: var(--white) !important;
+        .btn-outline-light:hover,
+        .btn-outline-light:focus {
+            background-color: transparent !important;
+            border-color: transparent !important;
+            opacity: 0.88;
+        }
+
+        .handling-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: nowrap;
+        }
+
+        .handling-actions img {
+            display: block;
+            width: 36px;
+            height: 36px;
         }
 
         .footer-section {
@@ -272,39 +290,48 @@
                                     </td>
                                     <td class="col-txn">{{ $booking->elavon_transaction_id  ? $booking->elavon_transaction_id : 'N/A' }}</td>
                                     <td>
-                                        <div class="btn-group" role="group">
+                                        <div class="btn-group handling-actions" role="group">
+                                            @if ($booking->status === 'PENDING')
+                                                <button type="button"
+                                                    class="btn btn-sm btn-outline-light btn-send-sms p-0"
+                                                    data-url="{{ route('external.booking.send-sms', $booking) }}"
+                                                    data-phone="{{ $booking->phone_number }}"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#smsModal"
+                                                    title="Sms fra oversikt">
+                                                    <img src="{{ asset('assets/dashboard/icon-sms.svg') }}" width="36"
+                                                        height="36" alt="Sms fra oversikt">
+                                                </button>
+                                                <button type="button"
+                                                    class="btn btn-sm btn-outline-light btn-copy-url p-0"
+                                                    data-ensure-url="{{ route('external.booking.ensure-payment-link', $booking) }}"
+                                                    title="{{ __('words.copy_payment_link') }}">
+                                                    <img src="{{ asset('assets/dashboard/icon-copy-link.svg') }}"
+                                                        width="36" height="36"
+                                                        alt="{{ __('words.copy_payment_link') }}">
+                                                </button>
+                                                <button type="button"
+                                                    class="btn btn-sm btn-outline-light btn-send-email p-0"
+                                                    data-url="{{ route('external.booking.send-email', $booking) }}"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#emailModal"
+                                                    title="Epost fra system">
+                                                    <img src="{{ asset('assets/dashboard/icon-email.svg') }}" width="36"
+                                                        height="36" alt="Epost fra system">
+                                                </button>
+                                            @endif
                                             <a href="{{ route('external.booking.invoice', $booking) }}"
                                                 class="btn btn-sm btn-outline-light p-0"
                                                 title="{{ __('words.view_invoice') }}">
-                                                <img src="{{ asset('assets/dashboard/invoice.png') }}" width="36"
-                                                    alt="{{ __('words.view_invoice') }}">
+                                                <img src="{{ asset('assets/dashboard/icon-invoice.svg') }}" width="36"
+                                                    height="36" alt="{{ __('words.view_invoice') }}">
                                             </a>
                                             <button type="button"
-                                                class="btn btn-sm btn-outline-light btn-send-sms p-0"
-                                                data-url="{{ route('external.booking.send-sms', $booking) }}"
-                                                data-phone="{{ $booking->phone_number }}"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#smsModal"
-                                                title="Sms fra oversikt"
-                                                style="width:36px;height:36px;">
-                                                <i class="fas fa-sms" style="font-size:18px;color:#2a6495;"></i>
-                                            </button>
-                                            <button type="button"
-                                                class="btn btn-sm btn-outline-light btn-copy-url p-0"
-                                                data-ensure-url="{{ route('external.booking.ensure-payment-link', $booking) }}"
-                                                title="{{ __('words.copy_payment_link') }}"
-                                                style="width:36px;height:36px;">
-                                                <img src="{{ asset('assets/dashboard/copy.png') }}" width="36"
-                                                    alt="{{ __('words.copy_payment_link') }}">
-                                            </button>
-                                            <button type="button"
-                                                class="btn btn-sm btn-outline-light btn-send-email p-0"
-                                                data-url="{{ route('external.booking.send-email', $booking) }}"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#emailModal"
-                                                title="Epost fra system"
-                                                style="width:36px;height:36px;">
-                                                <i class="fas fa-envelope" style="font-size:18px;color:#2a6495;"></i>
+                                                class="btn btn-sm btn-outline-light btn-copy-booking p-0"
+                                                data-booking-number="{{ $booking->booking_number }}"
+                                                title="Copy">
+                                                <img src="{{ asset('assets/dashboard/icon-copy.svg') }}" width="36"
+                                                    height="36" alt="Copy">
                                             </button>
                                             {{-- <x-helpers.delete :url="route('external.booking.destroy', $booking)" :id="$booking->id" /> --}}
                                         </div>
@@ -506,30 +533,39 @@
             }
         }
 
-        function showCopiedToast() {
+        function showCopiedToast(text) {
             Swal.fire({
                 icon: 'success',
                 title: 'Copied!',
-                text: 'Payment message copied to clipboard',
+                text: text || 'Copied to clipboard',
                 timer: 2000,
                 showConfirmButton: false
             });
         }
 
-        function copyText(text) {
+        function copyText(text, successText) {
             if (navigator.clipboard && window.isSecureContext) {
                 return navigator.clipboard.writeText(text).then(function() {
-                    showCopiedToast();
+                    showCopiedToast(successText);
                 }).catch(function() {
-                    fallbackCopy(text);
+                    fallbackCopy(text, successText);
                 });
             }
 
-            fallbackCopy(text);
+            fallbackCopy(text, successText);
             return Promise.resolve();
         }
 
         document.addEventListener('click', function(event) {
+            var copyBookingTrigger = event.target.closest('.btn-copy-booking');
+            if (copyBookingTrigger) {
+                event.preventDefault();
+                var bookingNumber = copyBookingTrigger.getAttribute('data-booking-number') || '';
+                if (!bookingNumber) return;
+                copyText(bookingNumber, 'Booking number copied to clipboard');
+                return;
+            }
+
             var smsTrigger = event.target.closest('.btn-send-sms');
             if (smsTrigger) {
                 pendingSmsUrl = smsTrigger.getAttribute('data-url');
@@ -562,7 +598,7 @@
             trigger.disabled = true;
             postJson(ensureUrl).then(function(result) {
                 if (result.ok && result.data.success && result.data.message) {
-                    return copyText(result.data.message);
+                    return copyText(result.data.message, 'Payment message copied to clipboard');
                 }
 
                 Swal.fire({
@@ -663,7 +699,7 @@
             });
         });
 
-        function fallbackCopy(text) {
+        function fallbackCopy(text, successText) {
             var textarea = document.createElement('textarea');
             textarea.value = text;
             textarea.style.position = 'fixed';
@@ -673,12 +709,12 @@
             textarea.select();
             try {
                 document.execCommand('copy');
-                showCopiedToast();
+                showCopiedToast(successText);
             } catch (e) {
                 Swal.fire({
                     icon: 'error',
                     title: 'Error',
-                    text: 'Failed to copy payment message'
+                    text: 'Failed to copy'
                 });
             }
             document.body.removeChild(textarea);
