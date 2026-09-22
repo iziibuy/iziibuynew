@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\LoginAsUserController;
 use App\Http\Controllers\ButtonPaymentController;
 use App\Http\Controllers\CallbackController;
 use App\Http\Controllers\CouponController;
@@ -9,6 +10,7 @@ use App\Http\Controllers\Dashboard\Shop\DashboardController;
 use App\Http\Controllers\Dashboard\Shop\PaymentController;
 use App\Http\Controllers\Dashboard\Shop\RegisterController;
 use App\Http\Controllers\Dashboard\Shop\TicketController;
+use App\Http\Controllers\ElavonCheckoutJsController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\SurfboardPaymentCallback;
@@ -95,6 +97,9 @@ Route::post('send-notification', [HomeController::class, 'send_notification'])->
 Route::post('/newsletter/subscribe', [HomeController::class, 'newsletter'])->name('newsletter.subscribe');
 Route::any('surfboard/callback', SurfboardPaymentCallback::class)->name('surfboard.callback');
 Route::get('button-payment/cancel-callback', [ButtonPaymentController::class, 'cancelCallback'])->name('buttonPayment.cancelCallback');
+Route::get('pay/elavon/{uuid}', [ElavonCheckoutJsController::class, 'show'])->name('elavon.checkoutjs.pay');
+Route::post('pay/elavon/{uuid}/complete', [ElavonCheckoutJsController::class, 'complete'])->name('elavon.checkoutjs.complete');
+Route::get('pay/elavon/{uuid}/cancel', [ElavonCheckoutJsController::class, 'cancel'])->name('elavon.checkoutjs.cancel');
 Route::group(['controller' => CallbackController::class, 'prefix' => 'callback', 'as' => 'callback.'], function () {
     Route::get('/payment/{paymentId}/{order}/success', 'paymentSuccess')->name('payment.success');
     Route::get('/payment/{paymentId}/{order}/cancel', 'paymentCanceled')->name('payment.cancel');
@@ -258,9 +263,5 @@ Route::get('/test/financial-report', function (Request $request, FinancialReport
     }
 });
 
-
-Route::get('login-as/{user}', function (User $user) {
-    Auth::login($user);
-
-    return redirect()->route('home');
-});
+Route::middleware('auth')->get('admin/users/{user}/login-as', LoginAsUserController::class)
+    ->name('admin.users.login-as');

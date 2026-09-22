@@ -5,12 +5,14 @@ namespace App\Filament\Resources\Users;
 use App\Facades\IziibuyFacades;
 use App\Filament\Resources\Users\Pages\EditUser;
 use App\Filament\Resources\Users\Pages\ManageUsers;
+use App\Filament\Resources\Users\Pages\ViewUser;
 use App\Models\User;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -207,6 +209,7 @@ class UserResource extends Resource
                     ->preload(),
             ])
             ->recordActions([
+                ViewAction::make(),
                 EditAction::make(),
                 DeleteAction::make(),
             ])
@@ -221,6 +224,7 @@ class UserResource extends Resource
     {
         return [
             'index' => ManageUsers::route('/'),
+            'view' => ViewUser::route('/{record}'),
             'edit' => EditUser::route('/{record}/edit'),
         ];
     }

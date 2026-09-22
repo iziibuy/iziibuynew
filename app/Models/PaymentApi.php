@@ -14,6 +14,10 @@ class PaymentApi extends Model
 
     protected $guarded = [];
 
+    public const ELAVON_LINK_MODE_HOSTED = 'hosted';
+
+    public const ELAVON_LINK_MODE_CHECKOUTJS = 'checkoutjs';
+
     protected function casts(): array
     {
         return [
@@ -25,6 +29,11 @@ class PaymentApi extends Model
     public function isSubscriptionButton(): bool
     {
         return (bool) $this->is_subscription;
+    }
+
+    public function usesElavonCheckoutJs(): bool
+    {
+        return ($this->elavon_link_mode ?? self::ELAVON_LINK_MODE_HOSTED) === self::ELAVON_LINK_MODE_CHECKOUTJS;
     }
 
     public function externalSubscriptions(): HasMany

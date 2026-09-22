@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use App\Facades\IziibuyFacades;
 use App\Models\Traits\Credits;
 use App\Models\Traits\HasMeta;
 use App\Models\Traits\IsRetailer;
-use App\Facades\IziibuyFacades;
 use Carbon\Carbon;
 use Database\Factories\UserFactory;
 use Exception;
@@ -22,7 +22,7 @@ use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements FilamentUser
 {
-    use HasApiTokens, HasFactory, HasMeta, HasRoles, IsRetailer, Notifiable, Credits;
+    use Credits, HasApiTokens, HasFactory, HasMeta, HasRoles, IsRetailer, Notifiable;
 
     protected $guarded = [];
 
@@ -73,11 +73,29 @@ class User extends Authenticatable implements FilamentUser
             return false;
         }
 
+        return $this->isAdmin();
+    }
+
+    public function isAdmin(): bool
+    {
         if ($this->role_id === self::ROLES['Admin']) {
             return true;
         }
 
         return $this->hasRole(['admin', 'Admin'], 'web');
+    }
+
+    public function dashboardUrl(): string
+    {
+        return match ($this->role_id) {
+            self::ROLES['Admin'] => route('filament.admin.pages.dashboard'),
+            self::ROLES['Vendor'] => route('shop.dashboard'),
+            self::ROLES['Manager'] => route('manager.dashboard'),
+            self::ROLES['Retailer'] => route('retailer.dashboard'),
+            self::ROLES['External'] => route('external.dashboard'),
+            self::ROLES['Enterprise'] => route('enterprise.dashboard'),
+            default => route('home'),
+        };
     }
 
     /**

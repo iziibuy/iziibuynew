@@ -3,12 +3,14 @@
 namespace App\Filament\Resources\PaymentMethodAccesses\RelationManagers;
 
 use App\Models\PaymentApi;
+use App\Models\PaymentMethodAccess;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
@@ -57,6 +59,17 @@ class PaymentapisRelationManager extends RelationManager
                 Toggle::make('status')
                     ->label(__('Active'))
                     ->default(true),
+                Select::make('elavon_link_mode')
+                    ->label(__('Elavon payment link'))
+                    ->options([
+                        PaymentApi::ELAVON_LINK_MODE_HOSTED => __('Hosted payment page (Elavon HPP redirect)'),
+                        PaymentApi::ELAVON_LINK_MODE_CHECKOUTJS => __('Own CheckoutJS page (card fields on our payment page)'),
+                    ])
+                    ->default(PaymentApi::ELAVON_LINK_MODE_HOSTED)
+                    ->native(false)
+                    ->helperText(__('Hosted sends customers to Elavon. CheckoutJS sends your branded payment page using Elavon Hosted Fields.'))
+                    ->visible(fn (): bool => $this->getOwnerRecord() instanceof PaymentMethodAccess
+                        && $this->getOwnerRecord()->paymentMethod === 'elavon'),
             ]);
     }
 
@@ -82,6 +95,16 @@ class PaymentapisRelationManager extends RelationManager
                     ->toggleable(isToggledHiddenByDefault: true),
                 IconColumn::make('status')
                     ->boolean(),
+                TextColumn::make('elavon_link_mode')
+                    ->label(__('Elavon link'))
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        PaymentApi::ELAVON_LINK_MODE_CHECKOUTJS => __('CheckoutJS'),
+                        default => __('Hosted'),
+                    })
+                    ->color(fn (?string $state): string => $state === PaymentApi::ELAVON_LINK_MODE_CHECKOUTJS ? 'info' : 'gray')
+                    ->visible(fn (): bool => $this->getOwnerRecord() instanceof PaymentMethodAccess
+                        && $this->getOwnerRecord()->paymentMethod === 'elavon'),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
