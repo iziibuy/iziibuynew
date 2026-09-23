@@ -812,14 +812,14 @@
                         <path d="M12 3 5 6v6c0 4.2 2.8 7.4 7 9 4.2-1.6 7-4.8 7-9V6l-7-3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
                         <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
-                    <span>{{ __('Card details stay with Elavon Hosted Fields.') }}</span>
+                    <span>{{ $checkoutTheme->summaryNote(__('Card details stay with Elavon Hosted Fields.')) }}</span>
                 </div>
             </aside>
 
             <section class="pay" aria-labelledby="card-details-heading">
                 <div class="pay-head">
-                    <h2 id="card-details-heading">{{ __('Card details') }}</h2>
-                    <p class="lead">{{ __('Enter your card on this page. Card data is processed securely by Elavon Hosted Fields.') }}</p>
+                    <h2 id="card-details-heading">{{ $checkoutTheme->heading(__('Card details')) }}</h2>
+                    <p class="lead">{{ $checkoutTheme->lead(__('Enter your card on this page. Card data is processed securely by Elavon Hosted Fields.')) }}</p>
                     <div class="brands" aria-label="{{ __('Accepted cards') }}">
                         <span class="brand brand-visa">
                             <svg role="img" aria-label="Visa" viewBox="0 0 780 500" xmlns="http://www.w3.org/2000/svg">
@@ -910,10 +910,10 @@
                                     <path d="M7 11V8a5 5 0 0 1 10 0v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                                     <rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="1.8"/>
                                 </svg>
-                                {{ __('Pay') }} {{ $formattedAmount }} {{ $order->currency }}
+                                {{ $checkoutTheme->payButtonLabel(__('Pay')) }} {{ $formattedAmount }} {{ $order->currency }}
                             </span>
                         </button>
-                        <a class="btn btn-ghost" href="{{ $cancelUrl }}">{{ __('Cancel payment') }}</a>
+                        <a class="btn btn-ghost" href="{{ $cancelUrl }}">{{ $checkoutTheme->cancelLabel(__('Cancel payment')) }}</a>
                     </div>
                     <div id="status" class="status" role="status" aria-live="polite"></div>
                     <div class="trust">
