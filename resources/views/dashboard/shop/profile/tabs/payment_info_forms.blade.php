@@ -126,6 +126,38 @@
                 </div>
             @endforeach
         </div>
+
+        @if ($editable)
+            <div class="row mt-2">
+                <div class="col-md-6">
+                    <x-form.input type="select" name="elavon_link_mode"
+                        label="{{ __('Elavon payment page') }}"
+                        :options="[
+                            \App\Models\Shop::ELAVON_LINK_MODE_HOSTED => __('Elavon hosted page'),
+                            \App\Models\Shop::ELAVON_LINK_MODE_CHECKOUTJS => __('Own CheckoutJS page'),
+                        ]"
+                        :value="old('elavon_link_mode', $shop->elavon_link_mode ?? \App\Models\Shop::ELAVON_LINK_MODE_HOSTED)" />
+                    <small class="text-muted d-block mb-3">
+                        {{ __('Hosted sends customers to Elavon. CheckoutJS keeps card fields on your branded payment page.') }}
+                    </small>
+                </div>
+            </div>
+        @elseif ($shop->usesElavonCheckoutJs())
+            <p class="text-muted small mt-2 mb-0">
+                {{ __('CheckoutJS payment page is enabled for this shop.') }}
+            </p>
+        @endif
+
+        @if ($shop->usesElavonCheckoutJs())
+            <div class="mt-4 pt-3 border-top">
+                <h5 class="mb-2">{{ __('Checkout page') }}</h5>
+                @include('dashboard.partials.checkoutjs-appearance-fields', [
+                    'checkoutTheme' => $shop->checkoutJsTheme(),
+                    'appearance' => $shop->checkoutjs_appearance ?? [],
+                    'companyNamePlaceholder' => $shop->company_name,
+                ])
+            </div>
+        @endif
     </div>
 
     <div class="col-md-12 acquirer-credentials" data-acquirer="surfboard" @style([

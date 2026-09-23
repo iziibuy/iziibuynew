@@ -6,6 +6,7 @@ use App\Constants\Constants;
 use App\Enterprise\Permissions;
 use App\Models\Traits\HasMeta;
 use App\Models\Traits\LegacyVoyagerGetsTranslatedAttribute;
+use App\Payment\Elavon\CheckoutJsTheme;
 use App\Services\Checkout\CheckoutPaymentOptionCatalog;
 use App\Services\Elavon\ElavonOnboardingPromo;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -26,11 +27,20 @@ class Shop extends Model
 
     public const ELAVON_RESUBSCRIPTION_MESSAGE = 'Please resubscribe with Elavon to reactivate this account.';
 
+    public const ELAVON_LINK_MODE_HOSTED = 'hosted';
+
+    public const ELAVON_LINK_MODE_CHECKOUTJS = 'checkoutjs';
+
     protected $guarded = [];
 
     protected $translatable = ['terms'];
 
-    protected $casts = ['paid_at' => 'datetime', 'previous_retailer_suspended_at' => 'datetime', 'retailer_joined_at' => 'datetime'];
+    protected $casts = [
+        'paid_at' => 'datetime',
+        'previous_retailer_suspended_at' => 'datetime',
+        'retailer_joined_at' => 'datetime',
+        'checkoutjs_appearance' => 'array',
+    ];
 
     protected $meta_attributes = [
         'title',
@@ -231,6 +241,16 @@ class Shop extends Model
     public function hasElavonSubscriptionMethod(): bool
     {
         return strtolower((string) ($this->attributes['subscriptionMethod'] ?? '')) === self::SUBSCRIPTION_METHOD_ELAVON;
+    }
+
+    public function usesElavonCheckoutJs(): bool
+    {
+        return ($this->elavon_link_mode ?? self::ELAVON_LINK_MODE_HOSTED) === self::ELAVON_LINK_MODE_CHECKOUTJS;
+    }
+
+    public function checkoutJsTheme(): CheckoutJsTheme
+    {
+        return CheckoutJsTheme::fromShop($this);
     }
 
     public function hasArea()

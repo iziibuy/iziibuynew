@@ -3,6 +3,7 @@
 namespace App\Payment\Elavon;
 
 use App\Models\PaymentApi;
+use App\Models\Shop;
 use App\Support\Voyager;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -25,6 +26,13 @@ final class CheckoutJsTheme
     public static function fromApi(?PaymentApi $api): self
     {
         $stored = $api?->checkoutjs_appearance;
+
+        return new self(is_array($stored) ? $stored : []);
+    }
+
+    public static function fromShop(?Shop $shop): self
+    {
+        $stored = $shop?->checkoutjs_appearance;
 
         return new self(is_array($stored) ? $stored : []);
     }
