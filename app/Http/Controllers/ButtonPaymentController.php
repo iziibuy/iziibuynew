@@ -71,15 +71,40 @@ class ButtonPaymentController extends Controller
             'domain' => 'required',
             'cancel_callback_url' => 'nullable|url',
             'is_subscription' => 'nullable|boolean',
+            'checkout_company_name' => ['nullable', 'string', 'max:120'],
+            'checkout_primary_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'checkout_secondary_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'checkout_background_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'checkout_footer' => ['nullable', 'string', 'max:300'],
+            'checkout_custom_css' => ['nullable', 'string', 'max:8000'],
+            'checkout_logo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'checkout_remove_logo' => ['nullable', 'boolean'],
         ]);
 
-        $paymentApi->update([
+        $attributes = [
             'domain' => $request->domain,
             'success_redirect_url' => $request->success,
             'failed_redirect_url' => $request->failed,
             'cancel_callback_url' => $request->cancel_callback_url,
             'is_subscription' => $request->boolean('is_subscription'),
-        ]);
+        ];
+
+        if ($paymentApi->usesElavonCheckoutJs()) {
+            $attributes['checkoutjs_appearance'] = $paymentApi->checkoutJsTheme()->persist(
+                $request->only([
+                    'checkout_company_name',
+                    'checkout_primary_color',
+                    'checkout_secondary_color',
+                    'checkout_background_color',
+                    'checkout_footer',
+                    'checkout_custom_css',
+                ]),
+                $request->file('checkout_logo'),
+                $request->boolean('checkout_remove_logo'),
+            );
+        }
+
+        $paymentApi->update($attributes);
 
         return redirect()->route('external.buttonPayment')->with('success', 'Payment api updated');
     }

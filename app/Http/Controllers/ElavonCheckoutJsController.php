@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ExternalOrder;
 use App\Payment\Elavon\ApiElavonPayment;
+use App\Payment\Elavon\CheckoutJsTheme;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -42,12 +43,16 @@ class ElavonCheckoutJsController extends Controller
         $order = $order->fresh();
         $access = $order->paymentMethodAccess;
         $publicId = $this->orderPublicId($order);
+        $pluginLogo = $access?->logo;
+        $theme = CheckoutJsTheme::fromApi($order->paymentApi);
 
         return view('payments.elavon-checkoutjs', [
             'order' => $order,
             'sessionId' => $session['payment_id'] ?? $order->payment_id,
             'hostedFieldsScriptUrl' => $elavon->hostedFieldsScriptUrl(),
-            'companyName' => $access?->company_name ?: config('app.name'),
+            'companyName' => $theme->companyName($access?->company_name ?: (string) config('app.name')),
+            'companyLogo' => $theme->logoUrl(is_string($pluginLogo) && $pluginLogo !== '' ? $pluginLogo : null),
+            'checkoutTheme' => $theme,
             'completeUrl' => route('elavon.checkoutjs.complete', $publicId),
             'cancelUrl' => route('elavon.checkoutjs.cancel', $publicId),
         ]);
