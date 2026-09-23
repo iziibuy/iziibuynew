@@ -6,8 +6,12 @@ use App\Elavon\Converge2\Client\ClientConfig;
 use App\Elavon\Converge2\Converge2;
 use App\Elavon\Converge2\Response\OrderResponse;
 use App\Elavon\Converge2\Response\PaymentSessionResponse;
+use App\Events\PurchaseComplete;
+use App\Mail\OrderConfirmed;
 use App\Models\Order;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 class ElavonPayment
 {
@@ -62,6 +66,38 @@ class ElavonPayment
         return $config;
     }
 
+    public function usesCheckoutJs(): bool
+    {
+        return $this->order->shop?->usesElavonCheckoutJs() ?? false;
+    }
+
+    public function hostedFieldsScriptUrl(): string
+    {
+        return rtrim($this->endpoint, '/').'/hosted-fields-client/index.js';
+    }
+
+    protected function checkoutJsOriginUrl(): string
+    {
+        $configured = config('services.enterprise_elavon.hpp_origin_url');
+
+        if (is_string($configured) && trim($configured) !== '') {
+            $origin = rtrim(trim($configured), '/');
+        } else {
+            $origin = rtrim((string) config('app.url'), '/');
+        }
+
+        return $origin.'/';
+    }
+
+    protected function ensurePublicId(): string
+    {
+        if (blank($this->order->uuid)) {
+            $this->order->forceFill(['uuid' => (string) Str::ulid()])->save();
+        }
+
+        return (string) $this->order->uuid;
+    }
+
     protected function makeOrderCreateBody()
     {
 
@@ -113,29 +149,46 @@ class ElavonPayment
 
     protected function makePaymentSessionCreateBody(OrderResponse $response)
     {
+        $billTo = [
+            'fullName' => $this->order->first_name.' '.$this->order->last_name,
+            'company' => $this->order->shop->company_name,
+            'postalCode' => $this->order->post_code,
+            'street1' => $this->order->address,
+            'street2' => '',
+            'city' => $this->order->city,
+            'countryCode' => 'NOR',
+            'primaryPhone' => $this->order->phone,
+            'email' => $this->order->email,
+        ];
+
+        $customFields = [
+            'vendor_id' => env('APP_NAME'),
+            'vendor_app_name' => env('APP_NAME'),
+            'vendor_app_version' => '1.0.0',
+            'php_version' => phpversion(),
+        ];
+
+        if ($this->usesCheckoutJs()) {
+            return [
+                'order' => $response->getId(),
+                'billTo' => $billTo,
+                'originUrl' => $this->checkoutJsOriginUrl(),
+                'defaultLanguageTag' => 'en-US',
+                'customFields' => $customFields,
+                'doCreateTransaction' => true,
+                'doThreeDSecure' => 1,
+                'hppType' => 'hostedPaymentFields',
+            ];
+        }
+
         return [
             'order' => $response->getId(),
-            'billTo' => [
-                'fullName' => $this->order->first_name.' '.$this->order->last_name,
-                'company' => $this->order->shop->company_name,
-                'postalCode' => $this->order->post_code,
-                'street1' => $this->order->address,
-                'street2' => '',
-                'city' => $this->order->city,
-                'countryCode' => 'NOR',
-                'primaryPhone' => $this->order->phone,
-                'email' => $this->order->email,
-            ],
+            'billTo' => $billTo,
             'returnUrl' => route('callback.elavon.payment.success'),
             'cancelUrl' => route('callback.elavon.payment.cancel', ['order_id' => $this->order->id]),
             'originUrl' => url('/'),
             'defaultLanguageTag' => 'en-US',
-            'customFields' => [
-                'vendor_id' => env('APP_NAME'),
-                'vendor_app_name' => env('APP_NAME'),
-                'vendor_app_version' => '1.0.0',
-                'php_version' => phpversion(),
-            ],
+            'customFields' => $customFields,
             'doCreateTransaction' => true,
             'doThreeDSecure' => 1,
             'hppType' => 'fullPageRedirect',
@@ -233,12 +286,18 @@ class ElavonPayment
         $payment_session_create_response = $this->elavon->createPaymentSession($payment_session_create_body);
 
         if ($payment_session_create_response->isSuccess()) {
+            $sessionId = $payment_session_create_response->getId();
+            $publicId = $this->ensurePublicId();
+
             return [
                 'status' => true,
                 'code' => 200,
                 'data' => [
-                    'payment_id' => $payment_session_create_response->getId(),
-                    'url' => $this->endpoint.'/?merchantAlias='.$this->keys['mercahantAlias'].'&publicApiKey='.$this->keys['publicKey'].'&sessionId='.$payment_session_create_response->getId(),
+                    'payment_id' => $sessionId,
+                    'url' => $this->usesCheckoutJs()
+                        ? route('elavon.checkoutjs.shop.pay', $publicId)
+                        : $this->endpoint.'/?merchantAlias='.$this->keys['mercahantAlias'].'&publicApiKey='.$this->keys['publicKey'].'&sessionId='.$sessionId,
+                    'mode' => $this->usesCheckoutJs() ? 'checkoutjs' : 'hosted',
                 ],
             ];
         } else {
@@ -256,6 +315,150 @@ class ElavonPayment
                 ],
             ];
         }
+    }
+
+    /**
+     * @return array{status:bool,payment_id?:string,message?:string,data?:array<string,mixed>}
+     */
+    public function ensureCheckoutJsSession(): array
+    {
+        if (! $this->usesCheckoutJs()) {
+            return [
+                'status' => false,
+                'message' => 'CheckoutJS mode is not enabled for this shop.',
+            ];
+        }
+
+        if (app()->runningUnitTests() && filled($this->order->payment_id)) {
+            return [
+                'status' => true,
+                'payment_id' => (string) $this->order->payment_id,
+            ];
+        }
+
+        if (filled($this->order->payment_id)) {
+            $session = $this->elavon->getPaymentSession((string) $this->order->payment_id);
+
+            if ($session->isSuccess() && method_exists($session, 'getData')) {
+                $data = $session->getData();
+                $hppType = is_object($data) ? ($data->hppType ?? null) : ($data['hppType'] ?? null);
+
+                if ($hppType === 'hostedPaymentFields') {
+                    return [
+                        'status' => true,
+                        'payment_id' => (string) $this->order->payment_id,
+                    ];
+                }
+            }
+        }
+
+        $created = $this->getPaymentLink();
+
+        if (! ($created['status'] ?? false)) {
+            return [
+                'status' => false,
+                'message' => $created['data']['message'] ?? 'Unable to create CheckoutJS payment session.',
+                'data' => $created['data'] ?? [],
+            ];
+        }
+
+        $sessionId = (string) $created['data']['payment_id'];
+        $publicId = $this->ensurePublicId();
+
+        $this->order->update([
+            'payment_id' => $sessionId,
+            'payment_url' => route('elavon.checkoutjs.shop.pay', $publicId),
+            'payment_method' => 'elavon',
+        ]);
+
+        return [
+            'status' => true,
+            'payment_id' => $sessionId,
+        ];
+    }
+
+    /**
+     * @return array{status:bool,redirect_url:string,message:?string,transaction_id:?string}
+     */
+    public function finalizeCheckoutJsPayment(string $sessionId): array
+    {
+        if ($this->order->payment_id && $this->order->payment_id !== $sessionId) {
+            return [
+                'status' => false,
+                'redirect_url' => $this->failedRedirectUrl(),
+                'message' => 'Payment session mismatch.',
+                'transaction_id' => null,
+            ];
+        }
+
+        if ((int) $this->order->status === 5 || (bool) $this->order->payment_status) {
+            return [
+                'status' => true,
+                'redirect_url' => $this->successRedirectUrl(),
+                'message' => null,
+                'transaction_id' => is_string($this->order->elavon_transaction_id) ? $this->order->elavon_transaction_id : null,
+            ];
+        }
+
+        $processed = $this->processPayment($sessionId);
+
+        if (! empty($processed['pending'])) {
+            return [
+                'status' => false,
+                'redirect_url' => $this->failedRedirectUrl(),
+                'message' => $processed['message'] ?? 'Payment has not been completed yet.',
+                'transaction_id' => null,
+            ];
+        }
+
+        if (! ($processed['state'] ?? false) || blank($processed['id'] ?? null)) {
+            return [
+                'status' => false,
+                'redirect_url' => $this->failedRedirectUrl(),
+                'message' => $processed['error'] ?? 'Payment was declined.',
+                'transaction_id' => $processed['id'] ?? null,
+            ];
+        }
+
+        $transactionId = (string) $processed['id'];
+        $this->order->createMeta('elavon_transaction_id', $transactionId);
+        $this->order->status = 5;
+        $this->order->payment_status = true;
+        $this->order->paid_at = now();
+        $this->order->payment_id = $sessionId;
+        $this->order->save();
+
+        if ($this->order->is_vcard) {
+            $message = "Order has been confirmed . Download details from here: <a href='".route('order.managers-csv', $this->order->id)."'>Download CSV</a>";
+            Mail::to($this->order->shop->user->email)->send(new OrderConfirmed($this->order, $message, true));
+        } else {
+            Mail::to($this->order->shop->user->email)->send(new OrderConfirmed($this->order, 'Order has been confirmed', true));
+        }
+
+        PurchaseComplete::dispatch($this->order);
+
+        $message = 'Order placed on '.$this->order->created_at->format('M d, Y').' has been confirmed.';
+        Mail::to($this->order->email)->send(new OrderConfirmed($this->order, $message, true));
+
+        return [
+            'status' => true,
+            'redirect_url' => $this->successRedirectUrl($transactionId),
+            'message' => null,
+            'transaction_id' => $transactionId,
+        ];
+    }
+
+    protected function successRedirectUrl(?string $transactionId = null): string
+    {
+        return route('thankyou', [
+            'user_name' => $this->order->shop->user_name,
+            'order' => $this->order,
+        ]);
+    }
+
+    protected function failedRedirectUrl(): string
+    {
+        return route('shop.home', $this->order->shop->user_name);
     }
 
     // public function processPayment($id)

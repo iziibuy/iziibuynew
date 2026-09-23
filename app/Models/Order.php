@@ -6,12 +6,16 @@ use App\Models\Traits\HasMeta;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class Order extends Model
 {
     use HasFactory, HasMeta;
+
     protected $guarded = [];
+
     protected $casts = ['paid_at' => 'datetime'];
+
     protected $meta_attributes = [
         'first_name',
         'last_name',
@@ -33,7 +37,7 @@ class Order extends Model
         'is_digital',
         'create_a_account',
         'elavon_transaction_id',
-        'surfboard_transaction_id'
+        'surfboard_transaction_id',
 
     ];
 
@@ -51,15 +55,16 @@ class Order extends Model
     {
         return $this->belongsTo(Shop::class, 'shop_id');
     }
+
     public function status($key = 0)
     {
         return [
             0 => __('words.status_pending'), // Awaiting payment
-            1 => __('words.status_paid'), //Paid
-            2 => __('words.status_shipped'), //Sent
-            3 => __('words.status_canceled'), //Cancels
+            1 => __('words.status_paid'), // Paid
+            2 => __('words.status_shipped'), // Sent
+            3 => __('words.status_canceled'), // Cancels
             4 => __('words.not_delivered'), // //not delivered
-            5 => __('words.delivered'), //delivered
+            5 => __('words.delivered'), // delivered
         ][$this->status];
     }
 
@@ -72,6 +77,7 @@ class Order extends Model
     {
         return $this->belongsTo(User::class);
     }
+
     public function maxRefund()
     {
         return $this->total - $this->refund;
@@ -84,6 +90,12 @@ class Order extends Model
 
     protected static function booted(): void
     {
+        static::creating(function (Order $order): void {
+            if (blank($order->uuid)) {
+                $order->uuid = (string) Str::ulid();
+            }
+        });
+
         static::addGlobalScope('doNotShowCanceledOrder', function (Builder $builder) {
             $builder->where('status', '!=', 3);
         });
