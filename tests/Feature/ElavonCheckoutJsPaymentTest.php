@@ -264,9 +264,13 @@ it('shows checkout page customization when the button uses checkoutjs', function
     $this->actingAs($user)
         ->get(route('external.buttonPayment.edit', $api))
         ->assertSuccessful()
+        ->assertSee('Button settings', false)
         ->assertSee('Checkout page', false)
         ->assertSee('Primary color', false)
-        ->assertSee('Custom CSS', false);
+        ->assertSee('Page text', false)
+        ->assertSee('Custom CSS', false)
+        ->assertSee('Useful selectors', false)
+        ->assertSee('Form heading', false);
 });
 
 it('hides checkout page customization for hosted buttons', function (): void {
@@ -277,7 +281,8 @@ it('hides checkout page customization for hosted buttons', function (): void {
     $this->actingAs($user)
         ->get(route('external.buttonPayment.edit', $api))
         ->assertSuccessful()
-        ->assertDontSee('Checkout page', false);
+        ->assertDontSee('Checkout page', false)
+        ->assertDontSee('Useful selectors', false);
 });
 
 it('saves checkout page appearance and renders it on the payment page', function (): void {
@@ -293,11 +298,16 @@ it('saves checkout page appearance and renders it on the payment page', function
             'failed' => 'https://merchant.example/fail',
             'is_subscription' => 0,
             'checkout_company_name' => 'Nordic Atelier',
+            'checkout_heading' => 'Secure card payment',
+            'checkout_lead' => 'Your card never touches our servers.',
+            'checkout_pay_button_label' => 'Complete',
+            'checkout_cancel_label' => 'Go back',
+            'checkout_summary_note' => 'Protected by Elavon.',
             'checkout_primary_color' => '#112233',
             'checkout_secondary_color' => '#aabbcc',
             'checkout_background_color' => '#f7f4ee',
             'checkout_footer' => 'Thank you for shopping with us.',
-            'checkout_custom_css' => '.footnote { letter-spacing: 0.04em; } </style><script>alert(1)</script>',
+            'checkout_custom_css' => ".btn-primary { border-radius: 8px; }\n.footnote { letter-spacing: 0.04em; } </style><script>alert(1)</script>",
             'checkout_logo' => $logo,
         ])
         ->assertRedirect(route('external.buttonPayment'));
@@ -306,9 +316,13 @@ it('saves checkout page appearance and renders it on the payment page', function
     $appearance = $api->checkoutjs_appearance;
 
     expect($appearance['company_name'])->toBe('Nordic Atelier')
+        ->and($appearance['heading'])->toBe('Secure card payment')
+        ->and($appearance['pay_button_label'])->toBe('Complete')
         ->and($appearance['primary_color'])->toBe('#112233')
         ->and($appearance['footer'])->toBe('Thank you for shopping with us.')
-        ->and($appearance['custom_css'])->toBe('.footnote { letter-spacing: 0.04em; } /stylescriptalert(1)/script')
+        ->and($appearance['custom_css'])->toContain('.btn-primary { border-radius: 8px; }')
+        ->and($appearance['custom_css'])->toContain('.footnote { letter-spacing: 0.04em; }')
+        ->and($appearance['custom_css'])->not->toContain('<script>')
         ->and($appearance['logo'])->toStartWith('checkoutjs-logos/');
 
     Storage::disk(CheckoutJsTheme::disk())->assertExists($appearance['logo']);
@@ -319,9 +333,14 @@ it('saves checkout page appearance and renders it on the payment page', function
     $this->get(route('elavon.checkoutjs.pay', $publicId))
         ->assertSuccessful()
         ->assertSee('Nordic Atelier', false)
+        ->assertSee('Secure card payment', false)
+        ->assertSee('Your card never touches our servers.', false)
+        ->assertSee('Complete', false)
+        ->assertSee('Go back', false)
+        ->assertSee('Protected by Elavon.', false)
         ->assertSee('#112233', false)
         ->assertSee('Thank you for shopping with us.', false)
-        ->assertSee('.footnote { letter-spacing: 0.04em; }', false)
+        ->assertSee('.btn-primary { border-radius: 8px; }', false)
         ->assertDontSee('</style><script>', false)
         ->assertSee('checkoutjs-logos/', false);
 });

@@ -15,6 +15,8 @@ final class CheckoutJsTheme
 
     public const DEFAULT_BACKGROUND = '#F3F1EB';
 
+    public const CUSTOM_CSS_MAX_LENGTH = 20000;
+
     /**
      * @param  array<string, mixed>  $appearance
      */
@@ -36,14 +38,37 @@ final class CheckoutJsTheme
 
     public function companyName(string $fallback): string
     {
-        $name = trim(strip_tags((string) ($this->appearance['company_name'] ?? '')));
+        return $this->text('company_name', $fallback, 120);
+    }
 
-        return $name !== '' ? $name : $fallback;
+    public function heading(string $fallback): string
+    {
+        return $this->text('heading', $fallback, 120);
+    }
+
+    public function lead(string $fallback): string
+    {
+        return $this->text('lead', $fallback, 400);
+    }
+
+    public function payButtonLabel(string $fallback): string
+    {
+        return $this->text('pay_button_label', $fallback, 80);
+    }
+
+    public function cancelLabel(string $fallback): string
+    {
+        return $this->text('cancel_label', $fallback, 80);
+    }
+
+    public function summaryNote(string $fallback): string
+    {
+        return $this->text('summary_note', $fallback, 200);
     }
 
     public function footer(): ?string
     {
-        $footer = trim(strip_tags((string) ($this->appearance['footer'] ?? '')));
+        $footer = $this->text('footer', '', 300);
 
         return $footer !== '' ? $footer : null;
     }
@@ -105,6 +130,28 @@ final class CheckoutJsTheme
     }
 
     /**
+     * Useful CSS selectors shown in the dashboard for merchants.
+     *
+     * @return array<string, string>
+     */
+    public static function cssSelectorHints(): array
+    {
+        return [
+            'body / .shell' => 'Page background and outer layout',
+            '.checkout' => 'Main checkout card',
+            '.summary' => 'Left order summary panel',
+            '.pay' => 'Right payment form panel',
+            '.amount strong' => 'Large amount text',
+            '.btn-primary' => 'Pay button',
+            '.btn-ghost' => 'Cancel link',
+            '.stripe-field / .stripe-shell' => 'Card number, expiry, and CVV fields',
+            '.footnote' => 'Footer text under the form',
+            '.trust' => 'Security notes under the form',
+            '.brands' => 'Accepted card logos above the form',
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $input
      * @return array<string, mixed>
      */
@@ -112,6 +159,11 @@ final class CheckoutJsTheme
     {
         $next = $this->appearance;
         $next['company_name'] = self::blankToNull(strip_tags((string) ($input['checkout_company_name'] ?? '')), 120);
+        $next['heading'] = self::blankToNull(strip_tags((string) ($input['checkout_heading'] ?? '')), 120);
+        $next['lead'] = self::blankToNull(strip_tags((string) ($input['checkout_lead'] ?? '')), 400);
+        $next['pay_button_label'] = self::blankToNull(strip_tags((string) ($input['checkout_pay_button_label'] ?? '')), 80);
+        $next['cancel_label'] = self::blankToNull(strip_tags((string) ($input['checkout_cancel_label'] ?? '')), 80);
+        $next['summary_note'] = self::blankToNull(strip_tags((string) ($input['checkout_summary_note'] ?? '')), 200);
         $next['footer'] = self::blankToNull(strip_tags((string) ($input['checkout_footer'] ?? '')), 300);
         $next['custom_css'] = self::sanitizeCss(isset($input['checkout_custom_css']) ? (string) $input['checkout_custom_css'] : null);
         $next['primary_color'] = self::normalizeHex($input['checkout_primary_color'] ?? null, self::DEFAULT_PRIMARY);
@@ -148,7 +200,18 @@ final class CheckoutJsTheme
             return null;
         }
 
-        return mb_substr($css, 0, 8000);
+        return mb_substr($css, 0, self::CUSTOM_CSS_MAX_LENGTH);
+    }
+
+    private function text(string $key, string $fallback, int $limit): string
+    {
+        $value = trim(strip_tags((string) ($this->appearance[$key] ?? '')));
+
+        if ($value === '') {
+            return $fallback;
+        }
+
+        return mb_substr($value, 0, $limit);
     }
 
     private static function blankToNull(string $value, int $limit): ?string

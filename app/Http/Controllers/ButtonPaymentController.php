@@ -28,6 +28,8 @@ class ButtonPaymentController extends Controller
             abort(403);
         }
 
+        $paymentApi->loadMissing('paymentMethodAccess');
+
         return view('dashboard.external.button.edit', compact('paymentApi'));
     }
 
@@ -72,11 +74,16 @@ class ButtonPaymentController extends Controller
             'cancel_callback_url' => 'nullable|url',
             'is_subscription' => 'nullable|boolean',
             'checkout_company_name' => ['nullable', 'string', 'max:120'],
+            'checkout_heading' => ['nullable', 'string', 'max:120'],
+            'checkout_lead' => ['nullable', 'string', 'max:400'],
+            'checkout_pay_button_label' => ['nullable', 'string', 'max:80'],
+            'checkout_cancel_label' => ['nullable', 'string', 'max:80'],
+            'checkout_summary_note' => ['nullable', 'string', 'max:200'],
             'checkout_primary_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'checkout_secondary_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'checkout_background_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'checkout_footer' => ['nullable', 'string', 'max:300'],
-            'checkout_custom_css' => ['nullable', 'string', 'max:8000'],
+            'checkout_custom_css' => ['nullable', 'string', 'max:20000'],
             'checkout_logo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'checkout_remove_logo' => ['nullable', 'boolean'],
         ]);
@@ -93,6 +100,11 @@ class ButtonPaymentController extends Controller
             $attributes['checkoutjs_appearance'] = $paymentApi->checkoutJsTheme()->persist(
                 $request->only([
                     'checkout_company_name',
+                    'checkout_heading',
+                    'checkout_lead',
+                    'checkout_pay_button_label',
+                    'checkout_cancel_label',
+                    'checkout_summary_note',
                     'checkout_primary_color',
                     'checkout_secondary_color',
                     'checkout_background_color',
