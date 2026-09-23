@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Payment\Elavon\CheckoutJsTheme;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,6 +24,7 @@ class PaymentApi extends Model
         return [
             'status' => 'boolean',
             'is_subscription' => 'boolean',
+            'checkoutjs_appearance' => 'array',
         ];
     }
 
@@ -34,6 +36,11 @@ class PaymentApi extends Model
     public function usesElavonCheckoutJs(): bool
     {
         return ($this->elavon_link_mode ?? self::ELAVON_LINK_MODE_HOSTED) === self::ELAVON_LINK_MODE_CHECKOUTJS;
+    }
+
+    public function checkoutJsTheme(): CheckoutJsTheme
+    {
+        return CheckoutJsTheme::fromApi($this);
     }
 
     public function externalSubscriptions(): HasMany

@@ -9,10 +9,13 @@ use App\Models\PaymentApi;
 use App\Models\PaymentMethodAccess;
 use App\Models\User;
 use App\Payment\Elavon\ApiElavonPayment;
+use App\Payment\Elavon\CheckoutJsTheme;
 use Database\Seeders\RoleSeeder;
 use Filament\Actions\EditAction;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 
@@ -253,4 +256,91 @@ it('builds the own checkoutjs payment url when button mode is checkoutjs', funct
 
     expect($result['data']['mode'])->toBe('checkoutjs')
         ->and($result['data']['url'])->toBe(route('elavon.checkoutjs.pay', $publicId));
+});
+
+it('shows checkout page customization when the button uses checkoutjs', function (): void {
+    [$user, , $api] = createCheckoutJsPlugin();
+
+    $this->actingAs($user)
+        ->get(route('external.buttonPayment.edit', $api))
+        ->assertSuccessful()
+        ->assertSee('Checkout page', false)
+        ->assertSee('Primary color', false)
+        ->assertSee('Custom CSS', false);
+});
+
+it('hides checkout page customization for hosted buttons', function (): void {
+    [$user, , $api] = createCheckoutJsPlugin(apiOverrides: [
+        'elavon_link_mode' => PaymentApi::ELAVON_LINK_MODE_HOSTED,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('external.buttonPayment.edit', $api))
+        ->assertSuccessful()
+        ->assertDontSee('Checkout page', false);
+});
+
+it('saves checkout page appearance and renders it on the payment page', function (): void {
+    Storage::fake(CheckoutJsTheme::disk());
+
+    [$user, $access, $api] = createCheckoutJsPlugin();
+    $logo = UploadedFile::fake()->image('mark.png', 80, 80);
+
+    $this->actingAs($user)
+        ->post(route('external.buttonPayment.update', $api), [
+            'domain' => 'https://merchant.example',
+            'success' => 'https://merchant.example/ok',
+            'failed' => 'https://merchant.example/fail',
+            'is_subscription' => 0,
+            'checkout_company_name' => 'Nordic Atelier',
+            'checkout_primary_color' => '#112233',
+            'checkout_secondary_color' => '#aabbcc',
+            'checkout_background_color' => '#f7f4ee',
+            'checkout_footer' => 'Thank you for shopping with us.',
+            'checkout_custom_css' => '.footnote { letter-spacing: 0.04em; } </style><script>alert(1)</script>',
+            'checkout_logo' => $logo,
+        ])
+        ->assertRedirect(route('external.buttonPayment'));
+
+    $api->refresh();
+    $appearance = $api->checkoutjs_appearance;
+
+    expect($appearance['company_name'])->toBe('Nordic Atelier')
+        ->and($appearance['primary_color'])->toBe('#112233')
+        ->and($appearance['footer'])->toBe('Thank you for shopping with us.')
+        ->and($appearance['custom_css'])->toBe('.footnote { letter-spacing: 0.04em; } /stylescriptalert(1)/script')
+        ->and($appearance['logo'])->toStartWith('checkoutjs-logos/');
+
+    Storage::disk(CheckoutJsTheme::disk())->assertExists($appearance['logo']);
+
+    $order = createCheckoutJsOrder($access, $api);
+    $publicId = $order->uuid ?? $order->ulid;
+
+    $this->get(route('elavon.checkoutjs.pay', $publicId))
+        ->assertSuccessful()
+        ->assertSee('Nordic Atelier', false)
+        ->assertSee('#112233', false)
+        ->assertSee('Thank you for shopping with us.', false)
+        ->assertSee('.footnote { letter-spacing: 0.04em; }', false)
+        ->assertDontSee('</style><script>', false)
+        ->assertSee('checkoutjs-logos/', false);
+});
+
+it('does not store checkout appearance for hosted buttons', function (): void {
+    [$user, , $api] = createCheckoutJsPlugin(apiOverrides: [
+        'elavon_link_mode' => PaymentApi::ELAVON_LINK_MODE_HOSTED,
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('external.buttonPayment.update', $api), [
+            'domain' => 'https://merchant.example',
+            'success' => 'https://merchant.example/ok',
+            'failed' => 'https://merchant.example/fail',
+            'is_subscription' => 0,
+            'checkout_company_name' => 'Should not save',
+            'checkout_primary_color' => '#112233',
+        ])
+        ->assertRedirect(route('external.buttonPayment'));
+
+    expect($api->fresh()->checkoutjs_appearance)->toBeNull();
 });
