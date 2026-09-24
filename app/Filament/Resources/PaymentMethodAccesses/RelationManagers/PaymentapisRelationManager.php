@@ -77,7 +77,7 @@ class PaymentapisRelationManager extends RelationManager
                     ->live()
                     ->helperText(__('Hosted sends customers to Elavon. CheckoutJS sends your branded payment page using Elavon Hosted Fields.'))
                     ->visible(fn (): bool => $this->ownerIsElavon()),
-                Section::make(__('Checkout page design'))
+                Section::make(__('Elavon checkout page'))
                     ->description(__('Customize the branded CheckoutJS payment page customers see.'))
                     ->columns(2)
                     ->visible(fn (Get $get): bool => $this->ownerIsElavon()

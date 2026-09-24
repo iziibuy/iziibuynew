@@ -148,7 +148,7 @@
         </div>
 
         <div id="shop-checkoutjs-appearance" class="mt-4 pt-3 border-top" @style(['display: none' => ! $checkoutJsSelected])>
-            <h5 class="mb-2">{{ __('Checkout page') }}</h5>
+            <h5 class="mb-2">{{ __('Elavon checkout page') }}</h5>
             @include('dashboard.partials.checkoutjs-appearance-fields', [
                 'checkoutTheme' => $shop->checkoutJsTheme(),
                 'appearance' => $shop->checkoutjs_appearance ?? [],

@@ -285,7 +285,7 @@ it('shows checkout page customization when the button uses checkoutjs', function
         ->get(route('external.buttonPayment.edit', $api))
         ->assertSuccessful()
         ->assertSee('Button settings', false)
-        ->assertSee('Checkout page', false)
+        ->assertSee('Elavon checkout page', false)
         ->assertSee('Elavon payment page', false)
         ->assertSee('Primary color', false)
         ->assertSee('Page text', false)
@@ -304,7 +304,7 @@ it('shows payment page options for hosted buttons and keeps checkout fields avai
         ->assertSuccessful()
         ->assertSee('Elavon payment page', false)
         ->assertSee('Own CheckoutJS page', false)
-        ->assertSee('Checkout page', false)
+        ->assertSee('Elavon checkout page', false)
         ->assertSee('Select “Own CheckoutJS page” under Button settings', false);
 });
 

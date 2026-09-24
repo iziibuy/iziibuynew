@@ -93,7 +93,7 @@ it('shows checkout page customization on the shop payment tab when checkoutjs is
         ->get(route('shop.store.profile'))
         ->assertSuccessful()
         ->assertSee('Elavon payment page', false)
-        ->assertSee('Checkout page', false)
+        ->assertSee('Elavon checkout page', false)
         ->assertSee('Custom CSS', false)
         ->assertSee('Useful selectors', false);
 });

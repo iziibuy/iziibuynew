@@ -38,7 +38,7 @@
                         <button class="nav-link {{ $openCheckoutTab ? 'active' : '' }}" id="checkout-page-tab" data-bs-toggle="tab"
                             data-bs-target="#checkout-page" type="button" role="tab" aria-controls="checkout-page"
                             aria-selected="{{ $openCheckoutTab ? 'true' : 'false' }}">
-                            {{ __('Checkout page') }}
+                            {{ __('Elavon checkout page') }}
                         </button>
                     </li>
                 </ul>
