@@ -127,37 +127,37 @@
             @endforeach
         </div>
 
-        @if ($editable)
-            <div class="row mt-2">
-                <div class="col-md-6">
-                    <x-form.input type="select" name="elavon_link_mode"
-                        label="{{ __('Elavon payment page') }}"
-                        :options="[
-                            \App\Models\Shop::ELAVON_LINK_MODE_HOSTED => __('Elavon hosted page'),
-                            \App\Models\Shop::ELAVON_LINK_MODE_CHECKOUTJS => __('Own CheckoutJS page'),
-                        ]"
-                        :value="old('elavon_link_mode', $shop->elavon_link_mode ?? \App\Models\Shop::ELAVON_LINK_MODE_HOSTED)" />
-                    <small class="text-muted d-block mb-3">
-                        {{ __('Hosted sends customers to Elavon. CheckoutJS keeps card fields on your branded payment page.') }}
-                    </small>
-                </div>
-            </div>
-        @elseif ($shop->usesElavonCheckoutJs())
-            <p class="text-muted small mt-2 mb-0">
-                {{ __('CheckoutJS payment page is enabled for this shop.') }}
-            </p>
-        @endif
+        @php
+            $checkoutMode = old('elavon_link_mode', $shop->elavon_link_mode ?? \App\Models\Shop::ELAVON_LINK_MODE_HOSTED);
+            $checkoutJsSelected = $checkoutMode === \App\Models\Shop::ELAVON_LINK_MODE_CHECKOUTJS;
+        @endphp
 
-        @if ($shop->usesElavonCheckoutJs())
-            <div class="mt-4 pt-3 border-top">
-                <h5 class="mb-2">{{ __('Checkout page') }}</h5>
-                @include('dashboard.partials.checkoutjs-appearance-fields', [
-                    'checkoutTheme' => $shop->checkoutJsTheme(),
-                    'appearance' => $shop->checkoutjs_appearance ?? [],
-                    'companyNamePlaceholder' => $shop->company_name,
-                ])
+        <div class="row mt-2">
+            <div class="col-md-6">
+                <x-form.input type="select" name="elavon_link_mode"
+                    label="{{ __('Elavon payment page') }}"
+                    :options="[
+                        \App\Models\Shop::ELAVON_LINK_MODE_HOSTED => __('Elavon hosted page'),
+                        \App\Models\Shop::ELAVON_LINK_MODE_CHECKOUTJS => __('Own CheckoutJS page'),
+                    ]"
+                    :value="$checkoutMode" />
+                <small class="text-muted d-block mb-3">
+                    {{ __('Hosted sends customers to Elavon. CheckoutJS keeps card fields on your branded payment page.') }}
+                </small>
             </div>
-        @endif
+        </div>
+
+        <div id="shop-checkoutjs-appearance" class="mt-4 pt-3 border-top" @style(['display: none' => ! $checkoutJsSelected])>
+            <h5 class="mb-2">{{ __('Checkout page') }}</h5>
+            @include('dashboard.partials.checkoutjs-appearance-fields', [
+                'checkoutTheme' => $shop->checkoutJsTheme(),
+                'appearance' => $shop->checkoutjs_appearance ?? [],
+                'companyNamePlaceholder' => $shop->company_name,
+            ])
+        </div>
+        <p id="shop-checkoutjs-appearance-hint" class="text-muted small mt-2 mb-0" @style(['display: none' => $checkoutJsSelected])>
+            {{ __('Select “Own CheckoutJS page” above to customize the branded payment page.') }}
+        </p>
     </div>
 
     <div class="col-md-12 acquirer-credentials" data-acquirer="surfboard" @style([
@@ -325,5 +325,29 @@
             })();
         </script>
     @endif
+
+    <script>
+        (function () {
+            var mode = document.querySelector('[name="elavon_link_mode"]');
+            var fields = document.getElementById('shop-checkoutjs-appearance');
+            var hint = document.getElementById('shop-checkoutjs-appearance-hint');
+
+            function syncShopCheckoutAppearance() {
+                if (!mode || !fields) {
+                    return;
+                }
+                var enabled = mode.value === 'checkoutjs';
+                fields.style.display = enabled ? '' : 'none';
+                if (hint) {
+                    hint.style.display = enabled ? 'none' : '';
+                }
+            }
+
+            if (mode) {
+                mode.addEventListener('change', syncShopCheckoutAppearance);
+                syncShopCheckoutAppearance();
+            }
+        })();
+    </script>
 
 </div>

@@ -1,8 +1,10 @@
 <x-dashboard.external>
     @php
-        $checkoutEnabled = $paymentApi->usesElavonCheckoutJs();
-        $checkoutTheme = $checkoutEnabled ? $paymentApi->checkoutJsTheme() : null;
-        $openCheckoutTab = $checkoutEnabled && collect([
+        $isElavon = ($paymentApi->paymentMethodAccess?->paymentMethod ?? null) === 'elavon';
+        $checkoutEnabled = old('elavon_link_mode', $paymentApi->elavon_link_mode ?? \App\Models\PaymentApi::ELAVON_LINK_MODE_HOSTED)
+            === \App\Models\PaymentApi::ELAVON_LINK_MODE_CHECKOUTJS;
+        $checkoutTheme = $paymentApi->checkoutJsTheme();
+        $openCheckoutTab = $isElavon && collect([
             'checkout_company_name',
             'checkout_heading',
             'checkout_lead',
@@ -23,7 +25,7 @@
         <div class="card-body">
             <h3 class="mb-3">{{ __('Edit button') }}</h3>
 
-            @if ($checkoutEnabled)
+            @if ($isElavon)
                 <ul class="nav nav-tabs mb-3" id="button-edit-tabs" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link {{ $openCheckoutTab ? '' : 'active' }}" id="button-settings-tab" data-bs-toggle="tab"
@@ -56,6 +58,19 @@
                         <x-form.input type="url" name="cancel_callback_url" label="Cancel callback url (optional)"
                             value="{{ $paymentApi->cancel_callback_url }}" />
 
+                        @if ($isElavon)
+                            <x-form.input type="select" name="elavon_link_mode"
+                                label="{{ __('Elavon payment page') }}"
+                                :options="[
+                                    \App\Models\PaymentApi::ELAVON_LINK_MODE_HOSTED => __('Elavon hosted page'),
+                                    \App\Models\PaymentApi::ELAVON_LINK_MODE_CHECKOUTJS => __('Own CheckoutJS page'),
+                                ]"
+                                :value="old('elavon_link_mode', $paymentApi->elavon_link_mode ?? \App\Models\PaymentApi::ELAVON_LINK_MODE_HOSTED)" />
+                            <small class="text-muted d-block mb-3">
+                                {{ __('Hosted sends customers to Elavon. CheckoutJS keeps card fields on your branded payment page.') }}
+                            </small>
+                        @endif
+
                         <div class="form-group form-check mb-3">
                             <input type="hidden" name="is_subscription" value="0">
                             <input type="checkbox" class="form-check-input" id="is_subscription" name="is_subscription"
@@ -66,14 +81,19 @@
                         </div>
                     </div>
 
-                    @if ($checkoutEnabled && $checkoutTheme)
+                    @if ($isElavon)
                         <div class="tab-pane fade {{ $openCheckoutTab ? 'show active' : '' }}" id="checkout-page" role="tabpanel"
                             aria-labelledby="checkout-page-tab">
-                            @include('dashboard.partials.checkoutjs-appearance-fields', [
-                                'checkoutTheme' => $checkoutTheme,
-                                'appearance' => $appearance,
-                                'companyNamePlaceholder' => $paymentApi->paymentMethodAccess?->company_name,
-                            ])
+                            <div id="checkoutjs-appearance-fields" @style(['display: none' => ! $checkoutEnabled])>
+                                @include('dashboard.partials.checkoutjs-appearance-fields', [
+                                    'checkoutTheme' => $checkoutTheme,
+                                    'appearance' => $appearance,
+                                    'companyNamePlaceholder' => $paymentApi->paymentMethodAccess?->company_name,
+                                ])
+                            </div>
+                            <div id="checkoutjs-appearance-disabled" class="text-muted" @style(['display: none' => $checkoutEnabled])>
+                                {{ __('Select “Own CheckoutJS page” under Button settings to customize this page.') }}
+                            </div>
                         </div>
                     @endif
                 </div>
@@ -84,4 +104,28 @@
             </form>
         </div>
     </div>
+
+    @if ($isElavon)
+        <script>
+            (function () {
+                var mode = document.getElementById('elavon_link_mode') || document.querySelector('[name="elavon_link_mode"]');
+                var fields = document.getElementById('checkoutjs-appearance-fields');
+                var disabled = document.getElementById('checkoutjs-appearance-disabled');
+
+                function syncCheckoutAppearance() {
+                    if (!mode || !fields || !disabled) {
+                        return;
+                    }
+                    var enabled = mode.value === 'checkoutjs';
+                    fields.style.display = enabled ? '' : 'none';
+                    disabled.style.display = enabled ? 'none' : '';
+                }
+
+                if (mode) {
+                    mode.addEventListener('change', syncCheckoutAppearance);
+                    syncCheckoutAppearance();
+                }
+            })();
+        </script>
+    @endif
 </x-dashboard.external>

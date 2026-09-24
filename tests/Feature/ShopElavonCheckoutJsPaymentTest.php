@@ -92,20 +92,44 @@ it('shows checkout page customization on the shop payment tab when checkoutjs is
     $this->actingAs($user)
         ->get(route('shop.store.profile'))
         ->assertSuccessful()
+        ->assertSee('Elavon payment page', false)
         ->assertSee('Checkout page', false)
         ->assertSee('Custom CSS', false)
         ->assertSee('Useful selectors', false);
 });
 
-it('hides checkout page customization when the shop uses hosted elavon', function (): void {
-    [$user] = createCheckoutJsShop([
+it('lets a shop choose the elavon payment page mode from the profile', function (): void {
+    [$user, $shop] = createCheckoutJsShop([
         'elavon_link_mode' => Shop::ELAVON_LINK_MODE_HOSTED,
     ]);
 
     $this->actingAs($user)
         ->get(route('shop.store.profile'))
         ->assertSuccessful()
-        ->assertDontSee('Useful selectors', false);
+        ->assertSee('Elavon payment page', false)
+        ->assertSee('Own CheckoutJS page', false)
+        ->assertSee('Select “Own CheckoutJS page” above', false);
+
+    $this->actingAs($user)
+        ->post(route('shop.store.profile.update'), [
+            'user_name' => $shop->user_name,
+            'default_currency' => 'NOK',
+            'currencies' => ['NOK'],
+            'meta' => [
+                'site_mode' => 'test',
+            ],
+            'elavon_link_mode' => Shop::ELAVON_LINK_MODE_CHECKOUTJS,
+            'checkout_company_name' => 'Shop Enabled Brand',
+            'checkout_primary_color' => '#13579B',
+        ])
+        ->assertRedirect();
+
+    $shop->refresh();
+
+    expect($shop->elavon_link_mode)->toBe(Shop::ELAVON_LINK_MODE_CHECKOUTJS)
+        ->and($shop->usesElavonCheckoutJs())->toBeTrue()
+        ->and($shop->checkoutjs_appearance['company_name'])->toBe('Shop Enabled Brand')
+        ->and($shop->checkoutjs_appearance['primary_color'])->toBe('#13579B');
 });
 
 it('lets a shop save checkout appearance and renders it for pending orders', function (): void {

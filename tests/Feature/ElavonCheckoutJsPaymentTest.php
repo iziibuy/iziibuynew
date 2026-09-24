@@ -132,14 +132,27 @@ it('lets an admin save checkoutjs as the elavon payment link mode in filament', 
             'cancel_callback_url' => $api->cancel_callback_url,
             'status' => true,
             'elavon_link_mode' => PaymentApi::ELAVON_LINK_MODE_CHECKOUTJS,
+            'checkoutjs_appearance' => [
+                'company_name' => 'Admin Brand',
+                'heading' => 'Pay securely',
+                'primary_color' => '#112233',
+                'custom_css' => '.btn-primary { border-radius: 6px; } <script>alert(1)</script>',
+            ],
         ])
         ->assertHasNoTableActionErrors();
 
-    expect($api->fresh()->elavon_link_mode)->toBe('checkoutjs')
-        ->and($api->fresh()->usesElavonCheckoutJs())->toBeTrue();
+    $api->refresh();
+
+    expect($api->elavon_link_mode)->toBe('checkoutjs')
+        ->and($api->usesElavonCheckoutJs())->toBeTrue()
+        ->and($api->checkoutjs_appearance['company_name'])->toBe('Admin Brand')
+        ->and($api->checkoutjs_appearance['heading'])->toBe('Pay securely')
+        ->and($api->checkoutjs_appearance['primary_color'])->toBe('#112233')
+        ->and($api->checkoutjs_appearance['custom_css'])->toContain('.btn-primary { border-radius: 6px; }')
+        ->and($api->checkoutjs_appearance['custom_css'])->not->toContain('<script>');
 });
 
-it('does not let external users change elavon link mode via button settings', function (): void {
+it('lets external users choose the elavon payment page mode', function (): void {
     [$user, , $api] = createCheckoutJsPlugin(apiOverrides: [
         'elavon_link_mode' => PaymentApi::ELAVON_LINK_MODE_HOSTED,
     ]);
@@ -149,12 +162,19 @@ it('does not let external users change elavon link mode via button settings', fu
             'domain' => 'https://merchant.example',
             'success' => 'https://merchant.example/ok',
             'failed' => 'https://merchant.example/fail',
-            'elavon_link_mode' => 'checkoutjs',
+            'elavon_link_mode' => PaymentApi::ELAVON_LINK_MODE_CHECKOUTJS,
             'is_subscription' => 0,
+            'checkout_company_name' => 'Plugin Brand',
+            'checkout_primary_color' => '#ABCDEF',
         ])
         ->assertRedirect(route('external.buttonPayment'));
 
-    expect($api->fresh()->elavon_link_mode)->toBe('hosted');
+    $api->refresh();
+
+    expect($api->elavon_link_mode)->toBe('checkoutjs')
+        ->and($api->usesElavonCheckoutJs())->toBeTrue()
+        ->and($api->checkoutjs_appearance['company_name'])->toBe('Plugin Brand')
+        ->and($api->checkoutjs_appearance['primary_color'])->toBe('#ABCDEF');
 });
 
 it('renders the checkoutjs payment page for pending checkoutjs orders', function (): void {
@@ -266,6 +286,7 @@ it('shows checkout page customization when the button uses checkoutjs', function
         ->assertSuccessful()
         ->assertSee('Button settings', false)
         ->assertSee('Checkout page', false)
+        ->assertSee('Elavon payment page', false)
         ->assertSee('Primary color', false)
         ->assertSee('Page text', false)
         ->assertSee('Custom CSS', false)
@@ -273,7 +294,7 @@ it('shows checkout page customization when the button uses checkoutjs', function
         ->assertSee('Form heading', false);
 });
 
-it('hides checkout page customization for hosted buttons', function (): void {
+it('shows payment page options for hosted buttons and keeps checkout fields available', function (): void {
     [$user, , $api] = createCheckoutJsPlugin(apiOverrides: [
         'elavon_link_mode' => PaymentApi::ELAVON_LINK_MODE_HOSTED,
     ]);
@@ -281,8 +302,10 @@ it('hides checkout page customization for hosted buttons', function (): void {
     $this->actingAs($user)
         ->get(route('external.buttonPayment.edit', $api))
         ->assertSuccessful()
-        ->assertDontSee('Checkout page', false)
-        ->assertDontSee('Useful selectors', false);
+        ->assertSee('Elavon payment page', false)
+        ->assertSee('Own CheckoutJS page', false)
+        ->assertSee('Checkout page', false)
+        ->assertSee('Select “Own CheckoutJS page” under Button settings', false);
 });
 
 it('saves checkout page appearance and renders it on the payment page', function (): void {

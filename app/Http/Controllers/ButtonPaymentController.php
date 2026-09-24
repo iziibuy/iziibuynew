@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class ButtonPaymentController extends Controller
 {
@@ -73,6 +74,10 @@ class ButtonPaymentController extends Controller
             'domain' => 'required',
             'cancel_callback_url' => 'nullable|url',
             'is_subscription' => 'nullable|boolean',
+            'elavon_link_mode' => ['nullable', Rule::in([
+                PaymentApi::ELAVON_LINK_MODE_HOSTED,
+                PaymentApi::ELAVON_LINK_MODE_CHECKOUTJS,
+            ])],
             'checkout_company_name' => ['nullable', 'string', 'max:120'],
             'checkout_heading' => ['nullable', 'string', 'max:120'],
             'checkout_lead' => ['nullable', 'string', 'max:400'],
@@ -88,6 +93,9 @@ class ButtonPaymentController extends Controller
             'checkout_remove_logo' => ['nullable', 'boolean'],
         ]);
 
+        $isElavon = ($paymentApi->paymentMethodAccess?->paymentMethod
+            ?? $paymentApi->loadMissing('paymentMethodAccess')->paymentMethodAccess?->paymentMethod) === 'elavon';
+
         $attributes = [
             'domain' => $request->domain,
             'success_redirect_url' => $request->success,
@@ -96,7 +104,16 @@ class ButtonPaymentController extends Controller
             'is_subscription' => $request->boolean('is_subscription'),
         ];
 
-        if ($paymentApi->usesElavonCheckoutJs()) {
+        if ($isElavon && $request->filled('elavon_link_mode')) {
+            $attributes['elavon_link_mode'] = $request->elavon_link_mode === PaymentApi::ELAVON_LINK_MODE_CHECKOUTJS
+                ? PaymentApi::ELAVON_LINK_MODE_CHECKOUTJS
+                : PaymentApi::ELAVON_LINK_MODE_HOSTED;
+        }
+
+        $usesCheckoutJs = ($attributes['elavon_link_mode'] ?? $paymentApi->elavon_link_mode)
+            === PaymentApi::ELAVON_LINK_MODE_CHECKOUTJS;
+
+        if ($isElavon && $usesCheckoutJs) {
             $attributes['checkoutjs_appearance'] = $paymentApi->checkoutJsTheme()->persist(
                 $request->only([
                     'checkout_company_name',

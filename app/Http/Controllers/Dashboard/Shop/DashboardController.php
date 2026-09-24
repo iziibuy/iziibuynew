@@ -101,7 +101,7 @@ class DashboardController extends Controller
             ...(auth()->user()->role_id == 1 && ($checkoutPaymentOptions !== null || $request->has('payment_method'))
                 ? ['paymentMethod' => implode(',', $paymentMethods)]
                 : []),
-            ...(auth()->user()->role_id == 1 && $request->filled('elavon_link_mode')
+            ...($request->filled('elavon_link_mode')
                 ? ['elavon_link_mode' => $request->elavon_link_mode === Shop::ELAVON_LINK_MODE_CHECKOUTJS
                     ? Shop::ELAVON_LINK_MODE_CHECKOUTJS
                     : Shop::ELAVON_LINK_MODE_HOSTED]
@@ -118,7 +118,12 @@ class DashboardController extends Controller
         Iziibuy::resetShop($shop);
         $shop->createMetas($data);
 
-        if ($shop->fresh()->usesElavonCheckoutJs()) {
+        $shop = $shop->fresh();
+        $usesCheckoutJs = ($request->filled('elavon_link_mode')
+            ? $request->elavon_link_mode === Shop::ELAVON_LINK_MODE_CHECKOUTJS
+            : $shop->usesElavonCheckoutJs());
+
+        if ($usesCheckoutJs) {
             $request->validate([
                 'checkout_company_name' => ['nullable', 'string', 'max:120'],
                 'checkout_heading' => ['nullable', 'string', 'max:120'],
