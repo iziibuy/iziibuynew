@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ExternalOrder;
 use App\Models\ExternalSubscription;
 use App\Models\PaymentApi;
+use App\Payment\Elavon\CheckoutJsTheme;
 use App\Payment\Surfboard\SurfboardOrderApi;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -78,19 +79,7 @@ class ButtonPaymentController extends Controller
                 PaymentApi::ELAVON_LINK_MODE_HOSTED,
                 PaymentApi::ELAVON_LINK_MODE_CHECKOUTJS,
             ])],
-            'checkout_company_name' => ['nullable', 'string', 'max:120'],
-            'checkout_heading' => ['nullable', 'string', 'max:120'],
-            'checkout_lead' => ['nullable', 'string', 'max:400'],
-            'checkout_pay_button_label' => ['nullable', 'string', 'max:80'],
-            'checkout_cancel_label' => ['nullable', 'string', 'max:80'],
-            'checkout_summary_note' => ['nullable', 'string', 'max:200'],
-            'checkout_primary_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
-            'checkout_secondary_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
-            'checkout_background_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
-            'checkout_footer' => ['nullable', 'string', 'max:300'],
-            'checkout_custom_css' => ['nullable', 'string', 'max:20000'],
-            'checkout_logo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
-            'checkout_remove_logo' => ['nullable', 'boolean'],
+            ...CheckoutJsTheme::validationRules(),
         ]);
 
         $isElavon = ($paymentApi->paymentMethodAccess?->paymentMethod
@@ -115,19 +104,7 @@ class ButtonPaymentController extends Controller
 
         if ($isElavon && $usesCheckoutJs) {
             $attributes['checkoutjs_appearance'] = $paymentApi->checkoutJsTheme()->persist(
-                $request->only([
-                    'checkout_company_name',
-                    'checkout_heading',
-                    'checkout_lead',
-                    'checkout_pay_button_label',
-                    'checkout_cancel_label',
-                    'checkout_summary_note',
-                    'checkout_primary_color',
-                    'checkout_secondary_color',
-                    'checkout_background_color',
-                    'checkout_footer',
-                    'checkout_custom_css',
-                ]),
+                $request->only(CheckoutJsTheme::inputKeys()),
                 $request->file('checkout_logo'),
                 $request->boolean('checkout_remove_logo'),
             );

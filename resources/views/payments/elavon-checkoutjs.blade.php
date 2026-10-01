@@ -1,3 +1,7 @@
+@php
+    $previewMode = $previewMode ?? false;
+    $companyNameFallback = $companyNameFallback ?? $companyName;
+@endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
@@ -9,7 +13,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="{{ $hostedFieldsScriptUrl }}"></script>
+    @unless ($previewMode)
+        <script src="{{ $hostedFieldsScriptUrl }}"></script>
+    @endunless
     <style>
         :root {
             --ink: #14211c;
@@ -738,10 +744,26 @@
             .btn-primary.is-loading::after { animation: none; }
             .btn-primary { transition: none; }
         }
-        @if ($checkoutTheme->customCss() !== '')
-            {!! $checkoutTheme->customCss() !!}
-        @endif
     </style>
+    @if ($previewMode)
+        <style>
+            .preview-input {
+                display: block;
+                width: 100%;
+                height: 28px;
+                padding: 0;
+                border: 0;
+                outline: 0;
+                background: transparent;
+                color: var(--ink);
+                font: inherit;
+                font-size: 1rem;
+                pointer-events: none;
+            }
+            .field-shell .preview-input { height: 100%; padding: 0 14px; }
+        </style>
+    @endif
+    <style id="checkoutjs-custom-css">{!! $checkoutTheme->customCss() !!}</style>
 </head>
 <body>
     @php
@@ -763,14 +785,16 @@
 
                 <div class="merchant">
                     <div class="avatar" aria-hidden="true">
-                        @if (! empty($companyLogo))
+                        @if ($previewMode)
+                            <img data-preview-logo src="{{ $companyLogo ?? '' }}" alt="" @style(['display: none' => empty($companyLogo)])>
+                        @elseif (! empty($companyLogo))
                             <img src="{{ $companyLogo }}" alt="" onerror="this.remove()">
                         @endif
-                        <span>{{ $merchantInitial }}</span>
+                        <span data-preview-initial>{{ $merchantInitial }}</span>
                     </div>
                     <div class="merchant-copy">
                         <p class="merchant-kicker">{{ __('Paying') }}</p>
-                        <h1>{{ $companyName }}</h1>
+                        <h1 data-preview-text="company_name" data-default="{{ $companyNameFallback }}">{{ $companyName }}</h1>
                     </div>
                 </div>
 
@@ -812,14 +836,14 @@
                         <path d="M12 3 5 6v6c0 4.2 2.8 7.4 7 9 4.2-1.6 7-4.8 7-9V6l-7-3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
                         <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
-                    <span>{{ $checkoutTheme->summaryNote(__('Card details stay with Elavon Hosted Fields.')) }}</span>
+                    <span data-preview-text="summary_note" data-default="{{ __('Card details stay with Elavon Hosted Fields.') }}">{{ $checkoutTheme->summaryNote(__('Card details stay with Elavon Hosted Fields.')) }}</span>
                 </div>
             </aside>
 
             <section class="pay" aria-labelledby="card-details-heading">
                 <div class="pay-head">
-                    <h2 id="card-details-heading">{{ $checkoutTheme->heading(__('Card details')) }}</h2>
-                    <p class="lead">{{ $checkoutTheme->lead(__('Enter your card on this page. Card data is processed securely by Elavon Hosted Fields.')) }}</p>
+                    <h2 id="card-details-heading" data-preview-text="heading" data-default="{{ __('Card details') }}">{{ $checkoutTheme->heading(__('Card details')) }}</h2>
+                    <p class="lead" data-preview-text="lead" data-default="{{ __('Enter your card on this page. Card data is processed securely by Elavon Hosted Fields.') }}">{{ $checkoutTheme->lead(__('Enter your card on this page. Card data is processed securely by Elavon Hosted Fields.')) }}</p>
                     <div class="brands" aria-label="{{ __('Accepted cards') }}">
                         <span class="brand brand-visa">
                             <svg role="img" aria-label="Visa" viewBox="0 0 780 500" xmlns="http://www.w3.org/2000/svg">
@@ -837,23 +861,31 @@
                     </div>
                 </div>
 
-                <div id="fields-skeleton" class="skeleton" aria-hidden="true">
+                <div id="fields-skeleton" @class(['skeleton', 'hidden' => $previewMode]) aria-hidden="true">
                     <span></span>
                     <span></span>
                     <div class="row-2"><span></span><span></span></div>
                 </div>
 
-                <form id="checkout-form" class="hidden" autocomplete="off" novalidate>
+                <form id="checkout-form" @class(['hidden' => ! $previewMode]) autocomplete="off" novalidate>
                     <div class="fields">
                         <div class="field">
                             <label for="cardholder-name">{{ __('Cardholder name') }}</label>
-                            <div id="cardholder-name" class="field-shell field-height"></div>
+                            <div id="cardholder-name" class="field-shell field-height">
+                                @if ($previewMode)
+                                    <input class="preview-input" value="{{ $order->customer_name }}" readonly tabindex="-1" aria-hidden="true">
+                                @endif
+                            </div>
                         </div>
 
-                        <div class="stripe-field has-brands" data-field="cardNumber">
+                        <div @class(['stripe-field', 'has-brands', 'is-active' => $previewMode]) data-field="cardNumber">
                             <div class="stripe-shell">
                                 <label class="stripe-label" for="card-number">{{ __('Card number') }}</label>
-                                <div id="card-number" class="stripe-host"></div>
+                                <div id="card-number" class="stripe-host">
+                                    @if ($previewMode)
+                                        <input class="preview-input" value="4242 4242 4242 4242" readonly tabindex="-1" aria-hidden="true">
+                                    @endif
+                                </div>
                                 <div class="stripe-brands" aria-hidden="true">
                                     <span class="mark mark-visa">
                                         <svg viewBox="0 0 780 500" xmlns="http://www.w3.org/2000/svg">
@@ -874,10 +906,14 @@
                         </div>
 
                         <div class="row-2">
-                            <div class="stripe-field has-icon" data-field="cardExpirationDate">
+                            <div @class(['stripe-field', 'has-icon', 'is-active' => $previewMode]) data-field="cardExpirationDate">
                                 <div class="stripe-shell">
                                     <label class="stripe-label" for="card-exp-date">{{ __('Expiry') }}</label>
-                                    <div id="card-exp-date" class="stripe-host"></div>
+                                    <div id="card-exp-date" class="stripe-host">
+                                        @if ($previewMode)
+                                            <input class="preview-input" value="12 / 29" readonly tabindex="-1" aria-hidden="true">
+                                        @endif
+                                    </div>
                                     <span class="stripe-icon" aria-hidden="true">
                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                                             <rect x="3.5" y="5" width="17" height="15" rx="2.5" stroke="currentColor" stroke-width="1.7"/>
@@ -887,10 +923,14 @@
                                     <span class="stripe-bar" aria-hidden="true"></span>
                                 </div>
                             </div>
-                            <div class="stripe-field has-icon" data-field="cardCvv">
+                            <div @class(['stripe-field', 'has-icon', 'is-active' => $previewMode]) data-field="cardCvv">
                                 <div class="stripe-shell">
                                     <label class="stripe-label" for="card-cvv">{{ __('CVV') }}</label>
-                                    <div id="card-cvv" class="stripe-host"></div>
+                                    <div id="card-cvv" class="stripe-host">
+                                        @if ($previewMode)
+                                            <input class="preview-input" value="•••" readonly tabindex="-1" aria-hidden="true">
+                                        @endif
+                                    </div>
                                     <span class="stripe-icon" aria-hidden="true">
                                         <svg width="22" height="16" viewBox="0 0 24 16" fill="none">
                                             <rect x="0.75" y="0.75" width="22.5" height="14.5" rx="2.5" stroke="currentColor" stroke-width="1.5"/>
@@ -904,16 +944,16 @@
                         </div>
                     </div>
                     <div class="actions">
-                        <button type="submit" class="btn btn-primary" id="pay-button" disabled>
+                        <button type="submit" class="btn btn-primary" id="pay-button" @disabled(! $previewMode)>
                             <span class="btn-label">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                     <path d="M7 11V8a5 5 0 0 1 10 0v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                                     <rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="1.8"/>
                                 </svg>
-                                {{ $checkoutTheme->payButtonLabel(__('Pay')) }} {{ $formattedAmount }} {{ $order->currency }}
+                                <span data-preview-text="pay_button_label" data-default="{{ __('Pay') }}">{{ $checkoutTheme->payButtonLabel(__('Pay')) }}</span> {{ $formattedAmount }} {{ $order->currency }}
                             </span>
                         </button>
-                        <a class="btn btn-ghost" href="{{ $cancelUrl }}">{{ $checkoutTheme->cancelLabel(__('Cancel payment')) }}</a>
+                        <a class="btn btn-ghost" href="{{ $cancelUrl }}" data-preview-text="cancel_label" data-default="{{ __('Cancel payment') }}">{{ $checkoutTheme->cancelLabel(__('Cancel payment')) }}</a>
                     </div>
                     <div id="status" class="status" role="status" aria-live="polite"></div>
                     <div class="trust">
@@ -934,9 +974,12 @@
                 </form>
             </section>
         </main>
-        <p class="footnote">{{ $checkoutTheme->footer() ?: __('You can cancel and return to the store at any time before paying.') }}</p>
+        <p class="footnote" data-preview-text="footer" data-default="{{ __('You can cancel and return to the store at any time before paying.') }}">{{ $checkoutTheme->footer() ?: __('You can cancel and return to the store at any time before paying.') }}</p>
     </div>
 
+    @if ($previewMode)
+        @include('payments.partials.elavon-checkoutjs-preview-script')
+    @else
     <script>
         (function () {
             const sessionId = @json($sessionId);
@@ -1194,5 +1237,6 @@
             initializeHostedFields();
         })();
     </script>
+    @endif
 </body>
 </html>

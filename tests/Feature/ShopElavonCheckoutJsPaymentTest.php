@@ -240,3 +240,60 @@ it('builds the shop checkoutjs payment url when checkoutjs mode is enabled', fun
     expect($result['data']['mode'])->toBe('checkoutjs')
         ->and($result['data']['url'])->toBe(route('elavon.checkoutjs.shop.pay', $order->fresh()->uuid));
 });
+
+it('links the shop payment tab to the live checkout designer', function (): void {
+    [$user] = createCheckoutJsShop();
+
+    $this->actingAs($user)
+        ->get(route('shop.store.profile'))
+        ->assertSuccessful()
+        ->assertSee(route('shop.checkoutDesign.edit'), false)
+        ->assertSee('Live preview', false);
+});
+
+it('shows the shop checkout designer with a live preview frame', function (): void {
+    [$user] = createCheckoutJsShop();
+
+    $this->actingAs($user)
+        ->get(route('shop.checkoutDesign.edit'))
+        ->assertSuccessful()
+        ->assertSee('Elavon checkout page designer', false)
+        ->assertSee(route('shop.checkoutDesign.preview'), false)
+        ->assertSee('checkoutjs-preview:update', false)
+        ->assertSee('Primary color', false);
+});
+
+it('renders a mock shop checkout page for the preview without loading hosted fields', function (): void {
+    [$user, $shop] = createCheckoutJsShop();
+    $shop->update(['checkoutjs_appearance' => [
+        'heading' => 'Preview heading',
+        'primary_color' => '#224466',
+    ]]);
+
+    $this->actingAs($user)
+        ->get(route('shop.checkoutDesign.preview'))
+        ->assertSuccessful()
+        ->assertSee('Preview heading', false)
+        ->assertSee('#224466', false)
+        ->assertSee('4242 4242 4242 4242', false)
+        ->assertSee('data-preview-text="heading"', false)
+        ->assertDontSee('hosted-fields-client/index.js', false);
+});
+
+it('saves shop appearance from the checkout designer', function (): void {
+    [$user, $shop] = createCheckoutJsShop();
+
+    $this->actingAs($user)
+        ->post(route('shop.checkoutDesign.update'), [
+            'checkout_heading' => 'Designer heading',
+            'checkout_primary_color' => '#335577',
+            'checkout_custom_css' => '.pay { padding: 2rem; }',
+        ])
+        ->assertRedirect(route('shop.checkoutDesign.edit'));
+
+    $appearance = $shop->fresh()->checkoutjs_appearance;
+
+    expect($appearance['heading'])->toBe('Designer heading')
+        ->and($appearance['primary_color'])->toBe('#335577')
+        ->and($appearance['custom_css'])->toBe('.pay { padding: 2rem; }');
+});

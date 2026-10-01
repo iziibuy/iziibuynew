@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CheckoutDesignController;
 use App\Http\Controllers\Dashboard\Shop\BookingController;
 use App\Http\Controllers\Dashboard\Shop\BoxesController;
 use App\Http\Controllers\Dashboard\Shop\CategoriesController;
@@ -90,6 +91,9 @@ Route::middleware('Paid')->group(function () {
         Route::get('profile', [DashboardController::class, 'profile'])->name('profile');
         Route::post('profile', [DashboardController::class, 'updateProfile'])->name('profile.update');
     });
+    Route::get('settings/checkout-design', [CheckoutDesignController::class, 'editShop'])->name('checkoutDesign.edit');
+    Route::get('settings/checkout-design/preview', [CheckoutDesignController::class, 'previewShop'])->name('checkoutDesign.preview');
+    Route::post('settings/checkout-design', [CheckoutDesignController::class, 'updateShop'])->name('checkoutDesign.update');
     Route::resource('sliders', SlidersController::class);
 
     Route::resource('levels', LevelController::class);

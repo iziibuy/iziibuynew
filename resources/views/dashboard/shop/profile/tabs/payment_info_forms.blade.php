@@ -153,6 +153,7 @@
                 'checkoutTheme' => $shop->checkoutJsTheme(),
                 'appearance' => $shop->checkoutjs_appearance ?? [],
                 'companyNamePlaceholder' => $shop->company_name,
+                'designerUrl' => $editable ? null : route('shop.checkoutDesign.edit'),
             ])
         </div>
         <p id="shop-checkoutjs-appearance-hint" class="text-muted small mt-2 mb-0" @style(['display: none' => $checkoutJsSelected])>

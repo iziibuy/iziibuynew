@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ButtonPaymentController;
+use App\Http\Controllers\CheckoutDesignController;
 use App\Http\Controllers\Dashboard\External\DashboardController;
 use App\Http\Controllers\Dashboard\External\ExternalBookingController;
 use App\Http\Controllers\Dashboard\External\TicketController;
@@ -37,6 +38,9 @@ Route::middleware('ExternalPaid')->group(function () {
     Route::get('/button-payment/view/{paymentApi}/docs', [ButtonPaymentController::class, 'docs'])->name('buttonPayment.docs');
     Route::get('/button-payment/edit/{paymentApi}', [ButtonPaymentController::class, 'edit'])->name('buttonPayment.edit');
     Route::post('/button-payment/edit/{paymentApi}', [ButtonPaymentController::class, 'update'])->name('buttonPayment.update');
+    Route::get('/button-payment/{paymentApi}/checkout-design', [CheckoutDesignController::class, 'editButton'])->name('checkoutDesign.edit');
+    Route::get('/button-payment/{paymentApi}/checkout-design/preview', [CheckoutDesignController::class, 'previewButton'])->name('checkoutDesign.preview');
+    Route::post('/button-payment/{paymentApi}/checkout-design', [CheckoutDesignController::class, 'updateButton'])->name('checkoutDesign.update');
     Route::get('/button-payment/create', [ButtonPaymentController::class, 'create'])->name('buttonPayment.create');
     Route::post('/button-payment/store', [ButtonPaymentController::class, 'store'])->name('buttonPayment.store');
     Route::delete('/button-payment/{paymentApi}/order/{order}/cancel', [ButtonPaymentController::class, 'cancelOrder'])->name('buttonPayment.cancel');

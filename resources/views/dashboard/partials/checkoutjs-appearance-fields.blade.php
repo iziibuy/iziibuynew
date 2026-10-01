@@ -9,9 +9,16 @@
     ];
 @endphp
 
-<p class="text-muted mb-3">
-    {{ __('Customize the CheckoutJS payment page customers see. Leave a field empty to keep the default text.') }}
-</p>
+<div class="d-flex flex-wrap align-items-start justify-content-between mb-3" style="gap:0.75rem;">
+    <p class="text-muted mb-0">
+        {{ __('Customize the CheckoutJS payment page customers see. Leave a field empty to keep the default text.') }}
+    </p>
+    @if (! empty($designerUrl))
+        <a href="{{ $designerUrl }}" class="btn btn-outline-primary btn-sm">
+            <i class="fas fa-eye mr-1"></i>{{ __('Live preview') }}
+        </a>
+    @endif
+</div>
 
 <h5 class="mb-2">{{ __('Branding') }}</h5>
 <x-form.input type="text" name="checkout_company_name" label="Company name"
@@ -162,6 +169,7 @@
                 : snippet;
             area.focus();
             area.setSelectionRange(area.value.length, area.value.length);
+            area.dispatchEvent(new Event('input', { bubbles: true }));
         });
     });
 </script>

@@ -386,3 +386,62 @@ it('does not store checkout appearance for hosted buttons', function (): void {
 
     expect($api->fresh()->checkoutjs_appearance)->toBeNull();
 });
+
+it('shows the plugin checkout designer with a live preview frame', function (): void {
+    [$user, , $api] = createCheckoutJsPlugin();
+
+    $this->actingAs($user)
+        ->get(route('external.buttonPayment.edit', $api))
+        ->assertSuccessful()
+        ->assertSee(route('external.checkoutDesign.edit', $api), false);
+
+    $this->actingAs($user)
+        ->get(route('external.checkoutDesign.edit', $api))
+        ->assertSuccessful()
+        ->assertSee('Elavon checkout page designer', false)
+        ->assertSee(route('external.checkoutDesign.preview', $api), false);
+});
+
+it('renders a mock plugin checkout page for the preview', function (): void {
+    [$user, , $api] = createCheckoutJsPlugin(apiOverrides: [
+        'checkoutjs_appearance' => ['company_name' => 'Preview Plugin Brand'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('external.checkoutDesign.preview', $api))
+        ->assertSuccessful()
+        ->assertSee('Preview Plugin Brand', false)
+        ->assertSee('data-default="Checkout Plugin"', false)
+        ->assertDontSee('hosted-fields-client/index.js', false);
+});
+
+it('saves plugin appearance from the checkout designer', function (): void {
+    [$user, , $api] = createCheckoutJsPlugin();
+
+    $this->actingAs($user)
+        ->post(route('external.checkoutDesign.update', $api), [
+            'checkout_pay_button_label' => 'Pay now',
+            'checkout_background_color' => '#FAFAFA',
+        ])
+        ->assertRedirect(route('external.checkoutDesign.edit', $api));
+
+    expect($api->fresh()->checkoutjs_appearance['pay_button_label'])->toBe('Pay now')
+        ->and($api->fresh()->checkoutjs_appearance['background_color'])->toBe('#FAFAFA');
+});
+
+it('does not let other plugin users open someone else\'s checkout designer', function (): void {
+    [, , $api] = createCheckoutJsPlugin();
+    [$otherUser] = createCheckoutJsPlugin();
+
+    $this->actingAs($otherUser)
+        ->get(route('external.checkoutDesign.edit', $api))
+        ->assertForbidden();
+
+    $this->actingAs($otherUser)
+        ->get(route('external.checkoutDesign.preview', $api))
+        ->assertForbidden();
+
+    $this->actingAs($otherUser)
+        ->post(route('external.checkoutDesign.update', $api), ['checkout_heading' => 'Hijack'])
+        ->assertForbidden();
+});

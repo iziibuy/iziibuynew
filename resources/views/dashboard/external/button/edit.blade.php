@@ -89,6 +89,7 @@
                                     'checkoutTheme' => $checkoutTheme,
                                     'appearance' => $appearance,
                                     'companyNamePlaceholder' => $paymentApi->paymentMethodAccess?->company_name,
+                                    'designerUrl' => route('external.checkoutDesign.edit', $paymentApi),
                                 ])
                             </div>
                             <div id="checkoutjs-appearance-disabled" class="text-muted" @style(['display: none' => $checkoutEnabled])>
