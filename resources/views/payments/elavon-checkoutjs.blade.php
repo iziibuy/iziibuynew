@@ -1,6 +1,7 @@
 @php
     $previewMode = $previewMode ?? false;
     $companyNameFallback = $companyNameFallback ?? $companyName;
+    $subscriptionIntervalDays = $subscriptionIntervalDays ?? null;
 @endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
@@ -671,6 +672,13 @@
         }
 
         .status:empty { display: none; }
+
+        .consent {
+            margin: 0.85rem 0 0;
+            color: var(--muted);
+            font-size: 0.8rem;
+            line-height: 1.45;
+        }
         .status.error { color: var(--danger); background: var(--danger-bg); }
         .status.ok { color: var(--ok); background: var(--mint); }
         .status.info { color: var(--forest); background: var(--info-bg); }
@@ -819,6 +827,12 @@
                             <dd>{{ $order->orderId }}</dd>
                         </div>
                     @endif
+                    @if ($subscriptionIntervalDays)
+                        <div class="fact">
+                            <dt>{{ __('Billing') }}</dt>
+                            <dd>{{ trans_choice('Every day|Every :count days', $subscriptionIntervalDays, ['count' => $subscriptionIntervalDays]) }}</dd>
+                        </div>
+                    @endif
                     <div class="fact">
                         <dt>{{ __('Customer') }}</dt>
                         <dd>{{ $order->customer_name }}</dd>
@@ -955,6 +969,15 @@
                         </button>
                         <a class="btn btn-ghost" href="{{ $cancelUrl }}" data-preview-text="cancel_label" data-default="{{ __('Cancel payment') }}">{{ $checkoutTheme->cancelLabel(__('Cancel payment')) }}</a>
                     </div>
+                    @if ($subscriptionIntervalDays)
+                        <p class="consent">
+                            {{ trans_choice(
+                                'Your card will be saved securely by Elavon. By paying you authorize :company to charge :amount :currency now and every day until you cancel.|Your card will be saved securely by Elavon. By paying you authorize :company to charge :amount :currency now and every :count days until you cancel.',
+                                $subscriptionIntervalDays,
+                                ['company' => $companyName, 'amount' => $formattedAmount, 'currency' => $order->currency, 'count' => $subscriptionIntervalDays]
+                            ) }}
+                        </p>
+                    @endif
                     <div id="status" class="status" role="status" aria-live="polite"></div>
                     <div class="trust">
                         <p>
@@ -984,6 +1007,7 @@
         (function () {
             const sessionId = @json($sessionId);
             const completeUrl = @json($completeUrl);
+            const tokenizeCard = @json((bool) $subscriptionIntervalDays);
             const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             const billTo = {
                 fullName: @json($order->customer_name),
@@ -1015,6 +1039,7 @@
 
             let elavonHostedFields = null;
             let submitting = false;
+            let needsNewSession = false;
 
             function setStatus(message, type) {
                 statusEl.textContent = message || '';
@@ -1131,6 +1156,18 @@
                     return;
                 }
 
+                if (message.type === 'hostedCardCreated' && tokenizeCard) {
+                    setStatus('Card verified. Saving card and taking the first payment…', 'info');
+                    finalizeOnServer()
+                        .then((payload) => { window.location.href = payload.redirect_url; })
+                        .catch((error) => {
+                            needsNewSession = true;
+                            setPaying(false);
+                            setStatus((error.message || 'Unable to save card.') + ' Press the button to try again.', 'error');
+                        });
+                    return;
+                }
+
                 if (message.type === 'transactionCreated') {
                     if (message.isAuthorized) {
                         setStatus('Payment approved. Confirming…', 'ok');
@@ -1207,6 +1244,10 @@
 
             form.addEventListener('submit', function (event) {
                 event.preventDefault();
+                if (needsNewSession) {
+                    window.location.reload();
+                    return;
+                }
                 if (submitting || !elavonHostedFields) {
                     return;
                 }

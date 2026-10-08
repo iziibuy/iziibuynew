@@ -74,7 +74,13 @@
                     <span class="api-op__path">/create-subscription/{{ $paymentMethodAccess->key }}</span>
                 </div>
                 <div class="api-op__body">
-                    <p class="text-muted mb-0">{{ __('Creates a pending subscription and returns a hosted payment URL for the first charge.') }}</p>
+                    <p class="text-muted mb-0">
+                        @if ($paymentApi->usesElavonCheckoutJs())
+                            {{ __('Creates a pending subscription and returns your branded CheckoutJS payment page URL. The card is tokenized on that page, saved for renewals, and the first period is charged.') }}
+                        @else
+                            {{ __('Creates a pending subscription and returns a hosted payment URL for the first charge.') }}
+                        @endif
+                    </p>
 
                     <h3>{{ __('cURL Example') }}</h3>
                     <pre class="api-code"><code>curl --location --request POST '{{ $createSubscriptionUrl }}' \

@@ -14,6 +14,7 @@ use App\Elavon\Converge2\Response\StoredCardResponse;
 use App\Models\ExternalSubscription;
 use App\Models\PaymentMethodAccess;
 use App\Services\Elavon\ElavonRecurringTransaction;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -96,9 +97,104 @@ class ApiElavonButtonSubscription
             'code' => 200,
             'data' => [
                 'payment_id' => $sessionId,
-                'url' => $this->endpoint.'/?merchantAlias='.$this->keys['mercahantAlias'].'&publicApiKey='.$this->keys['publicKey'].'&sessionId='.$sessionId,
+                'url' => $this->usesCheckoutJs()
+                    ? route('elavon.checkoutjs.subscription.pay', $this->subscription->uuid)
+                    : $this->hostedPaymentPageUrl($sessionId),
+                'mode' => $this->usesCheckoutJs() ? 'checkoutjs' : 'hosted',
             ],
         ];
+    }
+
+    public function usesCheckoutJs(): bool
+    {
+        return $this->subscription->paymentApi?->usesElavonCheckoutJs() ?? false;
+    }
+
+    public function hostedFieldsScriptUrl(): string
+    {
+        return rtrim($this->endpoint, '/').'/hosted-fields-client/index.js';
+    }
+
+    public function hostedPaymentPageUrl(string $sessionId): string
+    {
+        return $this->endpoint.'/?merchantAlias='.$this->keys['mercahantAlias']
+            .'&publicApiKey='.$this->keys['publicKey']
+            .'&sessionId='.$sessionId;
+    }
+
+    /**
+     * Ensure the subscription has a tokenize-only Hosted Fields session for CheckoutJS.
+     *
+     * @return array{status:bool,payment_id?:string,message?:string}
+     */
+    public function ensureCheckoutJsSession(): array
+    {
+        if (! $this->usesCheckoutJs()) {
+            return ['status' => false, 'message' => 'CheckoutJS mode is not enabled for this button.'];
+        }
+
+        $existing = (string) ($this->subscription->payment_id ?? '');
+
+        if ($existing !== '') {
+            $session = $this->elavon->getPaymentSession($existing);
+            $expiresAt = $session->isSuccess() ? $session->getExpiresAt() : null;
+
+            if ($session->isSuccess()
+                && ! $session->getDoCreateTransaction()
+                && ! $session->getHostedCard()
+                && (blank($expiresAt) || now()->addMinutes(2)->lt(Carbon::parse((string) $expiresAt)))) {
+                return ['status' => true, 'payment_id' => $existing];
+            }
+        }
+
+        $created = $this->getPaymentLink();
+
+        if (! ($created['status'] ?? false)) {
+            return [
+                'status' => false,
+                'message' => $created['data']['message'] ?? 'Unable to create CheckoutJS payment session.',
+            ];
+        }
+
+        $sessionId = (string) $created['data']['payment_id'];
+
+        $this->subscription->update([
+            'payment_id' => $sessionId,
+            'payment_url' => $created['data']['url'],
+            'payment_method' => 'elavon',
+        ]);
+
+        return ['status' => true, 'payment_id' => $sessionId];
+    }
+
+    /**
+     * Complete a CheckoutJS signup: the hosted card token from Hosted Fields is vaulted
+     * as a stored card and the first payment is taken with it.
+     *
+     * @return array{status:bool,message:?string}
+     */
+    public function finalizeCheckoutJsSubscription(string $sessionId): array
+    {
+        if ((string) $this->subscription->payment_id !== $sessionId) {
+            return ['status' => false, 'message' => 'Payment session mismatch.'];
+        }
+
+        if ($this->subscription->isActive()) {
+            return ['status' => true, 'message' => null];
+        }
+
+        $result = $this->finalizeFromSession($sessionId);
+
+        if (! $result['status']) {
+            $this->subscription->update(['payment_id' => null]);
+
+            return [
+                'status' => false,
+                'message' => (string) ($result['data']['message'] ?? 'Card could not be saved.'),
+            ];
+        }
+
+        return ['status' => true, 'message' => null];
     }
 
     /**
@@ -261,6 +357,22 @@ class ApiElavonButtonSubscription
     /** @return array<string, mixed> */
     protected function makePaymentSessionCreateBody(OrderResponse $order): array
     {
+        if ($this->usesCheckoutJs()) {
+            return [
+                'order' => $order->getId(),
+                'billTo' => $this->billTo(),
+                'originUrl' => $this->checkoutJsOriginUrl(),
+                'defaultLanguageTag' => 'en-US',
+                'customFields' => [
+                    'vendor_id' => config('app.name'),
+                    'external_subscription_id' => (string) $this->subscription->id,
+                ],
+                'doCreateTransaction' => false,
+                'doThreeDSecure' => 1,
+                'hppType' => 'hostedPaymentFields',
+            ];
+        }
+
         return [
             'order' => $order->getId(),
             'billTo' => $this->billTo(),
@@ -278,6 +390,17 @@ class ApiElavonButtonSubscription
             'doThreeDSecure' => 1,
             'hppType' => 'fullPageRedirect',
         ];
+    }
+
+    protected function checkoutJsOriginUrl(): string
+    {
+        $configured = config('services.enterprise_elavon.hpp_origin_url');
+
+        $origin = is_string($configured) && trim($configured) !== ''
+            ? trim($configured)
+            : (string) config('app.url');
+
+        return rtrim($origin, '/').'/';
     }
 
     /** @return array<string, mixed> */

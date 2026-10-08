@@ -11,6 +11,7 @@ use App\Http\Controllers\Dashboard\Shop\PaymentController;
 use App\Http\Controllers\Dashboard\Shop\RegisterController;
 use App\Http\Controllers\Dashboard\Shop\TicketController;
 use App\Http\Controllers\ElavonCheckoutJsController;
+use App\Http\Controllers\ElavonCheckoutJsSubscriptionController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\ShopElavonCheckoutJsController;
@@ -100,6 +101,9 @@ Route::post('send-notification', [HomeController::class, 'send_notification'])->
 Route::post('/newsletter/subscribe', [HomeController::class, 'newsletter'])->name('newsletter.subscribe');
 Route::any('surfboard/callback', SurfboardPaymentCallback::class)->name('surfboard.callback');
 Route::get('button-payment/cancel-callback', [ButtonPaymentController::class, 'cancelCallback'])->name('buttonPayment.cancelCallback');
+Route::get('pay/elavon/subscription/{uuid}', [ElavonCheckoutJsSubscriptionController::class, 'show'])->name('elavon.checkoutjs.subscription.pay');
+Route::post('pay/elavon/subscription/{uuid}/complete', [ElavonCheckoutJsSubscriptionController::class, 'complete'])->name('elavon.checkoutjs.subscription.complete');
+Route::get('pay/elavon/subscription/{uuid}/cancel', [ElavonCheckoutJsSubscriptionController::class, 'cancel'])->name('elavon.checkoutjs.subscription.cancel');
 Route::get('pay/elavon/shop/{uuid}', [ShopElavonCheckoutJsController::class, 'show'])->name('elavon.checkoutjs.shop.pay');
 Route::post('pay/elavon/shop/{uuid}/complete', [ShopElavonCheckoutJsController::class, 'complete'])->name('elavon.checkoutjs.shop.complete');
 Route::get('pay/elavon/shop/{uuid}/cancel', [ShopElavonCheckoutJsController::class, 'cancel'])->name('elavon.checkoutjs.shop.cancel');
