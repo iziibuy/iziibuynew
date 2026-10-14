@@ -115,6 +115,22 @@ class ElavonRecurringTransaction
     }
 
     /**
+     * Last four card digits from an Elavon transaction response, when present.
+     */
+    public static function cardLastFour(ResponseInterface $response): ?string
+    {
+        try {
+            $lastFour = method_exists($response, 'castCard') ? $response->castCard()?->getLast4() : null;
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $digits = preg_replace('/\D/', '', (string) $lastFour);
+
+        return strlen((string) $digits) >= 4 ? substr((string) $digits, -4) : null;
+    }
+
+    /**
      * Run a zero-amount account verification to register the card for future MIT billing.
      *
      * @return array{status: bool, data: array<string, mixed>}

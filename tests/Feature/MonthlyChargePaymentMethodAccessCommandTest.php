@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\PaymentMethodAccess;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 it('reports when no payment method accesses are due', function (): void {
@@ -41,6 +42,36 @@ it('lists due payment method accesses in dry-run without charging', function ():
         ->assertSuccessful();
 
     expect((string) $access->fresh()->last_paid_at)->toStartWith($paidAt->toDateString());
+});
+
+it('charges the full monthly fee on renewal even when run mid-month', function (): void {
+    $this->travelTo(Carbon::parse('2026-10-14 09:51:40'));
+
+    $access = PaymentMethodAccess::query()->create([
+        'user_id' => User::factory()->create()->id,
+        'company_name' => 'Mid Month Plugin',
+        'company_email' => 'midmonth-'.uniqid().'@example.com',
+        'key' => (string) Str::uuid(),
+        'subscriptionMethod' => 'elavon',
+        'paymentMethod' => 'elavon',
+        'status' => 1,
+        'fee' => 199,
+        'last_paid_at' => Carbon::parse('2026-09-15'),
+    ]);
+
+    $access->subscription()->create([
+        'key' => 'stored-card-midmonth',
+        'fee' => 199,
+        'status' => 1,
+        'paid_at' => Carbon::parse('2026-09-15'),
+    ]);
+
+    expect($access->monthlyRenewalFee())->toBe(248.75)
+        ->and($access->fee())->toBeLessThan(248.75);
+
+    $this->artisan('payment-method-access:charge', ['status' => 1, '--dry-run' => true, '--id' => $access->id])
+        ->expectsOutputToContain('fee: 248.75 NOK (full month 01 Oct 2026 – 31 Oct 2026)')
+        ->assertSuccessful();
 });
 
 it('explains why a filtered payment method access is not due', function (): void {

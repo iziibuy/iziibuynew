@@ -246,16 +246,16 @@ class PaymentMethodAccess extends Model
         return Attribute::make(get: fn () => self::companyAddressAsString($this->company_address));
     }
 
+    /**
+     * Signup charge: the monthly fee pro-rated for the rest of the current month, plus VAT.
+     */
     public function fee(): float
     {
         if (ElavonOnboardingPromo::isFreeSubscriptionPeriod()) {
             return ElavonOnboardingPromo::PROMO_SIGNUP_FEE;
         }
 
-        $base = (float) ($this->attributes['fee'] ?? 0);
-        if ($base <= 0) {
-            $base = (float) setting('payment.payment_method_fee', 0);
-        }
+        $base = $this->baseMonthlyFee();
 
         if ($base <= 0) {
             return 0.0;
@@ -264,6 +264,33 @@ class PaymentMethodAccess extends Model
         $prorated = Iziibuy::needToCharge($base);
 
         return $prorated + ($prorated * 0.25);
+    }
+
+    /**
+     * Monthly renewal charge: the full monthly fee plus VAT, never pro-rated.
+     */
+    public function monthlyRenewalFee(): float
+    {
+        $base = $this->baseMonthlyFee();
+
+        if ($base <= 0) {
+            return 0.0;
+        }
+
+        return round($base + ($base * 0.25), 2);
+    }
+
+    /**
+     * Monthly plugin price excluding VAT.
+     */
+    public function baseMonthlyFee(): float
+    {
+        $base = (float) ($this->attributes['fee'] ?? 0);
+        if ($base <= 0) {
+            $base = (float) setting('payment.payment_method_fee', 0);
+        }
+
+        return max($base, 0.0);
     }
 
     public function subscription()

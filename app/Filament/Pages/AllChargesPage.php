@@ -4,13 +4,23 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Exceptions\ChargeRefundException;
+use App\Models\ChargeRefund;
+use App\Services\Admin\ChargeBreakdown;
+use App\Services\Admin\ChargeCardLookup;
+use App\Services\Admin\ChargeCsvExporter;
+use App\Services\Admin\ChargeRefundService;
 use App\Services\Admin\UnifiedChargeLedger;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\FontFamily;
+use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
@@ -21,14 +31,19 @@ use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Url;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class AllChargesPage extends Page implements HasTable
 {
     use InteractsWithTable {
         makeTable as makeBaseTable;
     }
+
+    protected const CARD_LOOKUPS_PER_RENDER = 25;
 
     protected static ?string $slug = 'all-charges';
 
@@ -77,7 +92,10 @@ class AllChargesPage extends Page implements HasTable
 
     public function table(Table $table): Table
     {
+        $cardLookup = app(ChargeCardLookup::class)->limitRemoteLookups(self::CARD_LOOKUPS_PER_RENDER);
+
         return $table
+            ->deferLoading()
             ->records(function (
                 ?array $filters,
                 int|string $page,
@@ -86,23 +104,7 @@ class AllChargesPage extends Page implements HasTable
                 ?string $sortDirection,
                 ?string $search,
             ): LengthAwarePaginator {
-                $rows = app(UnifiedChargeLedger::class)->collect($filters, $sortColumn, $sortDirection);
-
-                if (filled($search)) {
-                    $needle = Str::lower((string) $search);
-                    $rows = $rows->filter(function (array $row) use ($needle): bool {
-                        $haystack = Str::lower(implode(' ', [
-                            $row['reference'] ?? '',
-                            $row['entity_name'] ?? '',
-                            $row['email'] ?? '',
-                            $row['model_label'] ?? '',
-                            $row['description'] ?? '',
-                            $row['source_label'] ?? '',
-                        ]));
-
-                        return str_contains($haystack, $needle);
-                    })->values();
-                }
+                $rows = $this->chargeRows($filters, $sortColumn, $sortDirection, $search);
 
                 $perPage = $recordsPerPage === 'all'
                     ? max($rows->count(), 1)
@@ -110,7 +112,7 @@ class AllChargesPage extends Page implements HasTable
                 $currentPage = max((int) $page, 1);
 
                 return new LengthAwarePaginator(
-                    items: $rows->forPage($currentPage, $perPage)->values()->all(),
+                    items: $rows->forPage($currentPage, $perPage)->keyBy('id')->all(),
                     total: $rows->count(),
                     perPage: $perPage,
                     currentPage: $currentPage,
@@ -152,10 +154,21 @@ class AllChargesPage extends Page implements HasTable
                     ->alignEnd()
                     ->sortable()
                     ->formatStateUsing(fn ($state, array $record): string => number_format((float) $state, 2).' '.($record['currency'] ?? 'NOK')),
+                TextColumn::make('card_last_four')
+                    ->label(__('Card'))
+                    ->state(fn (array $record): ?string => $cardLookup->lastFour($record))
+                    ->formatStateUsing(fn (string $state): string => '•••• '.$state)
+                    ->fontFamily(FontFamily::Mono)
+                    ->placeholder('-')
+                    ->toggleable(),
                 TextColumn::make('status_label')
                     ->label(__('Status'))
                     ->badge()
-                    ->color(fn (string $state, array $record): string => ($record['status'] ?? false) ? 'success' : 'danger'),
+                    ->color(fn (string $state, array $record): string => match (true) {
+                        (bool) ($record['refunded'] ?? false) => 'warning',
+                        (bool) ($record['status'] ?? false) => 'success',
+                        default => 'danger',
+                    }),
                 TextColumn::make('description')
                     ->label(__('Description'))
                     ->toggleable()
@@ -165,6 +178,20 @@ class AllChargesPage extends Page implements HasTable
                     ->label(__('Email'))
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->placeholder('-'),
+            ])
+            ->headerActions([
+                Action::make('exportCsv')
+                    ->label(__('Export CSV'))
+                    ->icon(Heroicon::OutlinedArrowDownTray)
+                    ->color('gray')
+                    ->action(fn (): StreamedResponse => app(ChargeCsvExporter::class)->download(
+                        $this->chargeRows(
+                            $this->tableFilters,
+                            $this->getTableSortColumn() ?? 'created_at',
+                            $this->getTableSortDirection() ?? 'desc',
+                            $this->getTableSearch(),
+                        ),
+                    )),
             ])
             ->defaultSort('created_at', 'desc')
             ->paginated([10, 25, 50, 100])
@@ -182,6 +209,7 @@ class AllChargesPage extends Page implements HasTable
                     ->options([
                         'paid' => __('Paid'),
                         'unpaid' => __('Unpaid'),
+                        'refunded' => __('Refunded'),
                     ]),
                 Filter::make('date')
                     ->label(__('Date'))
@@ -206,6 +234,74 @@ class AllChargesPage extends Page implements HasTable
                     }),
             ])
             ->recordActions([
+                Action::make('breakdown')
+                    ->label(__('Calculation breakdown'))
+                    ->tooltip(__('Calculation breakdown'))
+                    ->icon(Heroicon::OutlinedCalculator)
+                    ->iconButton()
+                    ->color('gray')
+                    ->modalHeading(fn (array $record): string => __('Calculation breakdown').' — '.($record['reference'] ?? ''))
+                    ->modalWidth(Width::Large)
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel(__('Close'))
+                    ->modalContent(fn (array $record): View => view('filament.pages.partials.all-charge-breakdown', [
+                        'breakdown' => app(ChargeBreakdown::class)->forRecord($record),
+                        'cardLastFour' => app(ChargeCardLookup::class)->lastFour($record),
+                    ])),
+                Action::make('refund')
+                    ->label(__('Refund'))
+                    ->tooltip(__('Refund charge'))
+                    ->icon(Heroicon::OutlinedArrowUturnLeft)
+                    ->iconButton()
+                    ->color('danger')
+                    ->visible(fn (array $record): bool => app(ChargeRefundService::class)->blockedReason($record) === null)
+                    ->authorize(fn (): bool => (bool) auth()->user()?->hasRole('admin'))
+                    ->requiresConfirmation()
+                    ->modalIcon(Heroicon::OutlinedArrowUturnLeft)
+                    ->modalHeading(fn (array $record): string => __('Refund :amount :currency?', [
+                        'amount' => number_format((float) $record['amount'], 2),
+                        'currency' => $record['currency'] ?? 'NOK',
+                    ]))
+                    ->modalDescription(fn (array $record): string => $this->refundDescription($record))
+                    ->schema([
+                        Textarea::make('reason')
+                            ->label(__('Reason'))
+                            ->required()
+                            ->maxLength(1000),
+                    ])
+                    ->modalSubmitActionLabel(__('Refund to card'))
+                    ->action(function (array $record, array $data, Action $action): void {
+                        try {
+                            $refund = app(ChargeRefundService::class)->refund($record, (string) $data['reason'], auth()->user());
+                        } catch (Throwable $exception) {
+                            if (! $exception instanceof ChargeRefundException) {
+                                report($exception);
+                            }
+
+                            Notification::make()
+                                ->danger()
+                                ->title(__('Refund failed'))
+                                ->body($exception instanceof ChargeRefundException
+                                    ? $exception->getMessage()
+                                    : __('Unexpected error while contacting Elavon. Nothing was changed locally; check Elavon before retrying.'))
+                                ->persistent()
+                                ->send();
+
+                            $action->halt();
+
+                            return;
+                        }
+
+                        Notification::make()
+                            ->success()
+                            ->title(__('Charge refunded'))
+                            ->body(__(':amount NOK :operation at Elavon (transaction :id).', [
+                                'amount' => number_format((float) $refund->amount, 2),
+                                'operation' => $refund->provider_operation === ChargeRefund::OPERATION_VOID ? __('voided') : __('refunded'),
+                                'id' => $refund->provider_transaction_id,
+                            ]))
+                            ->send();
+                    }),
                 Action::make('view')
                     ->label(__('View'))
                     ->icon(Heroicon::OutlinedEye)
@@ -228,6 +324,57 @@ class AllChargesPage extends Page implements HasTable
             ->emptyStateHeading(__('No charges found'))
             ->emptyStateDescription(__('Try adjusting the model or date filters.'))
             ->emptyStateIcon(Heroicon::OutlinedQueueList);
+    }
+
+    /**
+     * @param  array<string, mixed>  $record
+     */
+    protected function refundDescription(array $record): string
+    {
+        $cardLastFour = app(ChargeCardLookup::class)->lastFour($record);
+
+        $lines = [
+            $cardLastFour !== null
+                ? __('The full amount goes back to card •••• :card through Elavon. This cannot be undone.', ['card' => $cardLastFour])
+                : __('The full amount goes back to the card through Elavon. This cannot be undone.'),
+            __('The account\'s paid date returns to its previous charge, so the next monthly run charges it again. The account stays active.'),
+        ];
+
+        if (($record['source'] ?? null) === UnifiedChargeLedger::SOURCE_SHOP) {
+            $lines[] = __('Retailer commission paid out for this charge is reversed.');
+        }
+
+        return implode(' ', $lines);
+    }
+
+    /**
+     * Filtered, searched, and sorted ledger rows shared by the table and the CSV export.
+     *
+     * @param  array<string, mixed>|null  $filters
+     * @return Collection<int, array<string, mixed>>
+     */
+    protected function chargeRows(?array $filters, ?string $sortColumn, ?string $sortDirection, ?string $search): Collection
+    {
+        $rows = app(UnifiedChargeLedger::class)->collect($filters, $sortColumn, $sortDirection);
+
+        if (blank($search)) {
+            return $rows;
+        }
+
+        $needle = Str::lower($search);
+
+        return $rows->filter(function (array $row) use ($needle): bool {
+            $haystack = Str::lower(implode(' ', [
+                $row['reference'] ?? '',
+                $row['entity_name'] ?? '',
+                $row['email'] ?? '',
+                $row['model_label'] ?? '',
+                $row['description'] ?? '',
+                $row['source_label'] ?? '',
+            ]));
+
+            return str_contains($haystack, $needle);
+        })->values();
     }
 
     protected function makeTable(): Table

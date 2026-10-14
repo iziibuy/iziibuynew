@@ -81,8 +81,8 @@ class MonthlyChargePaymentMethodAccess extends Command
                 continue;
             }
 
-            $fee = $data->fee();
-            $this->line('    fee: '.number_format($fee, 2).' NOK');
+            $fee = $data->monthlyRenewalFee();
+            $this->line('    fee: '.number_format($fee, 2).' NOK (full month '.$startOfMonth->format('d M Y').' – '.$startOfMonth->copy()->endOfMonth()->format('d M Y').')');
 
             if ($dryRun) {
                 $this->comment('    DRY-RUN: would charge now.');

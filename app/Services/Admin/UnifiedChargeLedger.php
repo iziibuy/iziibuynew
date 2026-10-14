@@ -6,6 +6,7 @@ namespace App\Services\Admin;
 
 use App\Filament\Resources\Charges\ChargeResource;
 use App\Models\Charge;
+use App\Models\ChargeRefund;
 use App\Models\Enterprise;
 use App\Models\ExternalSubscription;
 use App\Models\ExternalSubscriptionCharge;
@@ -26,6 +27,18 @@ class UnifiedChargeLedger
     public const SOURCE_EXTERNAL_SUBSCRIPTION = 'external_subscription_charge';
 
     public const SOURCE_MEMBERSHIP = 'membership_charge';
+
+    /**
+     * Refunds keyed by ledger row id, loaded once per collect().
+     *
+     * @var Collection<string, ChargeRefund>
+     */
+    protected Collection $refunds;
+
+    public function __construct()
+    {
+        $this->refunds = collect();
+    }
 
     /**
      * @return array<string, string>
@@ -55,12 +68,30 @@ class UnifiedChargeLedger
     }
 
     /**
+     * Split a row key such as "shop_charge-42" into its source and charge id.
+     *
+     * @return array{0: string, 1: int}
+     */
+    public static function parseKey(string $key): array
+    {
+        $separator = strrpos($key, '-');
+
+        if ($separator === false) {
+            return [$key, 0];
+        }
+
+        return [substr($key, 0, $separator), (int) substr($key, $separator + 1)];
+    }
+
+    /**
      * @param  array<string, mixed>|null  $filters
      * @return Collection<int, array<string, mixed>>
      */
     public function collect(?array $filters = null, ?string $sortColumn = null, ?string $sortDirection = null): Collection
     {
         $filters ??= [];
+
+        $this->refunds = ChargeRefund::query()->get()->keyBy('ledger_key');
 
         $rows = collect()
             ->concat($this->shopCharges())
@@ -122,6 +153,9 @@ class UnifiedChargeLedger
                         'details' => $this->prettyJson($charge->getAttributes()['details'] ?? null),
                         'payment_body' => $this->prettyJson($charge->getAttributes()['payment_body'] ?? null),
                         'view_url' => $this->safeChargeViewUrl($charge),
+                        'elavon_transaction_id' => $shop?->subscriptionMethod === 'elavon' && ChargeElavonGateway::looksLikeTransactionId((string) $charge->order_id)
+                            ? (string) $charge->order_id
+                            : null,
                     ],
                 );
             });
@@ -182,6 +216,10 @@ class UnifiedChargeLedger
                         'last_four' => $charge->last4,
                         'payment_details' => $this->prettyJson($charge->getAttributes()['payment_details'] ?? null),
                         'charge_details' => $this->prettyJson($charge->getAttributes()['charge_details'] ?? null),
+                        'elavon_transaction_id' => ($subscribable instanceof PaymentMethodAccess || $subscribable instanceof Enterprise)
+                            && ChargeElavonGateway::looksLikeTransactionId((string) $charge->elavon_transaction_id)
+                            ? (string) $charge->elavon_transaction_id
+                            : null,
                     ],
                 );
             });
@@ -279,9 +317,11 @@ class UnifiedChargeLedger
 
         $status = data_get($filters, 'status.value') ?? data_get($filters, 'status');
         if ($status === '1' || $status === 1 || $status === true || $status === 'paid') {
-            $rows = $rows->where('status', true)->values();
+            $rows = $rows->where('status', true)->where('refunded', false)->values();
         } elseif ($status === '0' || $status === 0 || $status === false || $status === 'unpaid') {
             $rows = $rows->where('status', false)->values();
+        } elseif ($status === 'refunded') {
+            $rows = $rows->where('refunded', true)->values();
         }
 
         $from = data_get($filters, 'date.from');
@@ -319,6 +359,17 @@ class UnifiedChargeLedger
         mixed $createdAt,
         array $extras = [],
     ): array {
+        $refund = $this->refunds->get($key);
+
+        if ($refund !== null) {
+            $extras['refund'] = [
+                'refunded_at' => $refund->created_at?->toDateTimeString(),
+                'operation' => $refund->provider_operation,
+                'elavon_transaction_id' => $refund->provider_transaction_id,
+                'reason' => $refund->reason,
+            ];
+        }
+
         return [
             'id' => $key,
             'source' => $source,
@@ -329,7 +380,12 @@ class UnifiedChargeLedger
             'amount' => $amount,
             'currency' => $currency,
             'status' => $status,
-            'status_label' => $status ? __('Paid') : __('Unpaid'),
+            'refunded' => $refund !== null,
+            'status_label' => match (true) {
+                $refund !== null => __('Refunded'),
+                $status => __('Paid'),
+                default => __('Unpaid'),
+            },
             'reference' => $reference,
             'description' => $description,
             'entity_name' => $entityName,

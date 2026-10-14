@@ -204,7 +204,7 @@ class ElavonExternalSubscription
         }
 
         $transactionId = (string) $response->getId();
-        $this->recordCharge($subscription, $amountNok, $transactionId, $paymentDetails);
+        $this->recordCharge($subscription, $amountNok, $transactionId, $paymentDetails, ElavonRecurringTransaction::cardLastFour($response));
 
         return [
             'status' => true,
@@ -311,13 +311,17 @@ class ElavonExternalSubscription
         return filled($transactionId) ? (string) $transactionId : null;
     }
 
-    protected function recordCharge(Subscription $subscription, float $amountNok, string $transactionId, array $paymentDetails): void
+    protected function recordCharge(Subscription $subscription, float $amountNok, string $transactionId, array $paymentDetails, ?string $cardLastFour = null): void
     {
         $subscription->charges()->create([
             'amount' => $amountNok,
             'status' => true,
             'elavon_transaction_id' => $transactionId,
-            'charge_details' => json_encode(['transaction_id' => $transactionId, 'provider' => 'elavon']),
+            'charge_details' => json_encode(array_filter([
+                'transaction_id' => $transactionId,
+                'provider' => 'elavon',
+                'last4' => $cardLastFour,
+            ], fn (mixed $value): bool => $value !== null)),
             'payment_details' => json_encode(array_merge([
                 'payment_method_access' => [
                     'id' => $this->access->id,
