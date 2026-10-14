@@ -6,6 +6,7 @@ use App\Models\Charge;
 use App\Models\Shop;
 use App\Payment\Elavon\ElavonShopSubscription;
 use App\Services\RetailerCommission;
+use App\Services\Subscription\MonthlyBillingPeriod;
 use Error;
 use Exception;
 use Illuminate\Console\Command;
@@ -19,7 +20,9 @@ class MonthlyCharge extends Command
      *
      * @var string
      */
-    protected $signature = 'monthly:charge {status=0}';
+    protected $signature = 'monthly:charge
+                            {status=0 : Status to set on failed charge (0=deactivate, 1=keep active)}
+                            {--month= : Bill for this calendar month (YYYY-MM), default: current month}';
 
     /**
      * The console command description.
@@ -45,13 +48,17 @@ class MonthlyCharge extends Command
      */
     public function handle()
     {
+        $billingPeriod = MonthlyBillingPeriod::resolve($this->option('month'));
+        $paidThroughWindow = MonthlyBillingPeriod::forMonth(
+            $billingPeriod->start->copy()->subMonth()->startOfMonth()
+        );
+
         $api_key = setting('payment.api_key');
         $callback = route('callback.subscription');
         $quickpay = new QuickPay(":{$api_key}", ["QuickPay-Callback-Url:{$callback}"]);
-        $prevMonth = today()->subMonthsNoOverflow()->startOfMonth();
         $shops = Shop::whereBetween(
             'paid_at',
-            [$prevMonth->toDateTimeString(), $prevMonth->copy()->endOfMonth()->toDateTimeString()]
+            [$paidThroughWindow->start->toDateTimeString(), $paidThroughWindow->paidThrough()->toDateTimeString()]
         )->where('status', 1)
             ->get();
 
@@ -88,7 +95,7 @@ class MonthlyCharge extends Command
 
                         $shop->update([
                             'status' => 1,
-                            'paid_at' => now(),
+                            'paid_at' => $billingPeriod->paidThrough(),
                         ]);
 
                         if ($shop->retailer_id) {

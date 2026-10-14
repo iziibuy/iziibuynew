@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Enterprise;
 use App\Payment\Elavon\ElavonEnterpriseSubscription;
+use App\Services\Subscription\MonthlyBillingPeriod;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -15,7 +16,8 @@ class EnterpriseMonthlyCharge extends Command
     protected $signature = 'enterprise:payment
                             {status=0 : Status to set on failed charge (0=deactivate, 1=keep active)}
                             {--dry-run : List due enterprises without charging}
-                            {--id= : Only process this enterprise ID}';
+                            {--id= : Only process this enterprise ID}
+                            {--month= : Bill for this calendar month (YYYY-MM), default: current month}';
 
     protected $description = 'Charge active enterprises via Elavon stored card';
 
@@ -24,22 +26,25 @@ class EnterpriseMonthlyCharge extends Command
         $failStatus = (int) $this->argument('status');
         $dryRun = (bool) $this->option('dry-run');
         $onlyId = $this->option('id');
+        $billingPeriod = MonthlyBillingPeriod::resolve($this->option('month'));
 
         $this->info('Enterprise monthly charge');
         $this->line('  Mode: '.($dryRun ? 'dry-run (no charges)' : 'live'));
         $this->line('  Fail status: '.$failStatus);
-        $this->line('  Due rule: status=1 AND paid_at < '.now()->startOfMonth()->toDateTimeString());
+        $this->line('  Billing period: '.$billingPeriod->label());
+        $this->line('  paid_at after success: '.$billingPeriod->paidThrough()->toDateTimeString());
+        $this->line('  Due rule: status=1 AND paid_at < '.$billingPeriod->start->toDateTimeString());
         if (filled($onlyId)) {
             $this->line('  Filter ID: '.$onlyId);
         }
         $this->newLine();
 
-        $query = $this->dueEnterprisesQuery($onlyId);
+        $query = $this->dueEnterprisesQuery($billingPeriod, $onlyId);
         $enterprises = $query->get();
 
         if ($enterprises->isEmpty()) {
             $this->warn('No enterprises matched the due criteria.');
-            $this->explainWhyNothingMatched($onlyId);
+            $this->explainWhyNothingMatched($billingPeriod, $onlyId);
 
             return self::SUCCESS;
         }
@@ -94,8 +99,9 @@ class EnterpriseMonthlyCharge extends Command
                 Log::info(json_encode($result));
 
                 if ($result['status'] ?? false) {
-                    $enterprise->paid_at = now();
-                    $enterprise->subscription->paid_at = now();
+                    $paidThrough = $billingPeriod->paidThrough();
+                    $enterprise->paid_at = $paidThrough;
+                    $enterprise->subscription->paid_at = $paidThrough;
                     $enterprise->save();
                     $enterprise->subscription->save();
 
@@ -139,17 +145,17 @@ class EnterpriseMonthlyCharge extends Command
     /**
      * @return Builder<Enterprise>
      */
-    protected function dueEnterprisesQuery(mixed $onlyId): Builder
+    protected function dueEnterprisesQuery(MonthlyBillingPeriod $billingPeriod, mixed $onlyId): Builder
     {
         return Enterprise::query()
             ->with('subscription')
             ->where('status', 1)
-            ->where('paid_at', '<', now()->startOfMonth())
+            ->where('paid_at', '<', $billingPeriod->start)
             ->when(filled($onlyId), fn (Builder $query) => $query->whereKey($onlyId))
             ->orderBy('id');
     }
 
-    protected function explainWhyNothingMatched(mixed $onlyId): void
+    protected function explainWhyNothingMatched(MonthlyBillingPeriod $billingPeriod, mixed $onlyId): void
     {
         if (filled($onlyId)) {
             $enterprise = Enterprise::query()->with('subscription')->find($onlyId);
@@ -161,7 +167,7 @@ class EnterpriseMonthlyCharge extends Command
 
             $this->line("  Enterprise #{$onlyId} exists but is not due:");
             $this->line('    status: '.(int) $enterprise->status.' (need 1)');
-            $this->line('    paid_at: '.$this->formatTimestamp($enterprise->paid_at).' (need < '.now()->startOfMonth()->toDateString().')');
+            $this->line('    paid_at: '.$this->formatTimestamp($enterprise->paid_at).' (need < '.$billingPeriod->start->toDateString().')');
             $this->line('    subscription_id: '.($enterprise->subscription_id ?: 'missing'));
 
             return;
@@ -170,11 +176,11 @@ class EnterpriseMonthlyCharge extends Command
         $active = Enterprise::query()->where('status', 1)->count();
         $dueByPaidAt = Enterprise::query()
             ->where('status', 1)
-            ->where('paid_at', '<', now()->startOfMonth())
+            ->where('paid_at', '<', $billingPeriod->start)
             ->count();
         $paidThisMonth = Enterprise::query()
             ->where('status', 1)
-            ->where('paid_at', '>=', now()->startOfMonth())
+            ->where('paid_at', '>=', $billingPeriod->start)
             ->count();
 
         $this->line("  Active enterprises: {$active}");

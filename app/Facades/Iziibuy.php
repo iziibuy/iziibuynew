@@ -4,18 +4,16 @@ namespace App\Facades;
 
 use App\Currency\Currency;
 use App\Models\Shop;
-use App\Facades\Cart;
+use App\Support\LegacyVoyager\VoyagerFacade;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Storage;
-use SimpleSoftwareIO\QrCode\Facades\QrCode;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class Iziibuy
 {
-
-
     public function round_num($price)
     {
         // return sprintf('%.2f', $price);
@@ -36,32 +34,31 @@ class Iziibuy
             } else {
                 $default = 'NOK';
             }
-            $current =  session()->get('current_currency')[request()->user_name] ?? $default;
+            $current = session()->get('current_currency')[request()->user_name] ?? $default;
         }
 
-        return  $this->round_num(Currency::convert($current, $price, $default)) . ' ' . $current;
+        return $this->round_num(Currency::convert($current, $price, $default)).' '.$current;
     }
+
     public function onlyPrice($price, $shop = null, $currency = null)
     {
         $default = Shop::where('user_name', request()->user_name)->first()->default_currency ?? auth()->user()->shop->default_currency ?? $shop;
         $current = $currency ?? session()->get('current_currency')[request()->user_name] ?? $default;
-        return  $this->round_num(Currency::convert($current ?? $default, $price, $default));
+
+        return $this->round_num(Currency::convert($current ?? $default, $price, $default));
     }
 
     public function withSymbol($price, $symbol = 'NOK')
     {
-        return $this->round_num($price) . ' ' . $symbol;
+        return $this->round_num($price).' '.$symbol;
     }
 
-
-
-
-    public  function currency($shop = null)
+    public function currency($shop = null)
     {
-        $model = Cache::remember('shop-' . request()->user_name, 900, function () {
-            return   Shop::where('user_name', request()->user_name)->first();
+        $model = Cache::remember('shop-'.request()->user_name, 900, function () {
+            return Shop::where('user_name', request()->user_name)->first();
         });
-        $default = Cache::remember('default_currency:' . request()->user_name, 5, function () use ($shop, $model) {
+        $default = Cache::remember('default_currency:'.request()->user_name, 5, function () use ($shop, $model) {
             return $model->default_currency
                 ?? auth()->user()->shop->default_currency
                 ?? @$shop->default_currency;
@@ -71,6 +68,7 @@ class Iziibuy
 
         return $current;
     }
+
     public function tax()
     {
         return Cart::session(request('user_name'))->getContent()->map(function ($product) {
@@ -88,7 +86,7 @@ class Iziibuy
 
     public function newTotal()
     {
-        return ($this->newSubtotal() + $this->shipping());
+        return $this->newSubtotal() + $this->shipping();
     }
 
     public function isEnterprise()
@@ -108,17 +106,19 @@ class Iziibuy
 
     public function discount()
     {
-        if (session()->has('discount_' . request()->user_name)) {
-            return session()->get('discount_' . request()->user_name);
+        if (session()->has('discount_'.request()->user_name)) {
+            return session()->get('discount_'.request()->user_name);
         }
+
         return 0;
     }
 
     public function discount_code()
     {
-        if (session()->has('discount_code_' . request()->user_name)) {
-            return session()->get('discount_code_' . request()->user_name);
+        if (session()->has('discount_code_'.request()->user_name)) {
+            return session()->get('discount_code_'.request()->user_name);
         }
+
         return null;
     }
 
@@ -126,11 +126,11 @@ class Iziibuy
     {
         return null;
     }
+
     public function shipping()
     {
-        return  0;
+        return 0;
     }
-
 
     // public function onlyPrice($price, $shop = null)
     // {
@@ -142,6 +142,7 @@ class Iziibuy
         if ($ratings->count() > 0) {
             return $ratings->sum('rating') / $ratings->count();
         }
+
         return 0.00;
     }
 
@@ -151,6 +152,7 @@ class Iziibuy
         if ($shop) {
             return $shop->id;
         }
+
         return null;
     }
 
@@ -160,13 +162,13 @@ class Iziibuy
         if ($shop) {
             return $shop->user_name;
         }
+
         return null;
     }
 
-
     public function money_format($number)
     {
-        return  number_format($number, 0, ',', ' ');
+        return number_format($number, 0, ',', ' ');
     }
 
     public function image($file, $default = '')
@@ -175,31 +177,37 @@ class Iziibuy
         if (filter_var($file, FILTER_VALIDATE_URL)) {
             return $file;
         } else {
-            if (!empty($file)) {
-            return str_replace('\\', '/', \App\Support\LegacyVoyager\VoyagerFacade::image($file));
+            if (! empty($file)) {
+                return str_replace('\\', '/', VoyagerFacade::image($file));
             }
+
             return $file;
         }
     }
 
-    public function needToCharge($amount): float
+    public function needToCharge($amount, ?Carbon $from = null, ?Carbon $until = null): float
     {
-        $lastDayofMonth = Carbon::now()->endOfMonth();
-        $left = Carbon::now()->diffInDays($lastDayofMonth) + 1;
-        return $this->round_num((($amount) / date('t')) * $left);
+        $from = ($from ?? Carbon::now())->copy()->startOfDay();
+        $until = ($until ?? Carbon::now()->copy()->endOfMonth())->copy()->startOfDay();
+        $daysInMonth = $from->daysInMonth;
+        $daysInPeriod = $from->diffInDays($until) + 1;
+
+        return $this->round_num((($amount) / $daysInMonth) * $daysInPeriod);
     }
+
     public function qrcode($url)
     {
         if (env('APP_DEBUG') == false) {
             $path = storage_path('app/public/qrcode');
-            if (!File::exists($path)) {
+            if (! File::exists($path)) {
                 File::makeDirectory($path);
             }
-            $identifier = Str::uuid() . '.png';
-            //$qrcode = 'app/public/qrcode/' . $identifier;
+            $identifier = Str::uuid().'.png';
+            // $qrcode = 'app/public/qrcode/' . $identifier;
             $image = QrCode::format('png')->size(300)->generate($url);
-            Storage::disk('s3')->put('qrcode/' . $identifier, $image);
-            return 'qrcode/' . $identifier;
+            Storage::disk('s3')->put('qrcode/'.$identifier, $image);
+
+            return 'qrcode/'.$identifier;
         } else {
             return '';
         }
@@ -208,12 +216,12 @@ class Iziibuy
     public function getShop()
     {
         if (request()->user_name) {
-            $cacheKey = 'shop-' . request()->user_name;
+            $cacheKey = 'shop-'.request()->user_name;
             if (Cache::has($cacheKey)) {
                 return Cache::get($cacheKey);
             } else {
-                $shop = Cache::remember('shop-' . request()->user_name, 900, function () {
-                    return   Shop::where('user_name', request()->user_name)->first();
+                $shop = Cache::remember('shop-'.request()->user_name, 900, function () {
+                    return Shop::where('user_name', request()->user_name)->first();
                 });
             }
         }
@@ -224,10 +232,10 @@ class Iziibuy
     public function resetShop(Shop $shop)
     {
 
-        Cache::forget('shop-' . $shop->user_name);
-        Cache::remember('shop-' . $shop->user_name, 900, function () use ($shop) {
+        Cache::forget('shop-'.$shop->user_name);
+        Cache::remember('shop-'.$shop->user_name, 900, function () use ($shop) {
 
-            return   Shop::where('user_name', $shop->user_name)->first();
+            return Shop::where('user_name', $shop->user_name)->first();
         });
     }
 
@@ -242,6 +250,7 @@ class Iziibuy
                 break;
             }
         }
+
         return $status;
     }
 }

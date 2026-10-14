@@ -70,6 +70,8 @@ it('charges the full monthly fee on renewal even when run mid-month', function (
         ->and($access->fee())->toBeLessThan(248.75);
 
     $this->artisan('payment-method-access:charge', ['status' => 1, '--dry-run' => true, '--id' => $access->id])
+        ->expectsOutputToContain('Billing period: 01 Oct 2026 – 31 Oct 2026')
+        ->expectsOutputToContain('last_paid_at after success: 2026-10-31 23:59:59')
         ->expectsOutputToContain('fee: 248.75 NOK (full month 01 Oct 2026 – 31 Oct 2026)')
         ->assertSuccessful();
 });

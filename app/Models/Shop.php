@@ -664,7 +664,9 @@ class Shop extends Model
             $amount += $this->establishment_cost;
         }
         $amount += $this->monthly_cost;
-        $amount += $this->perUserFee();
+        if ($this->users->count() > 1) {
+            $amount += $this->singleUserCost();
+        }
         $amount += $amount * ($this->registrationTax() / 100);
 
         return $amount;
