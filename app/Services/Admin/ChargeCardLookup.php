@@ -43,12 +43,30 @@ class ChargeCardLookup
      */
     public function lastFour(array $record): ?string
     {
+        return $this->resolveLastFour($record, forceRemote: false);
+    }
+
+    /**
+     * Fetch last four digits from Elavon when missing, or again when $force is true.
+     *
+     * @param  array<string, mixed>  $record
+     */
+    public function syncFromElavon(array $record, bool $force = false): ?string
+    {
+        return $this->resolveLastFour($record, forceRemote: $force);
+    }
+
+    /**
+     * @param  array<string, mixed>  $record
+     */
+    protected function resolveLastFour(array $record, bool $forceRemote): ?string
+    {
         [$source, $id] = UnifiedChargeLedger::parseKey((string) ($record['id'] ?? ''));
 
         try {
             return match ($source) {
-                UnifiedChargeLedger::SOURCE_SHOP => $this->forShopCharge($id),
-                UnifiedChargeLedger::SOURCE_SUBSCRIPTION => $this->forSubscriptionCharge($id),
+                UnifiedChargeLedger::SOURCE_SHOP => $this->forShopCharge($id, $forceRemote),
+                UnifiedChargeLedger::SOURCE_SUBSCRIPTION => $this->forSubscriptionCharge($id, $forceRemote),
                 UnifiedChargeLedger::SOURCE_EXTERNAL_SUBSCRIPTION => $this->forExternalSubscriptionCharge($id),
                 default => null,
             };
@@ -59,7 +77,7 @@ class ChargeCardLookup
         }
     }
 
-    protected function forShopCharge(int $id): ?string
+    protected function forShopCharge(int $id, bool $forceRemote = false): ?string
     {
         $charge = Charge::query()->with('shop')->find($id);
 
@@ -67,9 +85,11 @@ class ChargeCardLookup
             return null;
         }
 
-        $stored = $this->lastFourFromShopChargeRecord($charge);
-        if ($stored !== null) {
-            return $stored;
+        if (! $forceRemote) {
+            $stored = $this->lastFourFromShopChargeRecord($charge);
+            if ($stored !== null) {
+                return $stored;
+            }
         }
 
         $transactionId = $this->gateway->transactionId($charge);
@@ -78,8 +98,13 @@ class ChargeCardLookup
             return null;
         }
 
+        $recordKey = UnifiedChargeLedger::SOURCE_SHOP.'-'.$id;
+        if ($forceRemote) {
+            $this->forgetLookupCache($recordKey);
+        }
+
         $lastFour = $this->fetchFromElavon(
-            UnifiedChargeLedger::SOURCE_SHOP.'-'.$id,
+            $recordKey,
             $transactionId,
             fn (): ?Converge2 => $this->gateway->client($charge),
         );
@@ -115,7 +140,7 @@ class ChargeCardLookup
         ])->saveQuietly();
     }
 
-    protected function forSubscriptionCharge(int $id): ?string
+    protected function forSubscriptionCharge(int $id, bool $forceRemote = false): ?string
     {
         $charge = SubscriptionCharge::query()->with('subscription.subscribable')->find($id);
 
@@ -123,9 +148,11 @@ class ChargeCardLookup
             return null;
         }
 
-        $stored = $this->normalize($charge->last4);
-        if ($stored !== null) {
-            return $stored;
+        if (! $forceRemote) {
+            $stored = $this->normalize($charge->last4);
+            if ($stored !== null) {
+                return $stored;
+            }
         }
 
         $transactionId = $this->gateway->transactionId($charge);
@@ -135,8 +162,13 @@ class ChargeCardLookup
             return null;
         }
 
+        $recordKey = UnifiedChargeLedger::SOURCE_SUBSCRIPTION.'-'.$id;
+        if ($forceRemote) {
+            $this->forgetLookupCache($recordKey);
+        }
+
         $lastFour = $this->fetchFromElavon(
-            UnifiedChargeLedger::SOURCE_SUBSCRIPTION.'-'.$id,
+            $recordKey,
             $transactionId,
             fn (): ?Converge2 => $this->gateway->client($charge),
         );
@@ -207,5 +239,10 @@ class ChargeCardLookup
         $digits = preg_replace('/\D/', '', (string) $value);
 
         return strlen((string) $digits) >= 4 ? substr((string) $digits, -4) : null;
+    }
+
+    protected function forgetLookupCache(string $recordKey): void
+    {
+        Cache::forget('charge-card-last4:'.$recordKey);
     }
 }
