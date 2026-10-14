@@ -120,11 +120,36 @@ class ElavonRecurringTransaction
     public static function cardLastFour(ResponseInterface $response): ?string
     {
         try {
-            $lastFour = method_exists($response, 'castCard') ? $response->castCard()?->getLast4() : null;
+            if (method_exists($response, 'castCard')) {
+                $response->castCard();
+            }
+
+            $lastFour = method_exists($response, 'getCard') && $response->getCard() !== null
+                ? $response->getCard()->getLast4()
+                : null;
         } catch (\Throwable) {
             return null;
         }
 
+        return self::normalizeLastFourDigits($lastFour);
+    }
+
+    public static function cardLastFourFromStoredCardId(Converge2 $client, string $storedCardId): ?string
+    {
+        try {
+            $response = $client->getStoredCard($storedCardId);
+            if (! $response->isSuccess()) {
+                return null;
+            }
+
+            return self::cardLastFour($response);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    public static function normalizeLastFourDigits(mixed $lastFour): ?string
+    {
         $digits = preg_replace('/\D/', '', (string) $lastFour);
 
         return strlen((string) $digits) >= 4 ? substr((string) $digits, -4) : null;

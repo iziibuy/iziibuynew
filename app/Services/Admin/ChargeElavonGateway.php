@@ -53,4 +53,19 @@ class ChargeElavonGateway
 
         return null;
     }
+
+    public function storedCardId(Model $charge): ?string
+    {
+        $storedCardId = match (true) {
+            $charge instanceof Charge => filled($charge->shop?->subscription_id)
+                ? (string) $charge->shop->subscription_id
+                : null,
+            $charge instanceof SubscriptionCharge => filled($charge->subscription?->key)
+                ? (string) $charge->subscription->key
+                : null,
+            default => null,
+        };
+
+        return filled($storedCardId) ? $storedCardId : null;
+    }
 }

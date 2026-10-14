@@ -20,7 +20,7 @@ class SyncChargeCardLastFour extends Command
                             {--shop-charge= : Only this shop charge ID}
                             {--subscription-charge= : Only this subscription charge ID}';
 
-    protected $description = 'Backfill card last four digits on existing charges from Elavon';
+    protected $description = 'Backfill card last four digits on existing charges from Elavon (transaction, then stored card / subscription id)';
 
     public function handle(ChargeCardLookup $lookup): int
     {
@@ -202,7 +202,10 @@ class SyncChargeCardLastFour extends Command
 
     protected function shouldSyncShopCharge(Charge $charge, bool $force): bool
     {
-        if (! ChargeElavonGateway::looksLikeTransactionId((string) $charge->order_id)) {
+        $canLookup = ChargeElavonGateway::looksLikeTransactionId((string) $charge->order_id)
+            || filled($charge->shop?->subscription_id);
+
+        if (! $canLookup) {
             return false;
         }
 
@@ -217,7 +220,10 @@ class SyncChargeCardLastFour extends Command
 
     protected function shouldSyncSubscriptionCharge(SubscriptionCharge $charge, bool $force): bool
     {
-        if (! ChargeElavonGateway::looksLikeTransactionId((string) $charge->elavon_transaction_id)) {
+        $canLookup = ChargeElavonGateway::looksLikeTransactionId((string) $charge->elavon_transaction_id)
+            || filled($charge->subscription?->key);
+
+        if (! $canLookup) {
             return false;
         }
 

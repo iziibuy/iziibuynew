@@ -10,6 +10,7 @@ use App\Models\Enterprise;
 use App\Models\ExternalSubscriptionCharge;
 use App\Models\PaymentMethodAccess;
 use App\Models\SubscriptionCharge;
+use App\Services\Elavon\ElavonRecurringTransaction;
 use Closure;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -92,20 +93,16 @@ class ChargeCardLookup
             }
         }
 
-        $transactionId = $this->gateway->transactionId($charge);
-
-        if ($transactionId === null) {
-            return null;
-        }
-
         $recordKey = UnifiedChargeLedger::SOURCE_SHOP.'-'.$id;
         if ($forceRemote) {
             $this->forgetLookupCache($recordKey);
+            $this->forgetLookupCache($this->storedCardCacheKey($recordKey));
         }
 
-        $lastFour = $this->fetchFromElavon(
+        $lastFour = $this->resolveLastFourFromElavon(
             $recordKey,
-            $transactionId,
+            $this->gateway->transactionId($charge),
+            $this->gateway->storedCardId($charge),
             fn (): ?Converge2 => $this->gateway->client($charge),
         );
 
@@ -155,21 +152,22 @@ class ChargeCardLookup
             }
         }
 
-        $transactionId = $this->gateway->transactionId($charge);
         $subscribable = $charge->subscription?->subscribable;
 
-        if ($transactionId === null || ! ($subscribable instanceof PaymentMethodAccess || $subscribable instanceof Enterprise)) {
+        if (! ($subscribable instanceof PaymentMethodAccess || $subscribable instanceof Enterprise)) {
             return null;
         }
 
         $recordKey = UnifiedChargeLedger::SOURCE_SUBSCRIPTION.'-'.$id;
         if ($forceRemote) {
             $this->forgetLookupCache($recordKey);
+            $this->forgetLookupCache($this->storedCardCacheKey($recordKey));
         }
 
-        $lastFour = $this->fetchFromElavon(
+        $lastFour = $this->resolveLastFourFromElavon(
             $recordKey,
-            $transactionId,
+            $this->gateway->transactionId($charge),
+            $this->gateway->storedCardId($charge),
             fn (): ?Converge2 => $this->gateway->client($charge),
         );
 
@@ -181,6 +179,70 @@ class ChargeCardLookup
         }
 
         return $lastFour;
+    }
+
+    /**
+     * @param  Closure(): ?Converge2  $client
+     */
+    protected function resolveLastFourFromElavon(
+        string $recordKey,
+        ?string $transactionId,
+        ?string $storedCardId,
+        Closure $client,
+    ): ?string {
+        if ($transactionId !== null) {
+            $fromTransaction = $this->fetchFromElavon($recordKey, $transactionId, $client);
+            if ($fromTransaction !== null) {
+                return $fromTransaction;
+            }
+        }
+
+        return $this->fetchLastFourFromStoredCard($recordKey, $storedCardId, $client);
+    }
+
+    /**
+     * @param  Closure(): ?Converge2  $client
+     */
+    protected function fetchLastFourFromStoredCard(string $recordKey, ?string $storedCardId, Closure $client): ?string
+    {
+        if (blank($storedCardId)) {
+            return null;
+        }
+
+        $cacheKey = $this->storedCardCacheKey($recordKey);
+        $cached = Cache::get($cacheKey);
+
+        if ($cached !== null) {
+            return $cached === '' ? null : (string) $cached;
+        }
+
+        if ($this->remoteLookupsRemaining !== null) {
+            if ($this->remoteLookupsRemaining <= 0) {
+                return null;
+            }
+
+            $this->remoteLookupsRemaining--;
+        }
+
+        $converge = $client();
+        $lastFour = $converge !== null
+            ? ElavonRecurringTransaction::cardLastFourFromStoredCardId($converge, $storedCardId)
+            : null;
+
+        if ($lastFour === null) {
+            Cache::put($cacheKey, '', now()->addMinutes(self::FAILED_LOOKUP_TTL_MINUTES));
+
+            return null;
+        }
+
+        Cache::forever($cacheKey, $lastFour);
+
+        return $lastFour;
+    }
+
+    protected function storedCardCacheKey(string $recordKey): string
+    {
+        return 'charge-card-last4-stored:'.$recordKey;
     }
 
     protected function forExternalSubscriptionCharge(int $id): ?string
