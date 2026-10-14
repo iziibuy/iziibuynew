@@ -105,13 +105,18 @@ class MonthlyCharge extends Command
                     $result = $elavon->chargeMonthly((float) $shop->subscriptionFeeFull());
 
                     if ($result['status']) {
+                        $chargeDetails = $shop->subscriptionRenewalFeeDetails($billingPeriod);
+                        if (filled($result['data']['last4'] ?? null)) {
+                            $chargeDetails['last4'] = $result['data']['last4'];
+                        }
+
                         Charge::create([
                             'shop_id' => $shop->id,
                             'order_id' => (string) ($result['data']['id'] ?? uniqid('elavon_', true)),
                             'amount' => $shop->subscriptionFeeFull(),
                             'status' => 1,
                             'comment' => 'Monthly subscription fee',
-                            'details' => json_encode($shop->subscriptionRenewalFeeDetails($billingPeriod)),
+                            'details' => json_encode($chargeDetails),
                         ]);
 
                         $shop->update([

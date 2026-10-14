@@ -6,6 +6,7 @@ use App\Models\Charge;
 use App\Models\Shop;
 use App\Models\User;
 use App\Services\Admin\ChargeBreakdown;
+use App\Services\Admin\ChargeCardLookup;
 use App\Services\Admin\UnifiedChargeLedger;
 use App\Services\Subscription\MonthlyBillingPeriod;
 use Illuminate\Support\Carbon;
@@ -76,4 +77,36 @@ it('falls back to shop paid_at month when charge details have no billing period'
     ]);
 
     expect($breakdown['period'])->toBe('01 Sep 2026 – 30 Sep 2026 (30 days)');
+});
+
+it('reads card last four digits saved on shop charge details', function (): void {
+    $owner = User::factory()->create();
+
+    $shop = Shop::query()->create([
+        'user_id' => $owner->id,
+        'user_name' => 'card-last4-shop',
+        'subscriptionMethod' => 'elavon',
+        'paymentMethod' => 'elavon',
+        'status' => 1,
+        'establishment' => 1,
+        'monthly_cost' => 599,
+    ]);
+
+    $details = $shop->subscriptionRenewalFeeDetails(MonthlyBillingPeriod::resolve('2026-09'));
+    $details['last4'] = '8863';
+
+    $charge = Charge::query()->create([
+        'shop_id' => $shop->id,
+        'order_id' => 't2fhfm8wg9tprcjfrm2tg83dt3t9',
+        'amount' => 748.75,
+        'status' => 1,
+        'comment' => 'Monthly subscription fee',
+        'details' => json_encode($details),
+    ]);
+
+    $lastFour = app(ChargeCardLookup::class)->lastFour([
+        'id' => UnifiedChargeLedger::SOURCE_SHOP.'-'.$charge->id,
+    ]);
+
+    expect($lastFour)->toBe('8863');
 });

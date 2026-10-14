@@ -5,6 +5,7 @@ namespace App\Services\Elavon;
 use App\Mail\NotificationEmail;
 use App\Models\Charge;
 use App\Models\Shop;
+use App\Services\Elavon\ElavonRecurringTransaction;
 use App\Services\RetailerCommission;
 use App\Services\Subscription\MonthlyBillingPeriod;
 use Illuminate\Support\Facades\Log;
@@ -59,7 +60,12 @@ class ElavonShopSubscriptionNotificationHandler
             return true;
         }
 
-        $this->recordSubscriptionBill($shop, $transactionId, $transaction->getTotalAmount());
+        $this->recordSubscriptionBill(
+            $shop,
+            $transactionId,
+            $transaction->getTotalAmount(),
+            ElavonRecurringTransaction::cardLastFour($transaction),
+        );
 
         return true;
     }
@@ -92,7 +98,7 @@ class ElavonShopSubscriptionNotificationHandler
         return null;
     }
 
-    protected function recordSubscriptionBill(Shop $shop, string $transactionId, ?float $amount): void
+    protected function recordSubscriptionBill(Shop $shop, string $transactionId, ?float $amount, ?string $cardLastFour = null): void
     {
         $existing = Charge::query()
             ->where('shop_id', $shop->id)
@@ -110,6 +116,10 @@ class ElavonShopSubscriptionNotificationHandler
         $feeDetails = $isSignupBill
             ? $shop->subscriptionFeeDetails()
             : $shop->subscriptionRenewalFeeDetails($billingPeriod);
+
+        if (filled($cardLastFour)) {
+            $feeDetails['last4'] = $cardLastFour;
+        }
 
         Charge::create([
             'shop_id' => $shop->id,

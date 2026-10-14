@@ -67,7 +67,7 @@ class ChargeCardLookup
             return null;
         }
 
-        $stored = $this->normalize(rescue(fn () => $charge->lastFour, null, false));
+        $stored = $this->lastFourFromShopChargeRecord($charge);
         if ($stored !== null) {
             return $stored;
         }
@@ -78,11 +78,41 @@ class ChargeCardLookup
             return null;
         }
 
-        return $this->fetchFromElavon(
+        $lastFour = $this->fetchFromElavon(
             UnifiedChargeLedger::SOURCE_SHOP.'-'.$id,
             $transactionId,
             fn (): ?Converge2 => $this->gateway->client($charge),
         );
+
+        if ($lastFour !== null) {
+            $this->persistLastFourOnShopCharge($charge, $lastFour);
+        }
+
+        return $lastFour;
+    }
+
+    protected function lastFourFromShopChargeRecord(Charge $charge): ?string
+    {
+        $details = json_decode((string) ($charge->getAttributes()['details'] ?? ''), true);
+        if (is_array($details)) {
+            $fromDetails = $this->normalize(data_get($details, 'last4') ?? data_get($details, 'card.last4'));
+            if ($fromDetails !== null) {
+                return $fromDetails;
+            }
+        }
+
+        $fromQuickPay = $this->normalize(rescue(fn () => $charge->lastFour, null, false));
+
+        return $fromQuickPay;
+    }
+
+    protected function persistLastFourOnShopCharge(Charge $charge, string $lastFour): void
+    {
+        $details = json_decode((string) ($charge->getAttributes()['details'] ?? ''), true);
+        $details = is_array($details) ? $details : [];
+        $charge->forceFill([
+            'details' => json_encode(array_merge($details, ['last4' => $lastFour])),
+        ])->saveQuietly();
     }
 
     protected function forSubscriptionCharge(int $id): ?string

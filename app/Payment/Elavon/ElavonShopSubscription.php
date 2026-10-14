@@ -772,6 +772,7 @@ class ElavonShopSubscription
                 'data' => [
                     'status' => $response->getState()->isAuthorized() || $response->getState()->isCaptured(),
                     'id' => $response->getId(),
+                    'last4' => ElavonRecurringTransaction::cardLastFour($response),
                 ],
             ];
         }
