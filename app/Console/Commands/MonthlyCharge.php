@@ -50,19 +50,37 @@ class MonthlyCharge extends Command
     public function handle()
     {
         $billingPeriod = MonthlyBillingPeriod::resolve($this->option('month'));
-        $paidThroughWindow = MonthlyBillingPeriod::forMonth(
-            $billingPeriod->start->copy()->subMonth()->startOfMonth()
-        );
+        $paidThrough = $billingPeriod->paidThrough();
+
+        $this->info('Shop monthly charge');
+        $this->line('  Billing period: '.$billingPeriod->label());
+        $this->line('  paid_at after success: '.$paidThrough->toDateTimeString());
+        $this->line('  Due rule: status=1 AND (paid_at IS NULL OR paid_at < '.$paidThrough->toDateTimeString().')');
+        if (filled($this->option('shop'))) {
+            $this->line('  Filter shop ID: '.$this->option('shop'));
+        }
+        $this->newLine();
 
         $api_key = setting('payment.api_key');
         $callback = route('callback.subscription');
         $quickpay = new QuickPay(":{$api_key}", ["QuickPay-Callback-Url:{$callback}"]);
-        $shops = Shop::whereBetween(
-            'paid_at',
-            [$paidThroughWindow->start->toDateTimeString(), $paidThroughWindow->paidThrough()->toDateTimeString()]
-        )->where('status', 1)
+        $shops = Shop::query()
+            ->where('status', 1)
+            ->where(fn ($query) => $query
+                ->whereNull('paid_at')
+                ->orWhere('paid_at', '<', $paidThrough->toDateTimeString()))
             ->when(filled($this->option('shop')), fn ($query) => $query->whereKey($this->option('shop')))
             ->get();
+
+        if ($shops->isEmpty()) {
+            $this->warn('No shops matched the due criteria.');
+            $this->explainWhyNoShopsMatched($billingPeriod);
+
+            return self::SUCCESS;
+        }
+
+        $this->info('Found '.$shops->count().' shop(s) to process.');
+        $this->newLine();
 
         foreach ($shops as $shop) {
             try {
@@ -157,5 +175,38 @@ class MonthlyCharge extends Command
             }
         }
         // Log::info('job Run at ' . now());
+    }
+
+    protected function explainWhyNoShopsMatched(MonthlyBillingPeriod $billingPeriod): void
+    {
+        $paidThrough = $billingPeriod->paidThrough()->toDateTimeString();
+        $onlyShop = $this->option('shop');
+
+        if (filled($onlyShop)) {
+            $shop = Shop::query()->find($onlyShop);
+            if ($shop === null) {
+                $this->line("  Shop #{$onlyShop} does not exist.");
+
+                return;
+            }
+
+            $this->line("  Shop #{$onlyShop} exists but is not due:");
+            $this->line('    status: '.(int) $shop->status.' (need 1)');
+            $this->line('    paid_at: '.($shop->paid_at?->toDateTimeString() ?? 'null').' (need null or before '.$paidThrough.')');
+            $this->line('    subscription: '.($shop->usesElavonNativeSubscription() ? 'Elavon native (skipped by cron)' : ($shop->subscription_id ? 'QuickPay/Elavon app-managed' : 'missing')));
+
+            return;
+        }
+
+        $active = Shop::query()->where('status', 1)->count();
+        $due = Shop::query()
+            ->where('status', 1)
+            ->where(fn ($query) => $query
+                ->whereNull('paid_at')
+                ->orWhere('paid_at', '<', $paidThrough))
+            ->count();
+
+        $this->line("  Active shops: {$active}");
+        $this->line("  Active + due for {$billingPeriod->label()}: {$due}");
     }
 }
