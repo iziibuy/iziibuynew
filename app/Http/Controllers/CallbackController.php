@@ -34,6 +34,7 @@ use App\Services\CreditWallet;
 use App\Services\Elavon\ElavonOnboardingPromo;
 use App\Services\Elavon\ElavonShopSubscriptionNotificationHandler;
 use App\Services\RetailerCommission;
+use App\Services\Subscription\MonthlyBillingPeriod;
 use Error;
 use Exception;
 use Illuminate\Http\Request;
@@ -552,7 +553,7 @@ class CallbackController extends Controller
             if ($charge && $payment->state == 'processed') {
                 $charge->shop->update([
                     'status' => 1,
-                    'paid_at' => Carbon::now(),
+                    'paid_at' => MonthlyBillingPeriod::resolve()->paidThrough(),
                 ]);
                 $charge->update([
                     'status' => 1,

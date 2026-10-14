@@ -6,7 +6,7 @@ use App\Mail\NotificationEmail;
 use App\Models\Charge;
 use App\Models\Shop;
 use App\Services\RetailerCommission;
-use Carbon\Carbon;
+use App\Services\Subscription\MonthlyBillingPeriod;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -116,7 +116,7 @@ class ElavonShopSubscriptionNotificationHandler
         ]);
 
         $shop->status = 1;
-        $shop->paid_at = Carbon::now();
+        $shop->paid_at = MonthlyBillingPeriod::resolve()->paidThrough();
         if ($isSignupBill) {
             $shop->establishment = 1;
         }

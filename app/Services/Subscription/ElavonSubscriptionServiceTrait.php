@@ -7,7 +7,6 @@ use App\Models\Charge;
 use App\Payment\Elavon\ElavonShopSubscription;
 use App\Payment\Elavon\ElavonShopSubscriptionFactory;
 use App\Services\RetailerCommission;
-use Carbon\Carbon;
 use Exception;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -105,7 +104,7 @@ trait ElavonSubscriptionServiceTrait
 
         $this->shop->status = 1;
         $this->shop->establishment = 1;
-        $this->shop->paid_at = Carbon::now();
+        $this->shop->paid_at = MonthlyBillingPeriod::resolve()->paidThrough();
         $this->shop->subscriptionMethod = 'elavon';
         $this->shop->ensureDefaultPackageOption();
         if ($this->shop->retailer_id) {
