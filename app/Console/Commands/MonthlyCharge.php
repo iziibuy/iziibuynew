@@ -22,7 +22,8 @@ class MonthlyCharge extends Command
      */
     protected $signature = 'monthly:charge
                             {status=0 : Status to set on failed charge (0=deactivate, 1=keep active)}
-                            {--month= : Bill for this calendar month (YYYY-MM), default: current month}';
+                            {--month= : Bill for this calendar month (YYYY-MM), default: current month}
+                            {--shop= : Only process this shop ID}';
 
     /**
      * The console command description.
@@ -60,6 +61,7 @@ class MonthlyCharge extends Command
             'paid_at',
             [$paidThroughWindow->start->toDateTimeString(), $paidThroughWindow->paidThrough()->toDateTimeString()]
         )->where('status', 1)
+            ->when(filled($this->option('shop')), fn ($query) => $query->whereKey($this->option('shop')))
             ->get();
 
         foreach ($shops as $shop) {

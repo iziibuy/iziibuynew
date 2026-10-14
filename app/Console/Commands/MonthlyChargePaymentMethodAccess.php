@@ -33,7 +33,7 @@ class MonthlyChargePaymentMethodAccess extends Command
         $this->line('  Fail status: '.$failStatus);
         $this->line('  Billing period: '.$billingPeriod->label());
         $this->line('  last_paid_at after success: '.$billingPeriod->paidThrough()->toDateTimeString());
-        $this->line('  Due rule: status=1 AND (last_paid_at IS NULL OR last_paid_at < '.$billingPeriod->start->toDateTimeString().')');
+        $this->line('  Due rule: status=1 AND (last_paid_at IS NULL OR last_paid_at < '.$billingPeriod->paidThrough()->toDateTimeString().')');
         if (filled($onlyId)) {
             $this->line('  Filter ID: '.$onlyId);
         }
@@ -99,7 +99,11 @@ class MonthlyChargePaymentMethodAccess extends Command
             try {
                 $subscriptionDatabase = $data->subscription;
                 $elavon = new ElavonExternalSubscription($data);
-                $result = $elavon->charge($fee, $subscriptionDatabase, ['type' => 'monthly']);
+                $result = $elavon->charge($fee, $subscriptionDatabase, [
+                    'type' => 'monthly',
+                    'billing_period_start' => $billingPeriod->start->toDateString(),
+                    'billing_period_end' => $billingPeriod->end->toDateString(),
+                ]);
 
                 Log::info(json_encode($result));
 
@@ -163,7 +167,7 @@ class MonthlyChargePaymentMethodAccess extends Command
             ->where('status', 1)
             ->where(fn (Builder $query) => $query
                 ->whereNull('last_paid_at')
-                ->orWhere('last_paid_at', '<', $billingPeriod->start->toDateTimeString()))
+                ->orWhere('last_paid_at', '<', $billingPeriod->paidThrough()->toDateTimeString()))
             ->when(filled($onlyId), fn (Builder $query) => $query->whereKey($onlyId))
             ->orderBy('id');
     }
@@ -180,7 +184,7 @@ class MonthlyChargePaymentMethodAccess extends Command
 
             $this->line("  Payment method access #{$onlyId} exists but is not due:");
             $this->line('    status: '.(int) $data->status.' (need 1)');
-            $this->line('    last_paid_at: '.$this->formatTimestamp($data->last_paid_at).' (need null or before '.$billingPeriod->start->toDateString().')');
+            $this->line('    last_paid_at: '.$this->formatTimestamp($data->last_paid_at).' (need null or before paid through '.$billingPeriod->paidThrough()->toDateTimeString().')');
 
             return;
         }
@@ -190,16 +194,17 @@ class MonthlyChargePaymentMethodAccess extends Command
             ->where('status', 1)
             ->where(fn (Builder $query) => $query
                 ->whereNull('last_paid_at')
-                ->orWhere('last_paid_at', '<', $billingPeriod->start->toDateTimeString()))
+                ->orWhere('last_paid_at', '<', $billingPeriod->paidThrough()->toDateTimeString()))
             ->count();
         $paidThisMonth = PaymentMethodAccess::query()
             ->where('status', 1)
-            ->where('last_paid_at', '>=', $billingPeriod->start->toDateTimeString())
+            ->where('last_paid_at', '>=', $billingPeriod->paidThrough()->toDateTimeString())
             ->count();
 
         $this->line("  Active payment method accesses: {$active}");
-        $this->line("  Active + due for {$billingPeriod->label()} (last_paid_at null or before {$billingPeriod->start->toDateString()}): {$dueByLastPaidAt}");
-        $this->line("  Active + already covered (last_paid_at on/after {$billingPeriod->start->toDateString()}): {$paidThisMonth}");
+        $paidThrough = $billingPeriod->paidThrough()->toDateTimeString();
+        $this->line("  Active + due for {$billingPeriod->label()} (last_paid_at null or before {$paidThrough}): {$dueByLastPaidAt}");
+        $this->line("  Active + already paid through period (last_paid_at on/after {$paidThrough}): {$paidThisMonth}");
 
         if ($active > 0 && $dueByLastPaidAt === 0) {
             $this->newLine();

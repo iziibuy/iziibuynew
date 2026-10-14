@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\PaymentMethodAccess;
 use App\Models\User;
+use App\Services\Subscription\MonthlyBillingPeriod;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -76,6 +77,36 @@ it('charges the full monthly fee on renewal even when run mid-month', function (
         ->assertSuccessful();
 });
 
+it('treats legacy mid-month last_paid_at as due when backfilling that month', function (): void {
+    $access = PaymentMethodAccess::query()->create([
+        'user_id' => User::factory()->create()->id,
+        'company_name' => 'Legacy September Plugin',
+        'company_email' => 'legacy-sep-'.uniqid().'@example.com',
+        'key' => (string) Str::uuid(),
+        'subscriptionMethod' => 'elavon',
+        'paymentMethod' => 'elavon',
+        'status' => 1,
+        'last_paid_at' => Carbon::parse('2026-09-16 11:48:42'),
+    ]);
+
+    $access->subscription()->create([
+        'key' => 'stored-card-legacy-sep',
+        'fee' => 149,
+        'status' => 1,
+        'paid_at' => Carbon::parse('2026-09-16 11:48:42'),
+    ]);
+
+    $this->artisan('payment-method-access:charge', [
+        'status' => 1,
+        '--dry-run' => true,
+        '--id' => $access->id,
+        '--month' => '2026-09',
+    ])
+        ->expectsOutputToContain('Found 1 payment method access(es) to process.')
+        ->expectsOutputToContain('Legacy September Plugin')
+        ->assertSuccessful();
+});
+
 it('explains why a filtered payment method access is not due', function (): void {
     $access = PaymentMethodAccess::query()->create([
         'user_id' => User::factory()->create()->id,
@@ -85,7 +116,7 @@ it('explains why a filtered payment method access is not due', function (): void
         'subscriptionMethod' => 'elavon',
         'paymentMethod' => 'elavon',
         'status' => 1,
-        'last_paid_at' => now()->startOfMonth()->addDay(),
+        'last_paid_at' => MonthlyBillingPeriod::resolve()->paidThrough(),
     ]);
 
     $this->artisan('payment-method-access:charge', ['status' => 1, '--dry-run' => true, '--id' => $access->id])

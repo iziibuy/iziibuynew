@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\Enterprise;
+use App\Services\Subscription\MonthlyBillingPeriod;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
@@ -47,7 +48,7 @@ it('explains why a filtered enterprise is not due', function (): void {
         'domain' => 'https://enterprise-'.uniqid().'.example.com',
         'enterprise_name' => 'Already Paid Co',
         'status' => 1,
-        'paid_at' => now()->startOfMonth()->addDay(),
+        'paid_at' => MonthlyBillingPeriod::resolve()->paidThrough(),
         'subscription_id' => 'stored-card-456',
     ]);
 

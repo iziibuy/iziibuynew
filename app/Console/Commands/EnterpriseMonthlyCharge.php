@@ -33,7 +33,7 @@ class EnterpriseMonthlyCharge extends Command
         $this->line('  Fail status: '.$failStatus);
         $this->line('  Billing period: '.$billingPeriod->label());
         $this->line('  paid_at after success: '.$billingPeriod->paidThrough()->toDateTimeString());
-        $this->line('  Due rule: status=1 AND paid_at < '.$billingPeriod->start->toDateTimeString());
+        $this->line('  Due rule: status=1 AND paid_at < '.$billingPeriod->paidThrough()->toDateTimeString());
         if (filled($onlyId)) {
             $this->line('  Filter ID: '.$onlyId);
         }
@@ -150,7 +150,7 @@ class EnterpriseMonthlyCharge extends Command
         return Enterprise::query()
             ->with('subscription')
             ->where('status', 1)
-            ->where('paid_at', '<', $billingPeriod->start)
+            ->where('paid_at', '<', $billingPeriod->paidThrough())
             ->when(filled($onlyId), fn (Builder $query) => $query->whereKey($onlyId))
             ->orderBy('id');
     }
@@ -167,7 +167,7 @@ class EnterpriseMonthlyCharge extends Command
 
             $this->line("  Enterprise #{$onlyId} exists but is not due:");
             $this->line('    status: '.(int) $enterprise->status.' (need 1)');
-            $this->line('    paid_at: '.$this->formatTimestamp($enterprise->paid_at).' (need < '.$billingPeriod->start->toDateString().')');
+            $this->line('    paid_at: '.$this->formatTimestamp($enterprise->paid_at).' (need < paid through '.$billingPeriod->paidThrough()->toDateTimeString().')');
             $this->line('    subscription_id: '.($enterprise->subscription_id ?: 'missing'));
 
             return;
@@ -176,11 +176,11 @@ class EnterpriseMonthlyCharge extends Command
         $active = Enterprise::query()->where('status', 1)->count();
         $dueByPaidAt = Enterprise::query()
             ->where('status', 1)
-            ->where('paid_at', '<', $billingPeriod->start)
+            ->where('paid_at', '<', $billingPeriod->paidThrough())
             ->count();
         $paidThisMonth = Enterprise::query()
             ->where('status', 1)
-            ->where('paid_at', '>=', $billingPeriod->start)
+            ->where('paid_at', '>=', $billingPeriod->paidThrough())
             ->count();
 
         $this->line("  Active enterprises: {$active}");

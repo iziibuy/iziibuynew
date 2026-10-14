@@ -321,6 +321,12 @@ class ChargeBreakdown
                 ]);
             }
 
+            $billingPeriodStart = data_get($paymentDetails, 'billing_period_start');
+            $billingPeriodEnd = data_get($paymentDetails, 'billing_period_end');
+            $period = is_string($billingPeriodStart) && is_string($billingPeriodEnd)
+                ? $this->period(Carbon::parse($billingPeriodStart)->startOfDay(), Carbon::parse($billingPeriodEnd)->startOfDay())
+                : $this->calendarMonthPeriod($charge->created_at);
+
             return $this->result(
                 method: self::METHOD_RECONSTRUCTED,
                 summary: __('Monthly renewal: full monthly plugin fee + 25% VAT.'),
@@ -341,7 +347,7 @@ class ChargeBreakdown
                 charged: $charged,
                 currency: $currency,
                 notes: $notes,
-                period: $this->calendarMonthPeriod($charge->created_at),
+                period: $period,
             );
         }
 

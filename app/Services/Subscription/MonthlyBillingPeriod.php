@@ -22,6 +22,18 @@ final class MonthlyBillingPeriod
         return $this->end->copy()->endOfDay();
     }
 
+    /**
+     * Whether last_paid_at / paid_at already reflects payment through this billing month.
+     */
+    public function isPaidThrough(?Carbon $lastPaidAt): bool
+    {
+        if ($lastPaidAt === null) {
+            return false;
+        }
+
+        return $lastPaidAt->gte($this->paidThrough());
+    }
+
     public function inclusiveDays(): float
     {
         return (float) ($this->start->copy()->startOfDay()->diffInDays($this->end->copy()->startOfDay()) + 1);
