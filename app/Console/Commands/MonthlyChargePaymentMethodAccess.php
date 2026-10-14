@@ -198,8 +198,25 @@ class MonthlyChargePaymentMethodAccess extends Command
             ->count();
 
         $this->line("  Active payment method accesses: {$active}");
-        $this->line("  Active + not paid this month (due): {$dueByLastPaidAt}");
-        $this->line("  Active + already paid this month: {$paidThisMonth}");
+        $this->line("  Active + due for {$billingPeriod->label()} (last_paid_at null or before {$billingPeriod->start->toDateString()}): {$dueByLastPaidAt}");
+        $this->line("  Active + already covered (last_paid_at on/after {$billingPeriod->start->toDateString()}): {$paidThisMonth}");
+
+        if ($active > 0 && $dueByLastPaidAt === 0) {
+            $this->newLine();
+            $this->line('  Active plugins (why none are due for this billing month):');
+            PaymentMethodAccess::query()
+                ->where('status', 1)
+                ->orderBy('id')
+                ->get(['id', 'company_name', 'last_paid_at'])
+                ->each(function (PaymentMethodAccess $row): void {
+                    $this->line(sprintf(
+                        '    #%d %s — last_paid_at: %s',
+                        $row->id,
+                        $this->paymentMethodLabel($row),
+                        $this->formatTimestamp($row->last_paid_at),
+                    ));
+                });
+        }
     }
 
     protected function paymentMethodLabel(PaymentMethodAccess $data): string
