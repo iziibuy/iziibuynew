@@ -551,13 +551,23 @@ class CallbackController extends Controller
         if ($checksum == $_SERVER['HTTP_QUICKPAY_CHECKSUM_SHA256']) {
 
             if ($charge && $payment->state == 'processed') {
+                $existingDetails = json_decode((string) ($charge->getAttributes()['details'] ?? ''), true);
+                $existingDetails = is_array($existingDetails) ? $existingDetails : [];
+                $billingPeriod = filled(data_get($existingDetails, 'billing_period_start'))
+                    ? MonthlyBillingPeriod::forMonth(Carbon::parse((string) $existingDetails['billing_period_start']))
+                    : MonthlyBillingPeriod::resolve();
+
                 $charge->shop->update([
                     'status' => 1,
-                    'paid_at' => MonthlyBillingPeriod::resolve()->paidThrough(),
+                    'paid_at' => $billingPeriod->paidThrough(),
                 ]);
                 $charge->update([
                     'status' => 1,
-                    'details' => json_encode($charge->shop->subscriptionFeeDetails()),
+                    'details' => json_encode(
+                        filled(data_get($existingDetails, 'billing_period_start'))
+                            ? $existingDetails
+                            : $charge->shop->subscriptionRenewalFeeDetails($billingPeriod)
+                    ),
                 ]);
                 $mail_data = [
                     'subject' => 'Subscription auto renew',

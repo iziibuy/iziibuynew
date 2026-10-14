@@ -204,10 +204,11 @@ class ChargeBreakdown
             charged: $charged,
             currency: $currency,
             notes: $notes,
-            period: $this->period(
-                $this->snapshotDate($snapshot, 'charged_at'),
-                $this->snapshotDate($snapshot, 'last_day_of_month'),
-            ),
+            period: $this->periodFromChargeDetails($snapshot)
+                ?? $this->period(
+                    $this->snapshotDate($snapshot, 'charged_at'),
+                    $this->snapshotDate($snapshot, 'last_day_of_month'),
+                ),
         );
     }
 
@@ -247,8 +248,25 @@ class ChargeBreakdown
             charged: $charged,
             currency: $currency,
             notes: $notes,
-            period: $this->calendarMonthPeriod($charge->created_at),
+            period: $this->periodFromChargeDetails($this->feeSnapshot($charge))
+                ?? ($charge->shop?->paid_at ? $this->calendarMonthPeriod($charge->shop->paid_at) : null)
+                ?? $this->calendarMonthPeriod($charge->created_at),
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $details
+     */
+    protected function periodFromChargeDetails(array $details): ?string
+    {
+        $start = data_get($details, 'billing_period_start');
+        $end = data_get($details, 'billing_period_end');
+
+        if (! is_string($start) || ! is_string($end)) {
+            return null;
+        }
+
+        return $this->period(Carbon::parse($start)->startOfDay(), Carbon::parse($end)->startOfDay());
     }
 
     /**

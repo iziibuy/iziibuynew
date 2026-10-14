@@ -111,6 +111,7 @@ class MonthlyCharge extends Command
                             'amount' => $shop->subscriptionFeeFull(),
                             'status' => 1,
                             'comment' => 'Monthly subscription fee',
+                            'details' => json_encode($shop->subscriptionRenewalFeeDetails($billingPeriod)),
                         ]);
 
                         $shop->update([
@@ -149,6 +150,7 @@ class MonthlyCharge extends Command
                                 'amount' => $shop->subscriptionFeeFull(),
                                 'status' => 0,
                                 'comment' => 'Monthly subscription fee',
+                                'details' => json_encode($shop->subscriptionRenewalFeeDetails($billingPeriod)),
                             ]);
                             if ($shop->retailer_id) {
                                 RetailerCommission::commission_from_recurring_payments($shop)->pay();

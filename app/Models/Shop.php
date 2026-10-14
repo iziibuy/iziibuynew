@@ -9,6 +9,7 @@ use App\Models\Traits\LegacyVoyagerGetsTranslatedAttribute;
 use App\Payment\Elavon\CheckoutJsTheme;
 use App\Services\Checkout\CheckoutPaymentOptionCatalog;
 use App\Services\Elavon\ElavonOnboardingPromo;
+use App\Services\Subscription\MonthlyBillingPeriod;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -788,6 +789,51 @@ class Shop extends Model
             'Tax ='.(float) $this->tax().'<br>'.
             'Discount ='.(float) $this->discount().'<br>'.
             'Total ='.(float) $this->subscriptionFee().'<br>';
+    }
+
+    /**
+     * Fee snapshot for a full-month renewal (saved on charge.details).
+     *
+     * @return array<string, mixed>
+     */
+    public function subscriptionRenewalFeeDetails(MonthlyBillingPeriod $billingPeriod): array
+    {
+        $this->loadMissing('users');
+
+        $managersCost = $this->users->count() > 1 ? (float) $this->singleUserCost() : 0.0;
+        $monthlyCost = (float) $this->monthly_cost;
+        $discount = (float) $this->discount();
+        $establishmentCost = $this->establishment ? 0.0 : (float) $this->establishedFee();
+        $net = $monthlyCost + $managersCost + $establishmentCost - $discount;
+        $tax = $net * ($this->registrationTax() / 100);
+
+        return [
+            'charge_type' => 'monthly_renewal',
+            'billing_period_start' => $billingPeriod->start->toDateString(),
+            'billing_period_end' => $billingPeriod->end->toDateString(),
+            'charged_at' => $billingPeriod->start->format('d M,Y'),
+            'last_day_of_month' => $billingPeriod->end->format('d M,Y'),
+            'days_before_the_months_end' => 0,
+            'shop' => [
+                'id' => $this->id,
+                'name' => $this->user_name,
+                'managers' => $this->users()->where('role_id', 4)->count(),
+                'establishment' => (bool) $this->establishment,
+                'fees' => [
+                    'per_manager_cost' => $this->per_user_fee,
+                    'monthly_cost' => $this->monthly_cost,
+                    'esatblisment_cost' => $establishmentCost,
+                ],
+            ],
+            'need_to_pay' => [
+                'managers_cost' => $managersCost,
+                'monthly_cost' => $monthlyCost,
+                'esatblisment_cost' => $establishmentCost,
+                'tax' => $tax,
+            ],
+            'discount' => $discount,
+            'total' => round($net + $tax, 2),
+        ];
     }
 
     public function tax()

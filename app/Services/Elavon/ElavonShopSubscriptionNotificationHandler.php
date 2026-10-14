@@ -106,17 +106,22 @@ class ElavonShopSubscriptionNotificationHandler
         $isSignupBill = $shop->paid_at === null || $shop->status != 1;
         $chargeAmount = $amount ?? ($isSignupBill ? $shop->subscriptionFee() : $shop->subscriptionFeeFull());
 
+        $billingPeriod = MonthlyBillingPeriod::resolve();
+        $feeDetails = $isSignupBill
+            ? $shop->subscriptionFeeDetails()
+            : $shop->subscriptionRenewalFeeDetails($billingPeriod);
+
         Charge::create([
             'shop_id' => $shop->id,
             'order_id' => $transactionId,
             'amount' => $chargeAmount,
             'status' => true,
             'comment' => $isSignupBill ? 'subscription fee' : 'Monthly subscription fee',
-            'details' => json_encode($shop->subscriptionFeeDetails()),
+            'details' => json_encode($feeDetails),
         ]);
 
         $shop->status = 1;
-        $shop->paid_at = MonthlyBillingPeriod::resolve()->paidThrough();
+        $shop->paid_at = $billingPeriod->paidThrough();
         if ($isSignupBill) {
             $shop->establishment = 1;
         }
