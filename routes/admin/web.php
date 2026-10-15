@@ -5,6 +5,7 @@ use App\Filament\Pages\RetailerReportPage;
 use App\Filament\Pages\RetailerWithdrawalsPage;
 use App\Filament\Resources\RetailerMetas\RetailerMetaResource;
 use App\Filament\Resources\Shops\ShopResource;
+use App\Http\Controllers\Admin\AllChargesExportController;
 use App\Http\Controllers\Admin\ImportsController;
 use App\Http\Controllers\Admin\OrderAdminController;
 use App\Http\Controllers\Admin\RetailerAdminController;
@@ -36,6 +37,7 @@ Route::middleware(['web', 'admin.user'])->prefix('admin')->as('admin.')->group(f
     Route::get('delete-attribute/{attribute}', [ProductsController::class, 'delete_attribue'])->name('delete.product.attribute');
     Route::get('copy-product/{product}', [ProductsController::class, 'CopyProduct'])->name('copy.product');
     Route::get('changelog', [PagesController::class, 'changelog'])->name('changelog');
+    Route::get('all-charges/export', AllChargesExportController::class)->name('all_charges.export');
     Route::get('shop-product-export-by-admin/{shop}', [ExportController::class, 'shop_product_export_by_admin'])->name('shop_product_export_by_admin');
     Route::get('enterprise-onboardings-export', [ExportController::class, 'enterprise_onboarding_export'])->name('enterprise_onboarding_export');
     Route::get('enterprise-onboardings-export/{enterpriseOnboarding}', [ExportController::class, 'enterprise_onboarding_export_single'])->name('enterprise_onboarding_export_single');

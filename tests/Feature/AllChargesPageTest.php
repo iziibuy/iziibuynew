@@ -405,17 +405,29 @@ it('neutralises spreadsheet formulas in exported values', function (): void {
     expect(app(ChargeCsvExporter::class)->toCsvRow($row)[11])->toStartWith("'=");
 });
 
-it('downloads the filtered charges from the export button', function (): void {
+it('downloads the filtered charges from the export route', function (): void {
     $this->travelTo(Carbon::parse('2026-10-14 10:00:00'));
     $admin = createAllChargesAdmin();
     createAllChargesShopFixture();
     createAllChargesExternalFixture();
 
-    Livewire::actingAs($admin)
-        ->test(AllChargesPage::class)
-        ->filterTable('model', 'Shop')
-        ->callAction(TestAction::make('exportCsv')->table())
-        ->assertFileDownloaded('all-charges-2026-10-14-100000.csv');
+    $response = $this->actingAs($admin)
+        ->get(route('admin.all_charges.export', [
+            'filters' => [
+                'model' => ['value' => 'Shop'],
+            ],
+        ]));
+
+    $response->assertOk();
+    $response->assertDownload('all-charges-2026-10-14-100000.csv');
+
+    $file = $response->baseResponse->getFile();
+    expect($file)->not->toBeNull();
+
+    $csv = (string) file_get_contents($file->getPathname());
+
+    expect($csv)->toContain('order-all-charges-1')
+        ->and($csv)->not->toContain('external-sub-ref');
 });
 
 it('filters unified charges by model', function (): void {

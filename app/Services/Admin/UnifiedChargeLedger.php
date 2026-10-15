@@ -15,6 +15,8 @@ use App\Models\PaymentMethodAccess;
 use App\Models\Shop;
 use App\Models\SubscriptionCharge;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Throwable;
 
@@ -87,19 +89,25 @@ class UnifiedChargeLedger
      * @param  array<string, mixed>|null  $filters
      * @return Collection<int, array<string, mixed>>
      */
-    public function collect(?array $filters = null, ?string $sortColumn = null, ?string $sortDirection = null): Collection
-    {
+    public function collect(
+        ?array $filters = null,
+        ?string $sortColumn = null,
+        ?string $sortDirection = null,
+        bool $lightweight = false,
+    ): Collection {
         $filters ??= [];
 
         $this->refunds = ChargeRefund::query()->get()->keyBy('ledger_key');
 
-        $rows = collect()
-            ->concat($this->shopCharges())
-            ->concat($this->subscriptionCharges())
-            ->concat($this->externalSubscriptionCharges())
-            ->concat($this->membershipCharges());
+        $createdBetween = $this->createdBetweenFromFilters($filters);
 
-        $rows = $this->applyFilters($rows, $filters);
+        $rows = collect()
+            ->concat($this->shopCharges($createdBetween, $lightweight))
+            ->concat($this->subscriptionCharges($createdBetween, $lightweight))
+            ->concat($this->externalSubscriptionCharges($createdBetween, $lightweight))
+            ->concat($this->membershipCharges($createdBetween, $lightweight));
+
+        $rows = $this->applyFilters($rows, $filters, skipDateFilter: $createdBetween !== null);
 
         $direction = strtolower((string) $sortDirection) === 'asc' ? 'asc' : 'desc';
         $column = filled($sortColumn) ? $sortColumn : 'created_at';
@@ -123,14 +131,40 @@ class UnifiedChargeLedger
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    protected function shopCharges(): Collection
+    /**
+     * @param  array{from: ?Carbon, until: ?Carbon}|null  $createdBetween
+     */
+    protected function shopCharges(?array $createdBetween = null, bool $lightweight = false): Collection
     {
-        return Charge::query()
+        $query = Charge::query()
             ->with(['shop.user'])
-            ->latest('id')
+            ->latest('id');
+
+        $this->applyCreatedBetween($query, $createdBetween);
+
+        return $query
             ->get()
-            ->map(function (Charge $charge): array {
+            ->map(function (Charge $charge) use ($lightweight): array {
                 $shop = $charge->shop;
+
+                $elavonTransactionId = $shop?->subscriptionMethod === 'elavon' && ChargeElavonGateway::looksLikeTransactionId((string) $charge->order_id)
+                    ? (string) $charge->order_id
+                    : null;
+
+                $extras = $lightweight
+                    ? [
+                        'last_four' => $charge->lastFour,
+                        'elavon_transaction_id' => $elavonTransactionId,
+                    ]
+                    : [
+                        'payment_type' => $charge->payment_type,
+                        'is_demo' => (bool) $charge->is_demo,
+                        'last_four' => $charge->lastFour,
+                        'details' => $this->prettyJson($charge->getAttributes()['details'] ?? null),
+                        'payment_body' => $this->prettyJson($charge->getAttributes()['payment_body'] ?? null),
+                        'view_url' => $this->safeChargeViewUrl($charge),
+                        'elavon_transaction_id' => $elavonTransactionId,
+                    ];
 
                 return $this->row(
                     key: self::SOURCE_SHOP.'-'.$charge->id,
@@ -146,17 +180,7 @@ class UnifiedChargeLedger
                     entityName: $shop?->company_name ?: ($shop?->user_name ?: ''),
                     email: $shop?->contact_email ?: ($shop?->user?->email ?? ''),
                     createdAt: $charge->created_at,
-                    extras: [
-                        'payment_type' => $charge->payment_type,
-                        'is_demo' => (bool) $charge->is_demo,
-                        'last_four' => $charge->lastFour,
-                        'details' => $this->prettyJson($charge->getAttributes()['details'] ?? null),
-                        'payment_body' => $this->prettyJson($charge->getAttributes()['payment_body'] ?? null),
-                        'view_url' => $this->safeChargeViewUrl($charge),
-                        'elavon_transaction_id' => $shop?->subscriptionMethod === 'elavon' && ChargeElavonGateway::looksLikeTransactionId((string) $charge->order_id)
-                            ? (string) $charge->order_id
-                            : null,
-                    ],
+                    extras: $extras,
                 );
             });
     }
@@ -173,13 +197,20 @@ class UnifiedChargeLedger
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    protected function subscriptionCharges(): Collection
+    /**
+     * @param  array{from: ?Carbon, until: ?Carbon}|null  $createdBetween
+     */
+    protected function subscriptionCharges(?array $createdBetween = null, bool $lightweight = false): Collection
     {
-        return SubscriptionCharge::query()
+        $query = SubscriptionCharge::query()
             ->with(['subscription.subscribable'])
-            ->latest('id')
+            ->latest('id');
+
+        $this->applyCreatedBetween($query, $createdBetween);
+
+        return $query
             ->get()
-            ->map(function (SubscriptionCharge $charge): array {
+            ->map(function (SubscriptionCharge $charge) use ($lightweight): array {
                 $subscription = $charge->subscription;
                 $subscribable = $subscription?->subscribable;
                 $modelType = $this->basename($subscription?->subscribable_type);
@@ -210,17 +241,25 @@ class UnifiedChargeLedger
                         ?: ''
                     ),
                     createdAt: $charge->created_at,
-                    extras: [
-                        'subscription_id' => $charge->subscription_id,
-                        'domain' => $charge->domain,
-                        'last_four' => $charge->last4,
-                        'payment_details' => $this->prettyJson($charge->getAttributes()['payment_details'] ?? null),
-                        'charge_details' => $this->prettyJson($charge->getAttributes()['charge_details'] ?? null),
-                        'elavon_transaction_id' => ($subscribable instanceof PaymentMethodAccess || $subscribable instanceof Enterprise)
-                            && ChargeElavonGateway::looksLikeTransactionId((string) $charge->elavon_transaction_id)
-                            ? (string) $charge->elavon_transaction_id
-                            : null,
-                    ],
+                    extras: $lightweight
+                        ? [
+                            'last_four' => $charge->last4,
+                            'elavon_transaction_id' => ($subscribable instanceof PaymentMethodAccess || $subscribable instanceof Enterprise)
+                                && ChargeElavonGateway::looksLikeTransactionId((string) $charge->elavon_transaction_id)
+                                ? (string) $charge->elavon_transaction_id
+                                : null,
+                        ]
+                        : [
+                            'subscription_id' => $charge->subscription_id,
+                            'domain' => $charge->domain,
+                            'last_four' => $charge->last4,
+                            'payment_details' => $this->prettyJson($charge->getAttributes()['payment_details'] ?? null),
+                            'charge_details' => $this->prettyJson($charge->getAttributes()['charge_details'] ?? null),
+                            'elavon_transaction_id' => ($subscribable instanceof PaymentMethodAccess || $subscribable instanceof Enterprise)
+                                && ChargeElavonGateway::looksLikeTransactionId((string) $charge->elavon_transaction_id)
+                                ? (string) $charge->elavon_transaction_id
+                                : null,
+                        ],
                 );
             });
     }
@@ -228,13 +267,20 @@ class UnifiedChargeLedger
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    protected function externalSubscriptionCharges(): Collection
+    /**
+     * @param  array{from: ?Carbon, until: ?Carbon}|null  $createdBetween
+     */
+    protected function externalSubscriptionCharges(?array $createdBetween = null, bool $lightweight = false): Collection
     {
-        return ExternalSubscriptionCharge::query()
+        $query = ExternalSubscriptionCharge::query()
             ->with(['subscription.paymentMethodAccess'])
-            ->latest('id')
+            ->latest('id');
+
+        $this->applyCreatedBetween($query, $createdBetween);
+
+        return $query
             ->get()
-            ->map(function (ExternalSubscriptionCharge $charge): array {
+            ->map(function (ExternalSubscriptionCharge $charge) use ($lightweight): array {
                 /** @var ExternalSubscription|null $subscription */
                 $subscription = $charge->subscription;
                 $plugin = $subscription?->paymentMethodAccess;
@@ -254,13 +300,19 @@ class UnifiedChargeLedger
                     entityName: (string) ($subscription?->customer_name ?: $plugin?->company_name ?: ''),
                     email: (string) ($subscription?->customer_email ?: $plugin?->company_email ?: ''),
                     createdAt: $charge->created_at,
-                    extras: [
-                        'type' => $charge->type,
-                        'failure_message' => $charge->failure_message,
-                        'payment_details' => $this->prettyJson($charge->getAttributes()['payment_details'] ?? null),
-                        'customer_email' => $subscription?->customer_email,
-                        'plugin' => $plugin?->company_name,
-                    ],
+                    extras: $lightweight
+                        ? [
+                            'elavon_transaction_id' => ChargeElavonGateway::looksLikeTransactionId((string) $charge->elavon_transaction_id)
+                                ? (string) $charge->elavon_transaction_id
+                                : null,
+                        ]
+                        : [
+                            'type' => $charge->type,
+                            'failure_message' => $charge->failure_message,
+                            'payment_details' => $this->prettyJson($charge->getAttributes()['payment_details'] ?? null),
+                            'customer_email' => $subscription?->customer_email,
+                            'plugin' => $plugin?->company_name,
+                        ],
                 );
             });
     }
@@ -268,34 +320,47 @@ class UnifiedChargeLedger
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    protected function membershipCharges(): Collection
+    /**
+     * @param  array{from: ?Carbon, until: ?Carbon}|null  $createdBetween
+     */
+    protected function membershipCharges(?array $createdBetween = null, bool $lightweight = false): Collection
     {
-        return MembershipCharge::query()
-            ->latest('id')
-            ->get()
-            ->map(function (MembershipCharge $charge): array {
-                $shop = Shop::query()->find($charge->shop_id);
+        $query = MembershipCharge::query()->latest('id');
 
-                return $this->row(
-                    key: self::SOURCE_MEMBERSHIP.'-'.$charge->id,
-                    source: self::SOURCE_MEMBERSHIP,
-                    modelType: 'Membership',
-                    modelLabel: $shop?->user_name ?: ('Membership #'.$charge->membership_id),
-                    modelId: $charge->membership_id,
-                    amount: (float) $charge->amount,
-                    currency: 'NOK',
-                    status: (bool) $charge->status,
-                    reference: '#'.$charge->id,
-                    description: __('Membership charge'),
-                    entityName: (string) ($shop?->company_name ?: $shop?->user_name ?: ''),
-                    email: (string) ($shop?->contact_email ?: ''),
-                    createdAt: $charge->created_at,
-                    extras: [
+        $this->applyCreatedBetween($query, $createdBetween);
+
+        $charges = $query->get();
+
+        $shops = Shop::query()
+            ->whereIn('id', $charges->pluck('shop_id')->filter()->unique()->values())
+            ->get()
+            ->keyBy('id');
+
+        return $charges->map(function (MembershipCharge $charge) use ($shops, $lightweight): array {
+            $shop = $shops->get($charge->shop_id);
+
+            return $this->row(
+                key: self::SOURCE_MEMBERSHIP.'-'.$charge->id,
+                source: self::SOURCE_MEMBERSHIP,
+                modelType: 'Membership',
+                modelLabel: $shop?->user_name ?: ('Membership #'.$charge->membership_id),
+                modelId: $charge->membership_id,
+                amount: (float) $charge->amount,
+                currency: 'NOK',
+                status: (bool) $charge->status,
+                reference: '#'.$charge->id,
+                description: __('Membership charge'),
+                entityName: (string) ($shop?->company_name ?: $shop?->user_name ?: ''),
+                email: (string) ($shop?->contact_email ?: ''),
+                createdAt: $charge->created_at,
+                extras: $lightweight
+                    ? []
+                    : [
                         'shop_id' => $charge->shop_id,
                         'membership_id' => $charge->membership_id,
                     ],
-                );
-            });
+            );
+        });
     }
 
     /**
@@ -303,7 +368,7 @@ class UnifiedChargeLedger
      * @param  array<string, mixed>  $filters
      * @return Collection<int, array<string, mixed>>
      */
-    protected function applyFilters(Collection $rows, array $filters): Collection
+    protected function applyFilters(Collection $rows, array $filters, bool $skipDateFilter = false): Collection
     {
         $model = data_get($filters, 'model.value') ?? data_get($filters, 'model');
         if (filled($model) && is_string($model)) {
@@ -324,6 +389,10 @@ class UnifiedChargeLedger
             $rows = $rows->where('refunded', true)->values();
         }
 
+        if ($skipDateFilter) {
+            return $rows;
+        }
+
         $from = data_get($filters, 'date.from');
         if (filled($from)) {
             $fromDate = Carbon::parse((string) $from)->startOfDay();
@@ -337,6 +406,44 @@ class UnifiedChargeLedger
         }
 
         return $rows;
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array{from: ?Carbon, until: ?Carbon}|null
+     */
+    protected function createdBetweenFromFilters(array $filters): ?array
+    {
+        $from = data_get($filters, 'date.from');
+        $until = data_get($filters, 'date.until');
+
+        if (! filled($from) && ! filled($until)) {
+            return null;
+        }
+
+        return [
+            'from' => filled($from) ? Carbon::parse((string) $from)->startOfDay() : null,
+            'until' => filled($until) ? Carbon::parse((string) $until)->endOfDay() : null,
+        ];
+    }
+
+    /**
+     * @param  Builder<Model>  $query
+     * @param  array{from: ?Carbon, until: ?Carbon}|null  $createdBetween
+     */
+    protected function applyCreatedBetween(Builder $query, ?array $createdBetween): void
+    {
+        if ($createdBetween === null) {
+            return;
+        }
+
+        if ($createdBetween['from'] instanceof Carbon) {
+            $query->where('created_at', '>=', $createdBetween['from']);
+        }
+
+        if ($createdBetween['until'] instanceof Carbon) {
+            $query->where('created_at', '<=', $createdBetween['until']);
+        }
     }
 
     /**
