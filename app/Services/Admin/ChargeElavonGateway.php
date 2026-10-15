@@ -7,8 +7,10 @@ namespace App\Services\Admin;
 use App\Elavon\Converge2\Converge2;
 use App\Models\Charge;
 use App\Models\Enterprise;
+use App\Models\ExternalSubscriptionCharge;
 use App\Models\PaymentMethodAccess;
 use App\Models\SubscriptionCharge;
+use App\Payment\Elavon\ApiElavonButtonSubscription;
 use App\Payment\Elavon\ElavonEnterpriseHostedSubscription;
 use App\Payment\Elavon\ElavonExternalHostedSubscription;
 use App\Payment\Elavon\ElavonShopHostedSubscription;
@@ -29,6 +31,7 @@ class ChargeElavonGateway
         $transactionId = match (true) {
             $charge instanceof Charge => $charge->shop?->subscriptionMethod === 'elavon' ? (string) $charge->order_id : null,
             $charge instanceof SubscriptionCharge => (string) $charge->elavon_transaction_id,
+            $charge instanceof ExternalSubscriptionCharge => (string) $charge->elavon_transaction_id,
             default => null,
         };
 
@@ -51,6 +54,17 @@ class ChargeElavonGateway
             };
         }
 
+        if ($charge instanceof ExternalSubscriptionCharge) {
+            $charge->loadMissing('subscription.paymentMethodAccess');
+            $subscription = $charge->subscription;
+
+            if ($subscription === null || strtolower((string) $subscription->payment_method) !== 'elavon') {
+                return null;
+            }
+
+            return (new ApiElavonButtonSubscription($subscription))->convergeClient();
+        }
+
         return null;
     }
 
@@ -62,6 +76,9 @@ class ChargeElavonGateway
                 : null,
             $charge instanceof SubscriptionCharge => filled($charge->subscription?->key)
                 ? (string) $charge->subscription->key
+                : null,
+            $charge instanceof ExternalSubscriptionCharge => filled($charge->subscription?->stored_card_id)
+                ? (string) $charge->subscription->stored_card_id
                 : null,
             default => null,
         };

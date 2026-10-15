@@ -34,6 +34,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Url;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
@@ -157,9 +158,8 @@ class AllChargesPage extends Page implements HasTable
                 TextColumn::make('card_last_four')
                     ->label(__('Card'))
                     ->state(fn (array $record): ?string => $cardLookup->lastFour($record))
-                    ->formatStateUsing(fn (string $state): string => '•••• '.$state)
+                    ->formatStateUsing(fn (?string $state): string => filled($state) ? '•••• '.$state : '-')
                     ->fontFamily(FontFamily::Mono)
-                    ->placeholder('-')
                     ->toggleable(),
                 TextColumn::make('status_label')
                     ->label(__('Status'))
@@ -184,14 +184,28 @@ class AllChargesPage extends Page implements HasTable
                     ->label(__('Export CSV'))
                     ->icon(Heroicon::OutlinedArrowDownTray)
                     ->color('gray')
-                    ->action(fn (): StreamedResponse => app(ChargeCsvExporter::class)->download(
-                        $this->chargeRows(
-                            $this->tableFilters,
-                            $this->getTableSortColumn() ?? 'created_at',
-                            $this->getTableSortDirection() ?? 'desc',
-                            $this->getTableSearch(),
-                        ),
-                    )),
+                    ->action(function (): BinaryFileResponse|StreamedResponse|null {
+                        try {
+                            return app(ChargeCsvExporter::class)->download(
+                                $this->chargeRows(
+                                    $this->tableFilters,
+                                    $this->getTableSortColumn() ?? 'created_at',
+                                    $this->getTableSortDirection() ?? 'desc',
+                                    $this->getTableSearch(),
+                                ),
+                            );
+                        } catch (Throwable $exception) {
+                            report($exception);
+
+                            Notification::make()
+                                ->title(__('Export failed'))
+                                ->body(__('Could not generate the CSV. Try narrowing the date filter and export again.'))
+                                ->danger()
+                                ->send();
+
+                            return null;
+                        }
+                    }),
             ])
             ->defaultSort('created_at', 'desc')
             ->paginated([10, 25, 50, 100])

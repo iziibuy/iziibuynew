@@ -34,6 +34,11 @@ class ApiElavonButtonSubscription
 
     protected PaymentMethodAccess $access;
 
+    public function convergeClient(): Converge2
+    {
+        return $this->elavon;
+    }
+
     public function __construct(protected ExternalSubscription $subscription)
     {
         $this->subscription->loadMissing(['paymentMethodAccess', 'paymentApi']);
@@ -258,17 +263,29 @@ class ApiElavonButtonSubscription
             'next_charge_at' => now()->addDays(max(1, (int) $this->subscription->interval_days)),
         ]);
 
+        $signupLastFour = null;
+        if ($transactionId !== '') {
+            $signupTx = $this->elavon->getTransaction($transactionId);
+            if ($signupTx->isSuccess()) {
+                $signupLastFour = ElavonRecurringTransaction::cardLastFour($signupTx);
+            }
+        }
+        if ($signupLastFour === null && $cardId !== '') {
+            $signupLastFour = ElavonRecurringTransaction::cardLastFourFromStoredCardId($this->elavon, $cardId);
+        }
+
         $this->subscription->charges()->create([
             'amount' => $amount,
             'currency' => $this->subscription->currency,
             'status' => true,
             'type' => 'signup',
             'elavon_transaction_id' => $transactionId !== '' ? $transactionId : null,
-            'payment_details' => json_encode([
+            'payment_details' => json_encode(array_filter([
                 'provider' => 'elavon',
                 'session_id' => $sessionId,
                 'type' => 'signup',
-            ]),
+                'last4' => $signupLastFour,
+            ])),
         ]);
 
         return [
@@ -318,7 +335,11 @@ class ApiElavonButtonSubscription
             'status' => true,
             'type' => 'renewal',
             'elavon_transaction_id' => $transactionId,
-            'payment_details' => json_encode(['provider' => 'elavon', 'type' => 'renewal']),
+            'payment_details' => json_encode([
+                'provider' => 'elavon',
+                'type' => 'renewal',
+                'last4' => ElavonRecurringTransaction::cardLastFour($response),
+            ]),
         ]);
 
         $this->subscription->paid_at = now();

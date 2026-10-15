@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\Charge;
+use App\Models\ExternalSubscriptionCharge;
 use App\Models\SubscriptionCharge;
 use App\Services\Admin\ChargeCardLookup;
 use App\Services\Admin\ChargeElavonGateway;
@@ -18,7 +19,8 @@ class SyncChargeCardLastFour extends Command
                             {--force : Re-fetch from Elavon even when last4 is already stored}
                             {--limit= : Maximum number of charges to process}
                             {--shop-charge= : Only this shop charge ID}
-                            {--subscription-charge= : Only this subscription charge ID}';
+                            {--subscription-charge= : Only this subscription charge ID}
+                            {--external-charge= : Only this button subscription charge ID}';
 
     protected $description = 'Backfill card last four digits on existing charges from Elavon (transaction, then stored card / subscription id)';
 
@@ -40,6 +42,7 @@ class SyncChargeCardLastFour extends Command
 
         $shopChargeId = $this->option('shop-charge');
         $subscriptionChargeId = $this->option('subscription-charge');
+        $externalChargeId = $this->option('external-charge');
 
         if (filled($shopChargeId)) {
             $this->processShopCharge((int) $shopChargeId, $lookup, $dryRun, $force, $updated, $failed);
@@ -49,6 +52,12 @@ class SyncChargeCardLastFour extends Command
 
         if (filled($subscriptionChargeId)) {
             $this->processSubscriptionCharge((int) $subscriptionChargeId, $lookup, $dryRun, $force, $updated, $failed);
+
+            return self::SUCCESS;
+        }
+
+        if (filled($externalChargeId)) {
+            $this->processExternalSubscriptionCharge((int) $externalChargeId, $lookup, $dryRun, $force, $updated, $failed);
 
             return self::SUCCESS;
         }
@@ -128,6 +137,47 @@ class SyncChargeCardLastFour extends Command
                         $updated++;
                     } else {
                         $this->warn("  subscription charge #{$charge->id} → no card digits from Elavon");
+                        $failed++;
+                    }
+                }
+
+                return true;
+            });
+
+        ExternalSubscriptionCharge::query()
+            ->with('subscription.paymentMethodAccess')
+            ->whereNotNull('elavon_transaction_id')
+            ->orderByDesc('id')
+            ->chunkById(50, function ($charges) use ($lookup, $dryRun, $force, $limit, &$processed, &$updated, &$skipped, &$failed): bool {
+                foreach ($charges as $charge) {
+                    if ($limit !== null && $processed >= $limit) {
+                        return false;
+                    }
+
+                    $processed++;
+
+                    if (! $this->shouldSyncExternalSubscriptionCharge($charge, $force)) {
+                        $skipped++;
+
+                        continue;
+                    }
+
+                    if ($dryRun) {
+                        $this->line("  [dry-run] button subscription charge #{$charge->id} tx={$charge->elavon_transaction_id}");
+                        $skipped++;
+
+                        continue;
+                    }
+
+                    $lastFour = $lookup->syncFromElavon([
+                        'id' => UnifiedChargeLedger::SOURCE_EXTERNAL_SUBSCRIPTION.'-'.$charge->id,
+                    ], $force);
+
+                    if ($lastFour !== null) {
+                        $this->info("  button subscription charge #{$charge->id} → •••• {$lastFour}");
+                        $updated++;
+                    } else {
+                        $this->warn("  button subscription charge #{$charge->id} → no card digits from Elavon");
                         $failed++;
                     }
                 }
@@ -218,6 +268,34 @@ class SyncChargeCardLastFour extends Command
         return ! is_array($details) || blank(data_get($details, 'last4'));
     }
 
+    protected function processExternalSubscriptionCharge(int $id, ChargeCardLookup $lookup, bool $dryRun, bool $force, int &$updated, int &$failed): void
+    {
+        $charge = ExternalSubscriptionCharge::query()->with('subscription.paymentMethodAccess')->find($id);
+        if ($charge === null) {
+            $this->error("Button subscription charge #{$id} not found.");
+
+            return;
+        }
+
+        if ($dryRun) {
+            $this->line("Would sync button subscription charge #{$id} (tx={$charge->elavon_transaction_id})");
+
+            return;
+        }
+
+        $lastFour = $lookup->syncFromElavon([
+            'id' => UnifiedChargeLedger::SOURCE_EXTERNAL_SUBSCRIPTION.'-'.$id,
+        ], $force);
+
+        if ($lastFour !== null) {
+            $this->info("button subscription charge #{$id} → •••• {$lastFour}");
+            $updated++;
+        } else {
+            $this->warn("button subscription charge #{$id} → no card digits from Elavon");
+            $failed++;
+        }
+    }
+
     protected function shouldSyncSubscriptionCharge(SubscriptionCharge $charge, bool $force): bool
     {
         $canLookup = ChargeElavonGateway::looksLikeTransactionId((string) $charge->elavon_transaction_id)
@@ -232,6 +310,24 @@ class SyncChargeCardLastFour extends Command
         }
 
         $details = json_decode((string) ($charge->getAttributes()['charge_details'] ?? ''), true);
+
+        return ! is_array($details) || blank(data_get($details, 'last4'));
+    }
+
+    protected function shouldSyncExternalSubscriptionCharge(ExternalSubscriptionCharge $charge, bool $force): bool
+    {
+        $canLookup = ChargeElavonGateway::looksLikeTransactionId((string) $charge->elavon_transaction_id)
+            || filled($charge->subscription?->stored_card_id);
+
+        if (! $canLookup) {
+            return false;
+        }
+
+        if ($force) {
+            return true;
+        }
+
+        $details = json_decode((string) ($charge->getAttributes()['payment_details'] ?? ''), true);
 
         return ! is_array($details) || blank(data_get($details, 'last4'));
     }

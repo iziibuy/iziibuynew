@@ -68,7 +68,7 @@ class ChargeCardLookup
             return match ($source) {
                 UnifiedChargeLedger::SOURCE_SHOP => $this->forShopCharge($id, $forceRemote),
                 UnifiedChargeLedger::SOURCE_SUBSCRIPTION => $this->forSubscriptionCharge($id, $forceRemote),
-                UnifiedChargeLedger::SOURCE_EXTERNAL_SUBSCRIPTION => $this->forExternalSubscriptionCharge($id),
+                UnifiedChargeLedger::SOURCE_EXTERNAL_SUBSCRIPTION => $this->forExternalSubscriptionCharge($id, $forceRemote),
                 default => null,
             };
         } catch (Throwable $exception) {
@@ -245,12 +245,57 @@ class ChargeCardLookup
         return 'charge-card-last4-stored:'.$recordKey;
     }
 
-    protected function forExternalSubscriptionCharge(int $id): ?string
+    protected function forExternalSubscriptionCharge(int $id, bool $forceRemote = false): ?string
     {
-        $charge = ExternalSubscriptionCharge::query()->find($id);
-        $details = json_decode((string) ($charge?->getAttributes()['payment_details'] ?? ''), true);
+        $charge = ExternalSubscriptionCharge::query()->with('subscription.paymentMethodAccess')->find($id);
 
-        return $this->normalize(data_get($details, 'last4') ?? data_get($details, 'card.last4'));
+        if ($charge === null) {
+            return null;
+        }
+
+        if (! $forceRemote) {
+            $stored = $this->lastFourFromExternalSubscriptionChargeRecord($charge);
+            if ($stored !== null) {
+                return $stored;
+            }
+        }
+
+        $recordKey = UnifiedChargeLedger::SOURCE_EXTERNAL_SUBSCRIPTION.'-'.$id;
+        if ($forceRemote) {
+            $this->forgetLookupCache($recordKey);
+            $this->forgetLookupCache($this->storedCardCacheKey($recordKey));
+        }
+
+        $lastFour = $this->resolveLastFourFromElavon(
+            $recordKey,
+            $this->gateway->transactionId($charge),
+            $this->gateway->storedCardId($charge),
+            fn (): ?Converge2 => $this->gateway->client($charge),
+        );
+
+        if ($lastFour !== null) {
+            $this->persistLastFourOnExternalSubscriptionCharge($charge, $lastFour);
+        }
+
+        return $lastFour;
+    }
+
+    protected function lastFourFromExternalSubscriptionChargeRecord(ExternalSubscriptionCharge $charge): ?string
+    {
+        $details = json_decode((string) ($charge->getAttributes()['payment_details'] ?? ''), true);
+
+        return is_array($details)
+            ? $this->normalize(data_get($details, 'last4') ?? data_get($details, 'card.last4'))
+            : null;
+    }
+
+    protected function persistLastFourOnExternalSubscriptionCharge(ExternalSubscriptionCharge $charge, string $lastFour): void
+    {
+        $details = json_decode((string) ($charge->getAttributes()['payment_details'] ?? ''), true);
+        $details = is_array($details) ? $details : [];
+        $charge->forceFill([
+            'payment_details' => json_encode(array_merge($details, ['last4' => $lastFour])),
+        ])->saveQuietly();
     }
 
     /**
