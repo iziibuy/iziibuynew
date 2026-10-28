@@ -172,7 +172,7 @@ class ApiElavonPayment
             'originUrl' => $this->order->source_url,
             'defaultLanguageTag' => 'en-US',
             'customFields' => $customFields,
-            'doCreateTransaction' => false,
+            'doCreateTransaction' => true,
             'doThreeDSecure' => 1,
             'hppType' => 'fullPageRedirect',
         ];
