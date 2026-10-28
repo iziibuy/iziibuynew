@@ -158,7 +158,7 @@ class ApiElavonPayment
                 'originUrl' => $this->checkoutJsOriginUrl(),
                 'defaultLanguageTag' => 'en-US',
                 'customFields' => $customFields,
-                'doCreateTransaction' => true,
+                'doCreateTransaction' => true, 
                 'doThreeDSecure' => 1,
                 'hppType' => 'hostedPaymentFields',
             ];
