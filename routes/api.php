@@ -56,7 +56,7 @@ Route::get('/payment-method-access/{paymentMethodAccess:key}', function (Payment
     return [
         'name' => $paymentMethodAccess->company_name,
         'domain' => substr($paymentMethodAccess->company_domain, 8),
-        'status' => $paymentMethodAccess->status ? true : false,
+        'status' => $paymentMethodAccess->hasAccess(),
     ];
 });
 

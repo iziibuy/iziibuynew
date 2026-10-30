@@ -13,7 +13,7 @@ Route::get('subscription', [DashboardController::class, 'subscriptionIndex'])->n
 Route::get('subscription/callback/{subscription}/success', [DashboardController::class, 'subscriptionSuccess'])->name('subscription.success');
 Route::get('subscription/callback/{subscription}/cancel', [DashboardController::class, 'subscriptionCancel'])->name('subscription.cancel');
 Route::get('subscription/{subscription}/start', [DashboardController::class, 'startSubscription'])->name('start-subscription');
-Route::get('subscription/{subscription}/trial', [DashboardController::class, 'startTrial'])->name('start-trial');
+Route::post('subscription/{subscription}/trial', [DashboardController::class, 'startTrial'])->name('start-trial');
 Route::get('/contraact', [DashboardController::class, 'contract'])->name('contract');
 Route::post('payment-method-access/{paymentMethodAccess}/sign-contract', [DashboardController::class, 'signContract'])->name('paymentMethodAccess.signContract');
 

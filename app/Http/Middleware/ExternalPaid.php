@@ -21,7 +21,7 @@ class ExternalPaid
         $user = Auth::user();
         $paymentMethodAccess = $user->paymentMethodAccess;
 
-        if ($paymentMethodAccess->canProcessPayments()) {
+        if ($paymentMethodAccess->hasAccess()) {
             return $next($request);
         } elseif (
             $paymentMethodAccess->company_registration == null &&
@@ -38,6 +38,12 @@ class ExternalPaid
             'fee' => (int) round($paymentMethodAccess->fee()),
         ]);
 
-        return redirect()->route('external.subscription.payment');
+        $redirect = redirect()->route('external.subscription.payment');
+
+        if ($paymentMethodAccess->trial_used) {
+            $redirect->withErrors(__('words.trial_ended_please_pay'));
+        }
+
+        return $redirect;
     }
 }

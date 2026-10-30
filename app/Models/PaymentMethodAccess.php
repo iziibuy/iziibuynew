@@ -163,13 +163,30 @@ class PaymentMethodAccess extends Model
     }
 
     /**
-     * Trial is running: card vaulted, nothing charged yet.
+     * The free trial is running and has not yet been settled by a paid signup.
      */
     public function onTrial(): bool
     {
         return $this->trial_ends_at !== null
             && $this->trial_ends_at->isFuture()
             && $this->trial_charged_at === null;
+    }
+
+    /**
+     * May use the dashboard and plugin: paid, or inside the free trial.
+     */
+    public function hasAccess(): bool
+    {
+        return $this->canProcessPayments() || $this->onTrial();
+    }
+
+    public function trialDaysLeft(): int
+    {
+        if (! $this->onTrial()) {
+            return 0;
+        }
+
+        return max((int) ceil(now()->floatDiffInDays($this->trial_ends_at, false)), 0);
     }
 
     /**

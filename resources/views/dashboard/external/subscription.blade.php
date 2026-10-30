@@ -47,8 +47,12 @@
                                         class="btn btn-primary">{{ __('words.start_running_subs_btn') }}</a>
                                 @endif
                                 @if ($paymentMethodAccess->canStartTrial())
-                                    <a href="{{ route('external.start-trial', $subscription) }}"
-                                        class="btn btn-outline-primary">{{ __('words.start_free_trial_btn') }}</a>
+                                    <form action="{{ route('external.start-trial', $subscription) }}" method="POST"
+                                        class="d-inline">
+                                        @csrf
+                                        <button type="submit"
+                                            class="btn btn-outline-primary">{{ __('words.start_free_trial_btn') }}</button>
+                                    </form>
                                 @endif
                                 <a class="btn btn-danger" href="{{ route('logout') }}"
                                     onclick="event.preventDefault(); document.getElementById('logout-form').submit();">

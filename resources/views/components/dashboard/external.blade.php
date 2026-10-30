@@ -91,6 +91,13 @@
         <div id="content" class="p-md-5 pt-5">
 
             <div class="container-fluid">
+                @if (($trialAccess = auth()->user()->paymentMethodAccess)?->onTrial())
+                    <div class="alert alert-info d-flex justify-content-between align-items-center">
+                        <span>{{ __('words.trial_days_left', ['days' => $trialAccess->trialDaysLeft()]) }}</span>
+                        <a href="{{ route('external.subscription.payment') }}"
+                            class="btn btn-sm btn-primary">{{ __('words.subscribe_now') }}</a>
+                    </div>
+                @endif
                 {{ $slot }}
             </div>
             <form action="" method="post" id="delete-form" style="dislplay:none">

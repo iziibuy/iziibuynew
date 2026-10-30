@@ -46,7 +46,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('payment-method-access:charge 1')->monthlyOn(1);
         $schedule->command('payment-method-access:charge 1')->monthlyOn(3);
         $schedule->command('payment-method-access:charge 0')->monthlyOn(5);
-        $schedule->command('payment-method-access:charge-trials')->hourly()->withoutOverlapping();
+        $schedule->command('payment-method-access:expire-trials')->hourly()->withoutOverlapping();
 
         $schedule->command('credits:expire')->daily();
         $schedule->command('bonus:calculate')->monthlyOn(now()->endOfMonth()->format('d') - 1, '23:59');
