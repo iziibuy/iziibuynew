@@ -138,6 +138,11 @@
                             <td>
                                 <span
                                     class="badge badge-{{ $paymentMethodAccess->status ? 'success' : 'danger' }}">{{ $paymentMethodAccess->status ? __('words.on') : __('words.off') }}</span>
+                                @if ($paymentMethodAccess->onTrial())
+                                    <div class="small text-info">
+                                        {{ __('words.trial_ends_on', ['date' => $paymentMethodAccess->trial_ends_at->format('d.m.Y')]) }}
+                                    </div>
+                                @endif
                             </td>
                         </tr>
                         <tr>

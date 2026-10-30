@@ -168,6 +168,9 @@ class MonthlyChargePaymentMethodAccess extends Command
             ->where(fn (Builder $query) => $query
                 ->whereNull('last_paid_at')
                 ->orWhere('last_paid_at', '<', $billingPeriod->paidThrough()->toDateTimeString()))
+            ->where(fn (Builder $query) => $query
+                ->whereNull('trial_ends_at')
+                ->orWhereNotNull('trial_charged_at'))
             ->when(filled($onlyId), fn (Builder $query) => $query->whereKey($onlyId))
             ->orderBy('id');
     }

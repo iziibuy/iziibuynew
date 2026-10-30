@@ -22,6 +22,10 @@ class PaymentMethodAccess extends Model
     protected $casts = [
         'last_paid_at' => 'datetime',
         'is_demo' => 'boolean',
+        'trial_started_at' => 'datetime',
+        'trial_ends_at' => 'datetime',
+        'trial_charged_at' => 'datetime',
+        'trial_used' => 'boolean',
     ];
 
     protected $meta_attributes = [
@@ -156,6 +160,43 @@ class PaymentMethodAccess extends Model
     public function canProcessPayments(): bool
     {
         return (bool) ($this->attributes['status'] ?? false);
+    }
+
+    /**
+     * Trial is running: card vaulted, nothing charged yet.
+     */
+    public function onTrial(): bool
+    {
+        return $this->trial_ends_at !== null
+            && $this->trial_ends_at->isFuture()
+            && $this->trial_charged_at === null;
+    }
+
+    /**
+     * One trial per user, and only before any paid signup.
+     */
+    public function canStartTrial(): bool
+    {
+        if ($this->trial_used || (bool) $this->status) {
+            return false;
+        }
+
+        $subscription = $this->subscription;
+
+        if ($subscription !== null) {
+            if ((int) $subscription->status === 1) {
+                return false;
+            }
+
+            if ($subscription->charges()->where('amount', '>', 0)->exists()) {
+                return false;
+            }
+        }
+
+        return ! static::query()
+            ->where('user_id', $this->user_id)
+            ->where('trial_used', true)
+            ->exists();
     }
 
     public function companyAddress(): Attribute

@@ -96,6 +96,10 @@ class PaymentMethodAccessInfolist
                             ->label(__('Last paid at'))
                             ->dateTime()
                             ->placeholder('-'),
+                        TextEntry::make('trial_ends_at')
+                            ->label(__('Free trial ends'))
+                            ->dateTime()
+                            ->placeholder('-'),
                         TextEntry::make('subscriptionMethod')
                             ->label(__('Subscription method'))
                             ->placeholder('-'),

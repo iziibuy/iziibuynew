@@ -46,6 +46,10 @@
                                     <a href="{{ route('external.start-subscription', $subscription) }}"
                                         class="btn btn-primary">{{ __('words.start_running_subs_btn') }}</a>
                                 @endif
+                                @if ($paymentMethodAccess->canStartTrial())
+                                    <a href="{{ route('external.start-trial', $subscription) }}"
+                                        class="btn btn-outline-primary">{{ __('words.start_free_trial_btn') }}</a>
+                                @endif
                                 <a class="btn btn-danger" href="{{ route('logout') }}"
                                     onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
                                     {{ __('words.shop_logout') }}
@@ -56,6 +60,9 @@
                                     @csrf
                                 </form>
                             </div>
+                            @if ($paymentMethodAccess->canStartTrial())
+                                <p class="text-center text-muted small mt-2 mb-0">{{ __('words.free_trial_info') }}</p>
+                            @endif
                         </div>
                     </div>
                 </div>

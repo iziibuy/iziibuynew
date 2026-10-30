@@ -27,6 +27,11 @@
                         <td>
                             {{ $paymentMethodAccess->company_domain }} <span
                                 class="badge badge-{{ $paymentMethodAccess->status ? 'success' : 'danger' }}">{{ $paymentMethodAccess->status ? 'On' : 'Off' }}</span>
+                            @if ($paymentMethodAccess->onTrial())
+                                <div class="small text-info">
+                                    {{ __('words.trial_ends_on', ['date' => $paymentMethodAccess->trial_ends_at->format('d.m.Y')]) }}
+                                </div>
+                            @endif
                             @if ($paymentMethodAccess->needs_elavon_resubscription)
                                 <div class="small text-warning">
                                     {{ $paymentMethodAccess->elavon_resubscription_message }}

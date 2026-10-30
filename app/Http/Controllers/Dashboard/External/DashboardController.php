@@ -147,9 +147,51 @@ class DashboardController extends Controller
         }
     }
 
+    public function startTrial(Subscription $subscription)
+    {
+        if ($subscription->subscribable->user_id != auth()->id()) {
+            return abort(403);
+        }
+
+        $paymentMethodAccess = $subscription->subscribable;
+
+        if (! $paymentMethodAccess->canStartTrial()) {
+            return redirect()->route('external.subscription.payment')->withErrors(__('words.trial_already_used'));
+        }
+
+        try {
+            $elavon = app(ElavonExternalSubscriptionFactory::class)->make($paymentMethodAccess);
+
+            // Vault-only HPP session: the card is saved, nothing is charged.
+            $result = $elavon->getPaymentLink(
+                0,
+                route('external.subscription.payment', absolute: true),
+                route('external.subscription.cancel', $subscription, absolute: true)
+            );
+
+            if (! $result['status']) {
+                return redirect()->back()->withErrors($result['data']['message'] ?? 'Payment link failed');
+            }
+
+            $subscription->update([
+                'key' => $result['data']['payment_id'],
+                'url' => $result['data']['url'],
+            ]);
+
+            session(['external_trial_pending' => $subscription->id]);
+
+            return redirect($result['data']['url']);
+        } catch (Exception $e) {
+            return redirect()->back()->withErrors($e->getMessage());
+        } catch (Error $e) {
+            return redirect()->back()->withErrors($e->getMessage());
+        }
+    }
+
     public function subscriptionSuccess(Request $request, Subscription $subscription)
     {
         $paymentMethodAccess = null;
+        $isTrial = (int) session('external_trial_pending') === $subscription->id;
 
         try {
             DB::beginTransaction();
@@ -167,11 +209,19 @@ class DashboardController extends Controller
             }
 
             $paymentMethodAccess = $subscription->subscribable;
+
+            if ($isTrial && ! $paymentMethodAccess->canStartTrial()) {
+                DB::rollBack();
+                session()->forget('external_trial_pending');
+
+                return redirect()->route('external.subscription.payment')->withErrors(__('words.trial_already_used'));
+            }
+
             $elavon = app(ElavonExternalSubscriptionFactory::class)->make($paymentMethodAccess);
             $result = $elavon->finalizeHostedSubscriptionFromSession(
                 trim($sessionId),
                 $subscription,
-                $paymentMethodAccess->fresh()->fee()
+                $isTrial ? 0 : $paymentMethodAccess->fresh()->fee()
             );
 
             if (! $result['status']) {
@@ -179,6 +229,18 @@ class DashboardController extends Controller
 
                 return redirect()->route('external.subscription.payment')
                     ->withErrors($result['data']['message'] ?? 'Payment could not be completed.');
+            }
+
+            if ($isTrial) {
+                $paymentMethodAccess->update([
+                    'trial_used' => true,
+                    'trial_started_at' => now(),
+                    'trial_ends_at' => now()->addDays(7),
+                ]);
+                session()->forget('external_trial_pending');
+            } elseif ($paymentMethodAccess->trial_ends_at !== null && $paymentMethodAccess->trial_charged_at === null) {
+                // Resubscribed with a normal paid signup after a trial: settle the trial so it is not billed twice.
+                $paymentMethodAccess->update(['trial_charged_at' => now()]);
             }
 
             DB::commit();
@@ -198,7 +260,8 @@ class DashboardController extends Controller
                 ]);
             }
 
-            return redirect()->route('external.contract')->with('success', 'Subscription completed');
+            return redirect()->route('external.contract')
+                ->with('success', $isTrial ? __('words.trial_started_success') : 'Subscription completed');
         } catch (Exception $e) {
             DB::rollBack();
 
