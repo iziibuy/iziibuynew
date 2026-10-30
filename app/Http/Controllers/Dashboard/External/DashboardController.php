@@ -164,6 +164,7 @@ class DashboardController extends Controller
                 'trial_used' => true,
                 'trial_started_at' => now(),
                 'trial_ends_at' => now()->addDays(7),
+                'trial_charged_at' => null,
             ]);
         });
 

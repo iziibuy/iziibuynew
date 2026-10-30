@@ -190,30 +190,23 @@ class PaymentMethodAccess extends Model
     }
 
     /**
-     * One trial per user, and only before any paid signup.
+     * A new trial may start whenever the account is unpaid and no trial is running,
+     * including after an earlier trial has ended. Accounts that have paid before are excluded.
      */
     public function canStartTrial(): bool
     {
-        if ($this->trial_used || (bool) $this->status) {
+        if ((bool) $this->status || $this->onTrial()) {
             return false;
         }
 
         $subscription = $this->subscription;
 
-        if ($subscription !== null) {
-            if ((int) $subscription->status === 1) {
-                return false;
-            }
-
-            if ($subscription->charges()->where('amount', '>', 0)->exists()) {
-                return false;
-            }
+        if ($subscription === null) {
+            return true;
         }
 
-        return ! static::query()
-            ->where('user_id', $this->user_id)
-            ->where('trial_used', true)
-            ->exists();
+        return (int) $subscription->status !== 1
+            && ! $subscription->charges()->where('amount', '>', 0)->exists();
     }
 
     public function companyAddress(): Attribute

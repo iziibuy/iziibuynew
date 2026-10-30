@@ -51,7 +51,7 @@ function mockElavon(Closure $configure): ElavonExternalSubscription
     return $elavon;
 }
 
-it('shows the trial button for an eligible user and hides it once the trial is used', function (): void {
+it('shows the trial button for an eligible user and hides it while a trial is running', function (): void {
     $user = trialUser();
     $access = trialAccess($user);
 
@@ -60,9 +60,9 @@ it('shows the trial button for an eligible user and hides it once the trial is u
         ->assertOk()
         ->assertSee(route('external.start-trial', $access->subscription), false);
 
-    $access->update(['trial_used' => true]);
+    $access->update(['trial_used' => true, 'trial_ends_at' => now()->addDays(3)]);
 
-    $this->actingAs($user)
+    $this->actingAs($user->fresh())
         ->get(route('external.subscription.payment'))
         ->assertOk()
         ->assertDontSee(route('external.start-trial', $access->subscription), false);
@@ -102,11 +102,16 @@ it('grants dashboard access with a days-left banner during the trial', function 
         ->assertSee(route('external.subscription.payment'), false);
 });
 
-it('redirects to the payment page once the trial has ended and refuses another trial', function (): void {
+it('redirects to the payment page once the trial has ended and allows a new trial', function (): void {
     $user = trialUser();
     $access = trialAccess($user);
 
     $this->actingAs($user)->post(route('external.start-trial', $access->subscription));
+
+    $this->actingAs($user->fresh())
+        ->post(route('external.start-trial', $access->subscription))
+        ->assertRedirect(route('external.subscription.payment'))
+        ->assertSessionHasErrors();
 
     $this->travel(8)->days();
 
@@ -117,26 +122,26 @@ it('redirects to the payment page once the trial has ended and refuses another t
     $this->actingAs($user->fresh())
         ->get(route('external.subscription.payment'))
         ->assertOk()
-        ->assertDontSee(route('external.start-trial', $access->subscription), false);
+        ->assertSee(route('external.start-trial', $access->subscription), false);
 
     $this->actingAs($user->fresh())
         ->post(route('external.start-trial', $access->subscription))
-        ->assertRedirect(route('external.subscription.payment'))
-        ->assertSessionHasErrors();
+        ->assertRedirect(route('external.contract'));
+
+    $access->refresh();
+
+    expect($access->onTrial())->toBeTrue()
+        ->and($access->trialDaysLeft())->toBe(7);
+
+    $this->actingAs($user->fresh())->get(route('external.dashboard'))->assertOk();
 });
 
-it('allows one trial per user across payment method accesses', function (): void {
+it('refuses a trial for accounts that have paid before', function (): void {
     $user = trialUser();
-    trialAccess($user, ['trial_used' => true]);
-    $second = trialAccess($user, ['company_name' => 'Second Plugin']);
+    $access = trialAccess($user);
+    $access->subscription->charges()->create(['amount' => 50, 'status' => true]);
 
-    expect($second->canStartTrial())->toBeFalse();
-
-    $this->actingAs($user)
-        ->post(route('external.start-trial', $second->subscription))
-        ->assertSessionHasErrors();
-
-    expect($second->fresh()->trial_used)->toBeFalse();
+    expect($access->fresh()->canStartTrial())->toBeFalse();
 });
 
 it('settles the trial on a paid signup and bills monthly afterwards but never during the trial', function (): void {
