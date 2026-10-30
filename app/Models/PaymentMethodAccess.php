@@ -191,7 +191,7 @@ class PaymentMethodAccess extends Model
 
     /**
      * A new trial may start whenever the account is unpaid and no trial is running,
-     * including after an earlier trial has ended. Accounts that have paid before are excluded.
+     * including after an earlier trial has ended or an earlier paid subscription lapsed.
      */
     public function canStartTrial(): bool
     {
@@ -199,14 +199,7 @@ class PaymentMethodAccess extends Model
             return false;
         }
 
-        $subscription = $this->subscription;
-
-        if ($subscription === null) {
-            return true;
-        }
-
-        return (int) $subscription->status !== 1
-            && ! $subscription->charges()->where('amount', '>', 0)->exists();
+        return (int) $this->subscription?->status !== 1;
     }
 
     public function companyAddress(): Attribute

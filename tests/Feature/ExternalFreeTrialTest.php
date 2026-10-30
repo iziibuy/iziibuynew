@@ -136,12 +136,12 @@ it('redirects to the payment page once the trial has ended and allows a new tria
     $this->actingAs($user->fresh())->get(route('external.dashboard'))->assertOk();
 });
 
-it('refuses a trial for accounts that have paid before', function (): void {
+it('allows a trial for a lapsed account that has paid before', function (): void {
     $user = trialUser();
     $access = trialAccess($user);
     $access->subscription->charges()->create(['amount' => 50, 'status' => true]);
 
-    expect($access->fresh()->canStartTrial())->toBeFalse();
+    expect($access->fresh()->canStartTrial())->toBeTrue();
 });
 
 it('settles the trial on a paid signup and bills monthly afterwards but never during the trial', function (): void {
