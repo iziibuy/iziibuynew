@@ -1,4 +1,4 @@
-<div class="alert alert-warning mb-4" role="alert">
+<!-- <div class="alert alert-warning mb-4" role="alert">
     <p class="mb-3"><strong>Viktig informasjon:</strong></p>
 
     <p class="mb-3">Dette er for å informere om at vi gjennomfører en oppdatering knyttet til lisensavtalen for
@@ -13,4 +13,4 @@
 
     <p class="mb-0">Har dere spørsmål eller trenger hjelp med registreringen, er dere hjertelig velkommen til å
         kontakte oss. Vi hjelper gjerne.</p>
-</div>
+</div> -->
