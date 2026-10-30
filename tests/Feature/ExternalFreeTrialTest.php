@@ -89,6 +89,38 @@ it('starts the trial without any Elavon call and keeps status unchanged', functi
         ->and($access->onTrial())->toBeTrue();
 });
 
+it('sets the payment method to elavon and saves the configured credentials on the access', function (): void {
+    config()->set('services.enterprise_elavon.trial_credentials', [
+        'merchant_alias' => 'alias-123',
+        'public_key' => 'pk_test_123',
+        'secret_key' => 'sk_test_123',
+    ]);
+    $user = trialUser();
+    $access = trialAccess($user);
+
+    $this->actingAs($user)->post(route('external.start-trial', $access->subscription))->assertRedirect(route('external.contract'));
+
+    $access = $access->fresh();
+    expect($access->subscriptionMethod)->toBe(PaymentMethodAccess::SUBSCRIPTION_METHOD_ELAVON)
+        ->and($access->elavon_merchant_alias)->toBe('alias-123')
+        ->and($access->elavon_public_key)->toBe('pk_test_123')
+        ->and($access->elavon_secret_key)->toBe('sk_test_123')
+        ->and($access->status)->toBeFalse();
+});
+
+it('still starts the trial and sets elavon when no trial credentials are configured', function (): void {
+    config()->set('services.enterprise_elavon.trial_credentials', ['merchant_alias' => null, 'public_key' => null, 'secret_key' => null]);
+    $user = trialUser();
+    $access = trialAccess($user);
+
+    $this->actingAs($user)->post(route('external.start-trial', $access->subscription))->assertRedirect(route('external.contract'));
+
+    $access = $access->fresh();
+    expect($access->subscriptionMethod)->toBe('elavon')
+        ->and($access->trial_used)->toBeTrue()
+        ->and($access->metas()->where('column_name', 'like', 'elavon_%')->exists())->toBeFalse();
+});
+
 it('grants dashboard access with a days-left banner during the trial', function (): void {
     $user = trialUser();
     $access = trialAccess($user);

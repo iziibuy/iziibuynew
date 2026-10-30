@@ -159,13 +159,25 @@ class DashboardController extends Controller
             return redirect()->route('external.subscription.payment')->withErrors(__('words.trial_already_used'));
         }
 
-        DB::transaction(function () use ($paymentMethodAccess): void {
+        $credentials = array_filter(
+            config('services.enterprise_elavon.trial_credentials', []),
+            fn ($value) => filled($value),
+        );
+
+        DB::transaction(function () use ($paymentMethodAccess, $credentials): void {
             $paymentMethodAccess->update([
+                'subscriptionMethod' => PaymentMethodAccess::SUBSCRIPTION_METHOD_ELAVON,
                 'trial_used' => true,
                 'trial_started_at' => now(),
                 'trial_ends_at' => now()->addDays(7),
                 'trial_charged_at' => null,
             ]);
+
+            if ($credentials !== []) {
+                $paymentMethodAccess->createMetas(collect($credentials)
+                    ->mapWithKeys(fn ($value, $key) => ['elavon_'.$key => $value])
+                    ->all());
+            }
         });
 
         return redirect()->route('external.contract')->with('success', __('words.trial_started_success'));

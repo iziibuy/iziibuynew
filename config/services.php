@@ -69,6 +69,12 @@ return [
         'disable_hpp_3ds' => filter_var(env('ELAVON_HPP_DISABLE_3DS', false), FILTER_VALIDATE_BOOLEAN),
         'charge_on_server' => filter_var(env('ELAVON_HPP_CHARGE_ON_SERVER', false), FILTER_VALIDATE_BOOLEAN),
         'hpp_origin_url' => env('ELAVON_HPP_ORIGIN_URL'),
+        // Credentials saved on a payment_method_access when its free trial starts (see DashboardController::startTrial).
+        'trial_credentials' => [
+            'merchant_alias' => env('ELAVON_TRIAL_MERCHANT_ALIAS'),
+            'public_key' => env('ELAVON_TRIAL_PUBLIC_KEY'),
+            'secret_key' => env('ELAVON_TRIAL_SECRET_KEY'),
+        ],
     ],
 
     'surfboard' => [
