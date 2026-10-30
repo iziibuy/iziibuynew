@@ -29,36 +29,36 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
-    ->withSchedule(function (Schedule $schedule): void {
-        $schedule->command('subscription:notify')->monthlyOn(27);
+    // ->withSchedule(function (Schedule $schedule): void {
+    //     $schedule->command('subscription:notify')->monthlyOn(27);
 
-        // Shop, Enterprise and Plugin (PaymentMethodAccess) subscriptions all
-        // charge on the 1st, retry on the 3rd if still active, then deactivate
-        // on the 5th if the retry also failed.
-        $schedule->command('monthly:charge 1')->monthlyOn(1);
-        $schedule->command('monthly:charge 1')->monthlyOn(3);
-        $schedule->command('monthly:charge 0')->monthlyOn(5);
+    //     // Shop, Enterprise and Plugin (PaymentMethodAccess) subscriptions all
+    //     // charge on the 1st, retry on the 3rd if still active, then deactivate
+    //     // on the 5th if the retry also failed.
+    //     $schedule->command('monthly:charge 1')->monthlyOn(1);
+    //     $schedule->command('monthly:charge 1')->monthlyOn(3);
+    //     $schedule->command('monthly:charge 0')->monthlyOn(5);
 
-        $schedule->command('enterprise:payment 1')->monthlyOn(1);
-        $schedule->command('enterprise:payment 1')->monthlyOn(3);
-        $schedule->command('enterprise:payment 0')->monthlyOn(5);
+    //     $schedule->command('enterprise:payment 1')->monthlyOn(1);
+    //     $schedule->command('enterprise:payment 1')->monthlyOn(3);
+    //     $schedule->command('enterprise:payment 0')->monthlyOn(5);
 
-        $schedule->command('payment-method-access:charge 1')->monthlyOn(1);
-        $schedule->command('payment-method-access:charge 1')->monthlyOn(3);
-        $schedule->command('payment-method-access:charge 0')->monthlyOn(5);
-        $schedule->command('payment-method-access:expire-trials')->hourly()->withoutOverlapping();
+    //     $schedule->command('payment-method-access:charge 1')->monthlyOn(1);
+    //     $schedule->command('payment-method-access:charge 1')->monthlyOn(3);
+    //     $schedule->command('payment-method-access:charge 0')->monthlyOn(5);
+    //     $schedule->command('payment-method-access:expire-trials')->hourly()->withoutOverlapping();
 
-        $schedule->command('credits:expire')->daily();
-        $schedule->command('bonus:calculate')->monthlyOn(now()->endOfMonth()->format('d') - 1, '23:59');
-        $schedule->command('booking:complete')->everyFifteenMinutes();
-        $schedule->command('shops:remove')->everyFifteenMinutes();
-        $schedule->command('queue:work --stop-when-empty')->everyMinute();
-        $schedule->command('subscription:autorenew')->daily();
-        $schedule->command('external-button-subscriptions:charge')->daily();
-        $schedule->command('order:cancel')->everyMinute();
-        $schedule->command('charges:check')->everyFiveMinutes();
-        $schedule->command('shops:process')->hourly();
-    })
+    //     $schedule->command('credits:expire')->daily();
+    //     $schedule->command('bonus:calculate')->monthlyOn(now()->endOfMonth()->format('d') - 1, '23:59');
+    //     $schedule->command('booking:complete')->everyFifteenMinutes();
+    //     $schedule->command('shops:remove')->everyFifteenMinutes();
+    //     $schedule->command('queue:work --stop-when-empty')->everyMinute();
+    //     $schedule->command('subscription:autorenew')->daily();
+    //     $schedule->command('external-button-subscriptions:charge')->daily();
+    //     $schedule->command('order:cancel')->everyMinute();
+    //     $schedule->command('charges:check')->everyFiveMinutes();
+    //     $schedule->command('shops:process')->hourly();
+    // })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prepend([
             ExtractUsernameFromRoute::class,
