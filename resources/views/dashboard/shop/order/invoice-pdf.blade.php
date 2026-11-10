@@ -799,6 +799,12 @@
                 </tr>
             </tbody>
         </table>
+                @if ($order->platform_percentage > 0)
+                    <p style="text-align:right;padding:0 20px;margin:0 0 10px;font-size:14px;">
+                        {{ __('Platform commission') }} ({{ rtrim(rtrim(number_format($order->platform_percentage, 2), '0'), '.') }}%):
+                        <strong>{{ Iziibuy::withSymbol($order->platform_amount, $order->currency) }}</strong>
+                    </p>
+                @endif
         @if ($order->shipping_cost > 0)
             <table align="center" border="0" cellpadding="0" cellspacing="0" class="row row-16"
                 role="presentation" style="mso-table-lspace: 0pt; mso-table-rspace: 0pt;" width="100%">

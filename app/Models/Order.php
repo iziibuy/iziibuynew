@@ -94,6 +94,13 @@ class Order extends Model
             if (blank($order->uuid)) {
                 $order->uuid = (string) Str::ulid();
             }
+
+            if (blank($order->platform_percentage) && filled($order->shop_id)) {
+                $order->platform_percentage = (float) Shop::query()->whereKey($order->shop_id)->value('platform_commission');
+            }
+
+            $order->platform_percentage = (float) $order->platform_percentage;
+            $order->platform_amount = round((float) $order->total * $order->platform_percentage / 100, 2);
         });
 
         static::addGlobalScope('doNotShowCanceledOrder', function (Builder $builder) {

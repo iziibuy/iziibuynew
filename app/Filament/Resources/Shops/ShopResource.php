@@ -30,6 +30,8 @@ use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\ColumnGroup;
@@ -78,90 +80,155 @@ class ShopResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema
+            ->columns(1)
             ->components([
-                TextInput::make('user_id')
-                    ->required()
-                    ->numeric(),
-                TextInput::make('retailer_id')
-                    ->numeric(),
-                TextInput::make('user_name')
-                    ->required()
-                    ->unique(Shop::class, 'user_name', ignoreRecord: true),
-                RichEditor::make('terms')
-                    ->columnSpanFull(),
-                TextInput::make('payment_order_id'),
-                TextInput::make('tax')
-                    ->label(__('VAT / MVA (%)'))
-                    ->numeric()
-                    ->minValue(0)
-                    ->maxValue(100)
-                    ->suffix('%')
-                    ->default(fn (): float => (float) config('settings.payment.registration_tax', 0))
-                    ->formatStateUsing(fn ($state): float => $state ?? (float) config('settings.payment.registration_tax', 0))
-                    ->helperText(__('Applied to this shop\'s subscription fees and customer orders. Pre-filled from PAYMENT_REGISTRATION_TAX when this shop has no saved value.')),
-                Toggle::make('status'),
-                TextInput::make('subscription_id')
-                    ->required(),
-                Textarea::make('payment_url')
-                    ->columnSpanFull(),
-                Toggle::make('establishment'),
-                TextInput::make('establishment_cost')
-                    ->numeric()
-                    ->prefix('$'),
-                TextInput::make('monthly_cost')
-                    ->numeric()
-                    ->prefix('$'),
-                Toggle::make('service_establishment'),
-                TextInput::make('service_establishment_cost')
-                    ->numeric()
-                    ->default(0)
-                    ->prefix('$'),
-                TextInput::make('service_monthly_fee')
-                    ->numeric()
-                    ->default(0),
-                Toggle::make('can_provide_service'),
-                TextInput::make('per_user_fee')
-                    ->numeric(),
-                TextInput::make('locations'),
-                TextInput::make('selling_location_mode')
-                    ->numeric(),
-                Toggle::make('contract_signed'),
-                Toggle::make('contract_status'),
-                TextInput::make('default_currency')
-                    ->default('NOK'),
-                Textarea::make('currencies')
-                    ->columnSpanFull(),
-                Textarea::make('country')
-                    ->columnSpanFull(),
-                Textarea::make('default_language')
-                    ->columnSpanFull(),
-                Textarea::make('contract_url')
-                    ->columnSpanFull(),
-                TextInput::make('area_id')
-                    ->numeric(),
-                Toggle::make('store_as_pickup_point'),
-                DateTimePicker::make('paid_at'),
-                TextInput::make('area'),
-                Section::make(__('Platform subscription (Elavon)'))
-                    ->description(__('Controls which iziibuy platform Elavon credentials are used when this shop subscribes. Demo uses sandbox keys from .env; live uses production keys from .env.'))
-                    ->schema([
-                        Toggle::make('is_demo')
-                            ->label(__('Demo subscription (Elavon sandbox)'))
-                            ->helperText(__('Uses ELAVON_ENTERPRISE_SANDBOX_* from .env. When off, uses ELAVON_ENTERPRISE_* production keys.'))
-                            ->default(false),
-                    ])
-                    ->columnSpanFull(),
-                TextInput::make('previous_retailer')
-                    ->numeric(),
-                DatePicker::make('retailer_joined_at'),
-                DatePicker::make('previous_retailer_suspended_at'),
-                TextInput::make('shopperId'),
-                TextInput::make('subscriptionMethod')
-                    ->required()
-                    ->default('quickpay'),
-                TextInput::make('paymentMethod')
-                    ->required()
-                    ->default('quickpay'),
+                Tabs::make('Shop')
+                    ->persistTabInQueryString()
+                    ->columnSpanFull()
+                    ->tabs([
+                        Tab::make(__('General'))
+                            ->icon(Heroicon::OutlinedBuildingStorefront)
+                            ->columns(['default' => 1, 'md' => 2])
+                            ->schema([
+                                TextInput::make('user_name')
+                                    ->label(__('Shop slug'))
+                                    ->required()
+                                    ->unique(Shop::class, 'user_name', ignoreRecord: true),
+                                Toggle::make('status')
+                                    ->label(__('Active'))
+                                    ->inline(false),
+                                TextInput::make('user_id')
+                                    ->label(__('Owner user id'))
+                                    ->required()
+                                    ->numeric(),
+                                TextInput::make('retailer_id')
+                                    ->numeric(),
+                                TextInput::make('area'),
+                                TextInput::make('area_id')
+                                    ->numeric(),
+                                Toggle::make('store_as_pickup_point')
+                                    ->columnSpanFull(),
+                            ]),
+                        Tab::make(__('Subscription & billing'))
+                            ->icon(Heroicon::OutlinedCreditCard)
+                            ->schema([
+                                Section::make(__('Platform subscription (Elavon)'))
+                                    ->description(__('Controls which iziibuy platform Elavon credentials are used when this shop subscribes. Demo uses sandbox keys from .env; live uses production keys from .env.'))
+                                    ->schema([
+                                        Toggle::make('is_demo')
+                                            ->label(__('Demo subscription (Elavon sandbox)'))
+                                            ->helperText(__('Uses ELAVON_ENTERPRISE_SANDBOX_* from .env. When off, uses ELAVON_ENTERPRISE_* production keys.'))
+                                            ->default(false),
+                                    ]),
+                                Section::make(__('Subscription details'))
+                                    ->columns(['default' => 1, 'md' => 2])
+                                    ->schema([
+                                        TextInput::make('subscription_id')
+                                            ->required(),
+                                        TextInput::make('payment_order_id'),
+                                        TextInput::make('subscriptionMethod')
+                                            ->required()
+                                            ->default('quickpay'),
+                                        TextInput::make('paymentMethod')
+                                            ->required()
+                                            ->default('quickpay'),
+                                        TextInput::make('shopperId'),
+                                        DateTimePicker::make('paid_at'),
+                                        TextInput::make('tax')
+                                            ->label(__('VAT / MVA (%)'))
+                                            ->numeric()
+                                            ->minValue(0)
+                                            ->maxValue(100)
+                                            ->suffix('%')
+                                            ->default(fn (): float => (float) config('settings.payment.registration_tax', 0))
+                                            ->formatStateUsing(fn ($state): float => $state ?? (float) config('settings.payment.registration_tax', 0))
+                                            ->helperText(__('Applied to this shop\'s subscription fees and customer orders. Pre-filled from PAYMENT_REGISTRATION_TAX when this shop has no saved value.'))
+                                            ->columnSpanFull(),
+                                        Textarea::make('payment_url')
+                                            ->rows(2)
+                                            ->columnSpanFull(),
+                                    ]),
+                            ]),
+                        Tab::make(__('Fees & services'))
+                            ->icon(Heroicon::OutlinedBanknotes)
+                            ->columns(['default' => 1, 'md' => 2])
+                            ->schema([
+                                Section::make(__('Shop fees'))
+                                    ->columns(1)
+                                    ->schema([
+                                        Toggle::make('establishment'),
+                                        TextInput::make('establishment_cost')
+                                            ->numeric()
+                                            ->prefix('$'),
+                                        TextInput::make('monthly_cost')
+                                            ->numeric()
+                                            ->prefix('$'),
+                                        TextInput::make('per_user_fee')
+                                            ->numeric(),
+                                        TextInput::make('platform_commission')
+                                            ->label(__('Platform commission (%)'))
+                                            ->numeric()
+                                            ->required()
+                                            ->default(0)
+                                            ->minValue(0)
+                                            ->maxValue(100)
+                                            ->suffix('%')
+                                            ->helperText(__('Stored on every new order as the platform cut of the order total. Visible to the shop owner only, never to customers.')),
+                                    ]),
+                                Section::make(__('Service fees'))
+                                    ->columns(1)
+                                    ->schema([
+                                        Toggle::make('can_provide_service'),
+                                        Toggle::make('service_establishment'),
+                                        TextInput::make('service_establishment_cost')
+                                            ->numeric()
+                                            ->default(0)
+                                            ->prefix('$'),
+                                        TextInput::make('service_monthly_fee')
+                                            ->numeric()
+                                            ->default(0),
+                                    ]),
+                            ]),
+                        Tab::make(__('Contract & locale'))
+                            ->icon(Heroicon::OutlinedGlobeAlt)
+                            ->columns(['default' => 1, 'md' => 2])
+                            ->schema([
+                                Toggle::make('contract_signed'),
+                                Toggle::make('contract_status'),
+                                TextInput::make('default_currency')
+                                    ->default('NOK'),
+                                TextInput::make('locations'),
+                                TextInput::make('selling_location_mode')
+                                    ->numeric(),
+                                Textarea::make('currencies')
+                                    ->rows(2)
+                                    ->columnSpanFull(),
+                                Textarea::make('country')
+                                    ->rows(2)
+                                    ->columnSpanFull(),
+                                Textarea::make('default_language')
+                                    ->rows(2)
+                                    ->columnSpanFull(),
+                                Textarea::make('contract_url')
+                                    ->rows(2)
+                                    ->columnSpanFull(),
+                            ]),
+                        Tab::make(__('Retailer history'))
+                            ->icon(Heroicon::OutlinedClock)
+                            ->columns(['default' => 1, 'md' => 2])
+                            ->schema([
+                                TextInput::make('previous_retailer')
+                                    ->numeric(),
+                                DatePicker::make('retailer_joined_at'),
+                                DatePicker::make('previous_retailer_suspended_at'),
+                            ]),
+                        Tab::make(__('Terms'))
+                            ->icon(Heroicon::OutlinedDocumentText)
+                            ->schema([
+                                RichEditor::make('terms')
+                                    ->hiddenLabel(),
+                            ]),
+                    ]),
             ]);
     }
 
@@ -269,6 +336,9 @@ class ShopResource extends Resource
                         TextEntry::make('paid_at')
                             ->dateTime()
                             ->placeholder('—'),
+                        TextEntry::make('platform_commission')
+                            ->label(__('Platform commission (%)'))
+                            ->suffix(' %'),
                         TextEntry::make('payment_url')
                             ->label(__('Payment url'))
                             ->placeholder('—')

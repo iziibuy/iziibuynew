@@ -61,6 +61,7 @@
                                     {!! __('words.invoice_address') !!}
                                 </th>
                                 <th>{!! __('words.cart_account_table_title') !!}</th>
+                                <th>{{ __('Platform commission') }}</th>
                                 <th>{!! __('words.orders_status') !!}</th>
                                 <th>{!! __('words.orders_invoice') !!}</th>
                             </tr>
@@ -87,6 +88,9 @@
 
 
                                     <td>{{ Iziibuy::withSymbol($order->total, $order->currency) }}</td>
+                                    <td>{{ Iziibuy::withSymbol($order->platform_amount, $order->currency) }}
+                                        <br><small class="text-muted">{{ rtrim(rtrim(number_format($order->platform_percentage, 2), '0'), '.') }}%</small>
+                                    </td>
                                     <td>
                                         <button
                                             class="badge @if ($order->status == 5) badge-success @elseif($order->status == 0) badge-warning @elseif($order->status == 3) badge-danger  @else badge-primary @endif border border-0">
