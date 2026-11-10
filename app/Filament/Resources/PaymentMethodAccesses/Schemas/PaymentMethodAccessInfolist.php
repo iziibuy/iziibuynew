@@ -37,6 +37,9 @@ class PaymentMethodAccessInfolist
                             ->badge()
                             ->formatStateUsing(fn (bool $state): string => $state ? __('Active') : __('Inactive'))
                             ->color(fn (bool $state): string => $state ? 'success' : 'danger'),
+                        TextEntry::make('platform_commission')
+                            ->label(__('Platform commission (%)'))
+                            ->suffix(' %'),
                         TextEntry::make('paymentMethod')
                             ->label(__('Gateway'))
                             ->badge()

@@ -129,6 +129,7 @@
                             <th>{{ __('Customer') }}</th>
                             <th>{{ __('Email') }}</th>
                             <th>{{ __('Amount') }}</th>
+                            <th>{{ __('Platform commission') }}</th>
                             <th>{{ __('Status') }}</th>
                             <th>{{ __('Paid at') }}</th>
                             <th>{{ __('Created at') }}</th>
@@ -153,6 +154,10 @@
                                         {{ number_format((float) $order->amount, 2) }}
                                         {{ $order->currency }}
                                     </div>
+                                </td>
+                                <td>
+                                    {{ number_format((float) $order->platform_amount, 2) }} {{ $order->currency }}
+                                    <br><small class="text-muted">{{ rtrim(rtrim(number_format($order->platform_percentage, 2), '0'), '.') }}%</small>
                                 </td>
                                 <td>
                                     @php

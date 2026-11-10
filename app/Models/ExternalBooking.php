@@ -28,6 +28,20 @@ class ExternalBooking extends Model
         'elavon_transaction_id',
     ];
 
+    protected static function booted(): void
+    {
+        static::creating(function (ExternalBooking $model): void {
+            if (blank($model->platform_percentage) && filled($model->payment_method_access_id)) {
+                $model->platform_percentage = (float) PaymentMethodAccess::query()
+                    ->whereKey($model->payment_method_access_id)
+                    ->value('platform_commission');
+            }
+
+            $model->platform_percentage = (float) $model->platform_percentage;
+            $model->platform_amount = round((float) $model->total * $model->platform_percentage / 100, 2);
+        });
+    }
+
     public function paymentMethodAccess()
     {
         return $this->belongsTo(PaymentMethodAccess::class);

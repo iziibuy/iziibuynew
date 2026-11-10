@@ -266,6 +266,7 @@
                                 <th>{{ __('words.booking_number') }}</th>
                                 <th>{{ __('words.phone_number') }}</th>
                                 <th>{{ __('words.amount') }}</th>
+                                <th>{{ __('Platform commission') }}</th>
                                 <th>{{ __('words.status') }}</th>
                                 <th>{{ __('words.transaction_id') }}</th>
                                 <th>{{ __('words.actions') }}</th>
@@ -280,6 +281,10 @@
                                     <td>{{ $booking->phone_number }} </td>
                                     <td class="col-amount">
                                         {{ Iziibuy::price($booking->total, currency: $booking->currency) }}</td>
+                                    <td class="col-amount">
+                                        {{ number_format((float) $booking->platform_amount, 2) }} {{ $booking->currency }}
+                                        <br><small class="text-muted">{{ rtrim(rtrim(number_format($booking->platform_percentage, 2), '0'), '.') }}%</small>
+                                    </td>
                                     <td class="col-status">
 
                                         <span

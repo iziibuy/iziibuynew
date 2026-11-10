@@ -22,6 +22,20 @@ class ExternalOrder extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::creating(function (ExternalOrder $model): void {
+            if (blank($model->platform_percentage) && filled($model->payment_method_access_id)) {
+                $model->platform_percentage = (float) PaymentMethodAccess::query()
+                    ->whereKey($model->payment_method_access_id)
+                    ->value('platform_commission');
+            }
+
+            $model->platform_percentage = (float) $model->platform_percentage;
+            $model->platform_amount = round((float) $model->amount * $model->platform_percentage / 100, 2);
+        });
+    }
+
     public function paymentMethodAccess(): BelongsTo
     {
         return $this->belongsTo(PaymentMethodAccess::class);

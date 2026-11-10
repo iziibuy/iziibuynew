@@ -17,6 +17,11 @@
     @endif
 
     <x-filament::section>
+        <div class="mb-4 flex items-center gap-2 text-sm">
+            <span class="font-medium">{{ __('Platform commission (%)') }}:</span>
+            <x-filament::badge color="gray">{{ rtrim(rtrim(number_format((float) $shop->platform_commission, 2), '0'), '.') }} %</x-filament::badge>
+            <span class="text-gray-500">{{ __('Read only. Change it from the shop edit page.') }}</span>
+        </div>
         <div class="shop-advance-edit">
             <div class="mb-6 flex flex-wrap gap-2" id="nav-tab" role="tablist">
                 <button class="shop-advance-edit-tab" id="company-tab" type="button"

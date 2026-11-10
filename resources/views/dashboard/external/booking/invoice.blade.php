@@ -323,6 +323,12 @@
                                     {{ $externalBooking->taxPercentage() }}%:</span>
                                 <span class="invoice-text">{{ Iziibuy::price($externalBooking->tax, currency: $externalBooking->currency) }}</span>
                             </div>
+                            @if ($externalBooking->platform_percentage > 0)
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="invoice-text">{{ __('Platform commission') }} ({{ rtrim(rtrim(number_format($externalBooking->platform_percentage, 2), '0'), '.') }}%):</span>
+                                    <span class="invoice-text">{{ number_format((float) $externalBooking->platform_amount, 2) }} {{ $externalBooking->currency }}</span>
+                                </div>
+                            @endif
                             <div class="d-flex justify-content-between fw-bold invoice-total">
                                 <span>{{ __('words.total') }}:</span>
                                 <span>{{ Iziibuy::price($externalBooking->total, currency: $externalBooking->currency) }}</span>
