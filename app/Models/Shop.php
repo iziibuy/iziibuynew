@@ -41,6 +41,11 @@ class Shop extends Model
         'previous_retailer_suspended_at' => 'datetime',
         'retailer_joined_at' => 'datetime',
         'checkoutjs_appearance' => 'array',
+        'is_demo' => 'boolean',
+        'trial_started_at' => 'datetime',
+        'trial_ends_at' => 'datetime',
+        'trial_charged_at' => 'datetime',
+        'trial_used' => 'boolean',
     ];
 
     protected $meta_attributes = [
@@ -73,6 +78,7 @@ class Shop extends Model
         'elavon_merchant_alias',
         'elavon_public_key',
         'elavon_secret_key',
+        'original_gateway_credentials',
         'menu',
         'default_package_option',
         'self_checkout_pin',
@@ -704,6 +710,46 @@ class Shop extends Model
     public function usesElavonSandbox(): bool
     {
         return (bool) ($this->attributes['is_demo'] ?? false);
+    }
+
+    /**
+     * The free trial is running and has not yet been settled by a paid signup.
+     */
+    public function onTrial(): bool
+    {
+        return $this->trial_ends_at !== null
+            && $this->trial_ends_at->isFuture()
+            && $this->trial_charged_at === null;
+    }
+
+    /**
+     * May use the dashboard: paid, or inside the free trial.
+     */
+    public function hasAccess(): bool
+    {
+        return (bool) ($this->attributes['status'] ?? false) || $this->onTrial();
+    }
+
+    public function trialDaysLeft(): int
+    {
+        if (! $this->onTrial()) {
+            return 0;
+        }
+
+        return max((int) ceil(now()->floatDiffInDays($this->trial_ends_at, false)), 0);
+    }
+
+    /**
+     * A new trial may start whenever the account is unpaid and no trial is running,
+     * including after an earlier trial has ended or an earlier paid subscription lapsed.
+     */
+    public function canStartTrial(): bool
+    {
+        if ((bool) ($this->attributes['status'] ?? false) || $this->onTrial()) {
+            return false;
+        }
+
+        return true;
     }
 
     public function subscriptionFee()

@@ -6,7 +6,7 @@ use App\Models\PaymentMethodAccess;
 use App\Models\User;
 use App\Payment\Elavon\ElavonExternalSubscription;
 use App\Payment\Elavon\ElavonExternalSubscriptionFactory;
-use App\Services\PaymentMethodAccess\GatewayCredentialBackup;
+use App\Services\GatewayCredentialBackup;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;

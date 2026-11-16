@@ -46,6 +46,7 @@ Route::get('/complete-registration', [RegisterController::class, 'completeProfil
 
 Route::put('/complete-registration', [RegisterController::class, 'completeProfileUpdate'])->name('profile.completeProfileUpdate');
 Route::get('subscription', [RegisterController::class, 'subscriptionIndex'])->name('subscription.payment');
+Route::post('subscription/trial', [RegisterController::class, 'startTrial'])->name('start-trial');
 Route::get('delete-account', [RegisterController::class, 'deleteAccount'])->name('delete.account');
 Route::any('enroll-subscription', [RegisterController::class, 'enrollSubscription'])->name('enroll.subscription');
 Route::get('subscription/elavon-return', [RegisterController::class, 'elavonSubscriptionReturn'])->name('subscription.elavon.return');

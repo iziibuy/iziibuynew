@@ -67,6 +67,9 @@ trait ElavonSubscriptionServiceTrait
             $this->shop->status = 1;
             $this->shop->establishment = 1;
             $this->shop->subscriptionMethod = 'elavon';
+            if ($this->shop->trial_ends_at !== null && $this->shop->trial_charged_at === null) {
+                $this->shop->trial_charged_at = now();
+            }
             $this->shop->ensureDefaultPackageOption();
             $this->shop->save();
 
@@ -106,6 +109,9 @@ trait ElavonSubscriptionServiceTrait
         $this->shop->establishment = 1;
         $this->shop->paid_at = MonthlyBillingPeriod::resolve()->paidThrough();
         $this->shop->subscriptionMethod = 'elavon';
+        if ($this->shop->trial_ends_at !== null && $this->shop->trial_charged_at === null) {
+            $this->shop->trial_charged_at = now();
+        }
         $this->shop->ensureDefaultPackageOption();
         if ($this->shop->retailer_id) {
             RetailerCommission::one_time_pay_out($this->shop)->pay();

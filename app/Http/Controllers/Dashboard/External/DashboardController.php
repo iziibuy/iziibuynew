@@ -14,7 +14,7 @@ use App\Models\User;
 use App\Payment\Elavon\ElavonExternalSubscription;
 use App\Payment\Elavon\ElavonExternalSubscriptionFactory;
 use App\Payment\External\Surfboard\ExternalSurfboardMarchant;
-use App\Services\PaymentMethodAccess\GatewayCredentialBackup;
+use App\Services\GatewayCredentialBackup;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Error;
 use Exception;

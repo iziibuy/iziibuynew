@@ -11,25 +11,32 @@ class Paid
     /**
      * Handle an incoming request.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \Closure  $next
      * @return mixed
      */
     public function handle(Request $request, Closure $next)
     {
         $user = Auth::user();
-        if($user->shop->status == 1){
+        $shop = $user->shop;
+
+        if ($shop->hasAccess()) {
             return $next($request);
-        }elseif(
-            $user->shop->company_registration == null && 
-            $user->shop->city == null && 
-            $user->shop->street == null &&
-            $user->shop->post_code == null &&
-            $user->shop->contact_email == null &&
-            $user->shop->contact_phone == null 
-        ){
-            return redirect(route('shop.completeProfile'))->with('success','Please finish your profile before proceeding.');
+        } elseif (
+            $shop->company_registration == null &&
+            $shop->city == null &&
+            $shop->street == null &&
+            $shop->post_code == null &&
+            $shop->contact_email == null &&
+            $shop->contact_phone == null
+        ) {
+            return redirect(route('shop.completeProfile'))->with('success', 'Please finish your profile before proceeding.');
         }
-        return redirect(route('shop.subscription.payment'));
+
+        $redirect = redirect(route('shop.subscription.payment'));
+
+        if ($shop->trial_used) {
+            $redirect->withErrors(__('words.trial_ended_please_pay'));
+        }
+
+        return $redirect;
     }
 }

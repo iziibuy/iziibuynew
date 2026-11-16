@@ -15,6 +15,7 @@ use App\Payment\Elavon\ElavonShopSubscription;
 use App\Payment\Elavon\ElavonShopSubscriptionFactory;
 use App\Rules\CreditCardValidation;
 use App\Services\Elavon\ElavonShopSubscriptionBilling;
+use App\Services\GatewayCredentialBackup;
 use App\Services\Subscription\ShopSubscriptionService;
 use Exception;
 use Illuminate\Contracts\Auth\Guard;
@@ -221,6 +222,44 @@ class RegisterController extends Controller
         }
 
         return redirect(route('home'));
+    }
+
+    public function startTrial()
+    {
+        $shop = auth()->user()->shop;
+
+        if (! $shop || auth()->user()->role_id != User::ROLES['Vendor']) {
+            return abort(403);
+        }
+
+        if (! $shop->canStartTrial()) {
+            return redirect()->route('shop.subscription.payment')->withErrors(__('words.trial_already_used'));
+        }
+
+        $credentials = array_filter(
+            config('services.enterprise_elavon.trial_credentials', []),
+            fn ($value) => filled($value),
+        );
+
+        DB::transaction(function () use ($shop, $credentials): void {
+            app(GatewayCredentialBackup::class)->backupIfNeeded($shop);
+
+            $shop->update([
+                'subscriptionMethod' => Shop::SUBSCRIPTION_METHOD_ELAVON,
+                'trial_used' => true,
+                'trial_started_at' => now(),
+                'trial_ends_at' => now()->addDays(7),
+                'trial_charged_at' => null,
+            ]);
+
+            if ($credentials !== []) {
+                $shop->createMetas(collect($credentials)
+                    ->mapWithKeys(fn ($value, $key) => ['elavon_'.$key => $value])
+                    ->all());
+            }
+        });
+
+        return redirect()->route('shop.complete.signup')->with('success', __('words.trial_started_success'));
     }
 
     public function deleteAccount()

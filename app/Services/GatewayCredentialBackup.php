@@ -1,8 +1,11 @@
 <?php
 
-namespace App\Services\PaymentMethodAccess;
+namespace App\Services;
 
 use App\Models\PaymentMethodAccess;
+use App\Models\Shop;
+use App\Models\Traits\HasMeta;
+use Illuminate\Database\Eloquent\Model;
 
 class GatewayCredentialBackup
 {
@@ -26,14 +29,18 @@ class GatewayCredentialBackup
     /**
      * Snapshot existing Surfboard/Elavon credentials into a JSON meta before demo keys are applied.
      * Skips when a backup already exists so a later trial does not overwrite originals with demo values.
+     *
+     * @param  Shop|PaymentMethodAccess  $model
      */
-    public function backupIfNeeded(PaymentMethodAccess $access): bool
+    public function backupIfNeeded(Model $model): bool
     {
-        if ($this->hasBackup($access)) {
+        $this->assertSupportsMetas($model);
+
+        if ($this->hasBackup($model)) {
             return false;
         }
 
-        $credentials = $this->currentCredentials($access);
+        $credentials = $this->currentCredentials($model);
 
         if ($credentials === []) {
             return false;
@@ -62,38 +69,47 @@ class GatewayCredentialBackup
             $payload['surfboard'] = $surfboard;
         }
 
-        return $access->createMetas([self::META_KEY => $payload]);
-    }
-
-    public function hasBackup(PaymentMethodAccess $access): bool
-    {
-        return $access->metas()->where('column_name', self::META_KEY)->exists();
+        return $model->createMetas([self::META_KEY => $payload]);
     }
 
     /**
+     * @param  Shop|PaymentMethodAccess  $model
+     */
+    public function hasBackup(Model $model): bool
+    {
+        $this->assertSupportsMetas($model);
+
+        return $model->metas()->where('column_name', self::META_KEY)->exists();
+    }
+
+    /**
+     * @param  Shop|PaymentMethodAccess  $model
      * @return array<string, string>
      */
-    public function currentCredentials(PaymentMethodAccess $access): array
+    public function currentCredentials(Model $model): array
     {
-        $credentials = [];
+        $this->assertSupportsMetas($model);
 
-        foreach (self::CREDENTIAL_KEYS as $key) {
-            $value = $access->{$key};
-
-            if (filled($value)) {
-                $credentials[$key] = (string) $value;
-            }
-        }
-
-        return $credentials;
+        // Read from the metas table directly so HasMeta's request cache cannot
+        // return stale values from a previous model with the same id.
+        return $model->metas()
+            ->whereIn('column_name', self::CREDENTIAL_KEYS)
+            ->whereNotNull('column_value')
+            ->where('column_value', '!=', '')
+            ->pluck('column_value', 'column_name')
+            ->map(fn ($value) => (string) $value)
+            ->all();
     }
 
     /**
+     * @param  Shop|PaymentMethodAccess  $model
      * @return array{elavon?: array<string, string>, surfboard?: array<string, string>, captured_at?: string}|null
      */
-    public function getBackup(PaymentMethodAccess $access): ?array
+    public function getBackup(Model $model): ?array
     {
-        $raw = $access->metas()->where('column_name', self::META_KEY)->value('column_value');
+        $this->assertSupportsMetas($model);
+
+        $raw = $model->metas()->where('column_name', self::META_KEY)->value('column_value');
 
         if (! is_string($raw) || $raw === '') {
             return null;
@@ -102,5 +118,18 @@ class GatewayCredentialBackup
         $decoded = json_decode($raw, true);
 
         return is_array($decoded) ? $decoded : null;
+    }
+
+    /**
+     * @param  Shop|PaymentMethodAccess  $model
+     */
+    protected function assertSupportsMetas(Model $model): void
+    {
+        if (! in_array(HasMeta::class, class_uses_recursive($model), true)) {
+            throw new \InvalidArgumentException(sprintf(
+                '%s must use the HasMeta trait to back up gateway credentials.',
+                $model::class,
+            ));
+        }
     }
 }

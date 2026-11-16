@@ -85,6 +85,13 @@
                                     <a href="{{ route('shop.enroll.subscription', ['type' => 'new_card']) }}"
                                         class="btn btn-primary">{{ __('words.subscribe_with_new_card') }}</a>
                                 @endif
+                                @if (auth()->user()->shop->canStartTrial())
+                                    <form action="{{ route('shop.start-trial') }}" method="POST" class="d-inline">
+                                        @csrf
+                                        <button type="submit"
+                                            class="btn btn-outline-primary">{{ __('words.start_free_trial_btn') }}</button>
+                                    </form>
+                                @endif
                                 <a class="btn btn-danger" href="{{ route('logout') }}"
                                     onclick="event.preventDefault();
                                                           document.getElementById('logout-form').submit();">
@@ -96,6 +103,9 @@
                                     @csrf
                                 </form>
                             </div>
+                            @if (auth()->user()->shop->canStartTrial())
+                                <p class="text-center text-muted small mt-2 mb-0">{{ __('words.free_trial_info') }}</p>
+                            @endif
                         </div>
                     </div>
                 </div>
