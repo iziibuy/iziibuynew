@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Payment\Elavon\ElavonExternalSubscription;
 use App\Payment\Elavon\ElavonExternalSubscriptionFactory;
 use App\Payment\External\Surfboard\ExternalSurfboardMarchant;
+use App\Services\PaymentMethodAccess\GatewayCredentialBackup;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Error;
 use Exception;
@@ -165,6 +166,8 @@ class DashboardController extends Controller
         );
 
         DB::transaction(function () use ($paymentMethodAccess, $credentials): void {
+            app(GatewayCredentialBackup::class)->backupIfNeeded($paymentMethodAccess);
+
             $paymentMethodAccess->update([
                 'subscriptionMethod' => PaymentMethodAccess::SUBSCRIPTION_METHOD_ELAVON,
                 'trial_used' => true,

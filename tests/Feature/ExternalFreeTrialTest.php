@@ -6,6 +6,7 @@ use App\Models\PaymentMethodAccess;
 use App\Models\User;
 use App\Payment\Elavon\ElavonExternalSubscription;
 use App\Payment\Elavon\ElavonExternalSubscriptionFactory;
+use App\Services\PaymentMethodAccess\GatewayCredentialBackup;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -105,7 +106,82 @@ it('sets the payment method to elavon and saves the configured credentials on th
         ->and($access->elavon_merchant_alias)->toBe('alias-123')
         ->and($access->elavon_public_key)->toBe('pk_test_123')
         ->and($access->elavon_secret_key)->toBe('sk_test_123')
-        ->and($access->status)->toBeFalse();
+        ->and($access->status)->toBeFalse()
+        ->and($access->metas()->where('column_name', GatewayCredentialBackup::META_KEY)->exists())->toBeFalse();
+});
+
+it('backs up original elavon and surfboard credentials as json before applying trial keys', function (): void {
+    config()->set('services.enterprise_elavon.trial_credentials', [
+        'merchant_alias' => 'trial-alias',
+        'public_key' => 'pk_trial',
+        'secret_key' => 'sk_trial',
+    ]);
+    $user = trialUser();
+    $access = trialAccess($user);
+    $access->createMetas([
+        'elavon_merchant_alias' => 'live-alias',
+        'elavon_public_key' => 'pk_live',
+        'elavon_secret_key' => 'sk_live',
+        'surfboard_terminalId' => 'term-cit',
+        'surfboard_mit_terminalId' => 'term-mit',
+        'surfboard_merchantId' => 'merch-1',
+        'surfboard_storeId' => 'store-1',
+    ]);
+
+    $this->actingAs($user)->post(route('external.start-trial', $access->subscription))->assertRedirect(route('external.contract'));
+
+    $access = $access->fresh();
+    $backup = app(GatewayCredentialBackup::class)->getBackup($access);
+
+    expect($access->elavon_merchant_alias)->toBe('trial-alias')
+        ->and($access->elavon_public_key)->toBe('pk_trial')
+        ->and($access->elavon_secret_key)->toBe('sk_trial')
+        ->and($access->surfboard_terminalId)->toBe('term-cit')
+        ->and($backup)->toMatchArray([
+            'elavon' => [
+                'elavon_merchant_alias' => 'live-alias',
+                'elavon_public_key' => 'pk_live',
+                'elavon_secret_key' => 'sk_live',
+            ],
+            'surfboard' => [
+                'surfboard_terminalId' => 'term-cit',
+                'surfboard_mit_terminalId' => 'term-mit',
+                'surfboard_merchantId' => 'merch-1',
+                'surfboard_storeId' => 'store-1',
+            ],
+        ])
+        ->and($backup['captured_at'] ?? null)->not->toBeEmpty();
+});
+
+it('does not overwrite an existing original gateway credentials backup on a later trial', function (): void {
+    config()->set('services.enterprise_elavon.trial_credentials', [
+        'merchant_alias' => 'trial-alias',
+        'public_key' => 'pk_trial',
+        'secret_key' => 'sk_trial',
+    ]);
+    $user = trialUser();
+    $access = trialAccess($user);
+    $access->createMetas([
+        'elavon_merchant_alias' => 'live-alias',
+        'elavon_public_key' => 'pk_live',
+        'elavon_secret_key' => 'sk_live',
+    ]);
+
+    $this->actingAs($user)->post(route('external.start-trial', $access->subscription))->assertRedirect(route('external.contract'));
+
+    $this->travel(8)->days();
+
+    $this->actingAs($user->fresh())
+        ->post(route('external.start-trial', $access->subscription))
+        ->assertRedirect(route('external.contract'));
+
+    $backup = app(GatewayCredentialBackup::class)->getBackup($access->fresh());
+
+    expect($backup['elavon'] ?? [])->toMatchArray([
+        'elavon_merchant_alias' => 'live-alias',
+        'elavon_public_key' => 'pk_live',
+        'elavon_secret_key' => 'sk_live',
+    ]);
 });
 
 it('still starts the trial and sets elavon when no trial credentials are configured', function (): void {

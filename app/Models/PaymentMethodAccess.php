@@ -95,6 +95,7 @@ class PaymentMethodAccess extends Model
         'elavon_merchant_alias',
         'elavon_public_key',
         'elavon_secret_key',
+        'original_gateway_credentials',
         'gateway_contract_signed',
         'selected_payment_methods',
         'surfboard_webKybUrl',
