@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Services\Admin\DueBillOwnerInspector;
 use App\Services\Admin\DueBillsQuery;
 use App\Services\Admin\UnifiedDueLedger;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\EmbeddedTable;
+use Filament\Schemas\Components\Html;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -22,6 +26,7 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Blade;
 use Livewire\Attributes\Url;
 
 class DueBillsPage extends Page implements HasTable
@@ -57,6 +62,16 @@ class DueBillsPage extends Page implements HasTable
     #[Url(as: 'search')]
     public $tableSearch = '';
 
+    /**
+     * @var array{
+     *     user_id: int,
+     *     user: array{id: int, name: string, email: string}|null,
+     *     billing_period: string,
+     *     entities: list<array<string, mixed>>
+     * }|null
+     */
+    public ?array $ownerInspection = null;
+
     public function getTitle(): string|Htmlable
     {
         return __('Due bills');
@@ -71,6 +86,16 @@ class DueBillsPage extends Page implements HasTable
     {
         return $schema
             ->components([
+                Html::make(function (): string {
+                    if ($this->ownerInspection === null) {
+                        return '';
+                    }
+
+                    return Blade::render(
+                        '<div class="mb-6">@include(\'filament.pages.partials.due-bill-owner-inspection\', [\'inspection\' => $inspection])</div>',
+                        ['inspection' => $this->ownerInspection],
+                    );
+                }),
                 EmbeddedTable::make(),
             ]);
     }
@@ -157,6 +182,36 @@ class DueBillsPage extends Page implements HasTable
             ->paginated([10, 25, 50, 100])
             ->defaultPaginationPageOption(25)
             ->striped()
+            ->headerActions([
+                Action::make('inspectOwner')
+                    ->label(__('Check owner'))
+                    ->icon(Heroicon::OutlinedMagnifyingGlass)
+                    ->color('gray')
+                    ->modalHeading(__('Check owner billing status'))
+                    ->modalDescription(__('Enter an owner user ID to see if their shop/plugin is on the due list, or why it will not be billed.'))
+                    ->modalSubmitActionLabel(__('Check'))
+                    ->schema([
+                        TextInput::make('user_id')
+                            ->label(__('Owner user ID'))
+                            ->numeric()
+                            ->required()
+                            ->minValue(1)
+                            ->placeholder('40133'),
+                    ])
+                    ->action(function (array $data): void {
+                        $billingPeriod = app(DueBillsQuery::class)->billingPeriodFromFilters($this->tableFilters);
+                        $this->ownerInspection = app(DueBillOwnerInspector::class)
+                            ->inspect((int) $data['user_id'], $billingPeriod);
+                    }),
+                Action::make('clearOwnerInspection')
+                    ->label(__('Clear check'))
+                    ->icon(Heroicon::OutlinedXMark)
+                    ->color('gray')
+                    ->visible(fn (): bool => $this->ownerInspection !== null)
+                    ->action(function (): void {
+                        $this->ownerInspection = null;
+                    }),
+            ])
             ->filters([
                 SelectFilter::make('type')
                     ->label(__('Type'))

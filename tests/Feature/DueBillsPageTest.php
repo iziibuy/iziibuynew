@@ -7,10 +7,12 @@ use App\Models\Enterprise;
 use App\Models\PaymentMethodAccess;
 use App\Models\Shop;
 use App\Models\User;
+use App\Services\Admin\DueBillOwnerInspector;
 use App\Services\Admin\DueBillsQuery;
 use App\Services\Admin\UnifiedDueLedger;
 use App\Services\Subscription\MonthlyBillingPeriod;
 use Database\Seeders\RoleSeeder;
+use Filament\Actions\Testing\TestAction;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 
@@ -205,4 +207,72 @@ it('searches due bills by company name', function (): void {
 
     expect($rows)->toHaveCount(1)
         ->and($rows->first()['company'])->toBe('Due Plugin Co');
+});
+
+it('explains when an owner shop is already on the due list', function (): void {
+    $shop = dueBillsShop();
+    $inspection = app(DueBillOwnerInspector::class)->inspect((int) $shop->user_id);
+
+    expect($inspection['user']['id'])->toBe($shop->user_id)
+        ->and($inspection['entities'])->toHaveCount(1)
+        ->and($inspection['entities'][0]['on_due_list'])->toBeTrue()
+        ->and($inspection['entities'][0]['status'])->toBe(DueBillOwnerInspector::STATUS_DUE)
+        ->and($inspection['entities'][0]['due_amount'])->toBe((float) $shop->subscriptionFeeFull());
+});
+
+it('explains why an already-paid owner shop is not billed', function (): void {
+    $period = MonthlyBillingPeriod::resolve();
+    $shop = dueBillsShop(['paid_at' => $period->paidThrough()]);
+
+    $inspection = app(DueBillOwnerInspector::class)->inspect((int) $shop->user_id, $period);
+    $entity = $inspection['entities'][0];
+    dump([
+        'paid_at' => $shop->paid_at?->toDateTimeString(),
+        'paid_through' => $period->paidThrough()->toDateTimeString(),
+        'gte' => $shop->paid_at?->gte($period->paidThrough()),
+        'entity' => $entity,
+    ]);
+
+    expect($entity['on_due_list'])->toBeFalse()
+        ->and($entity['status'])->toBe(DueBillOwnerInspector::STATUS_NOT_DUE)
+        ->and(implode(' ', $entity['reasons']))->toContain('Already paid');
+});
+
+it('explains why an active-trial plugin is not billed', function (): void {
+    $plugin = dueBillsPlugin([
+        'trial_used' => true,
+        'trial_ends_at' => now()->addDays(3),
+        'trial_charged_at' => null,
+        'last_paid_at' => null,
+    ]);
+
+    $inspection = app(DueBillOwnerInspector::class)->inspect((int) $plugin->user_id);
+    $entity = $inspection['entities'][0];
+
+    expect($entity['type'])->toBe(UnifiedDueLedger::TYPE_PLUGIN)
+        ->and($entity['on_due_list'])->toBeFalse()
+        ->and(implode(' ', $entity['reasons']))->toContain('Free trial is unsettled');
+});
+
+it('reports when the owner user id has no billable accounts', function (): void {
+    $inspection = app(DueBillOwnerInspector::class)->inspect(999999);
+
+    expect($inspection['user'])->toBeNull()
+        ->and($inspection['entities'])->toHaveCount(1)
+        ->and($inspection['entities'][0]['status'])->toBe(DueBillOwnerInspector::STATUS_MISSING);
+});
+
+it('checks an owner user id from the due bills page', function (): void {
+    $admin = dueBillsAdmin();
+    $shop = dueBillsShop();
+
+    Livewire::actingAs($admin)
+        ->test(DueBillsPage::class)
+        ->assertSuccessful()
+        ->callAction(TestAction::make('inspectOwner')->table(), [
+            'user_id' => $shop->user_id,
+        ])
+        ->assertSet('ownerInspection.user_id', $shop->user_id)
+        ->assertSee('On due list')
+        ->assertSee('Due Shop Co');
 });
