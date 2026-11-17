@@ -49,6 +49,40 @@ class DueBillMakeAvailable
     }
 
     /**
+     * Exclude a due entity from this billing month by marking it paid through the period.
+     *
+     * @return array{
+     *     success: bool,
+     *     on_due_list: bool,
+     *     actions: list<string>,
+     *     remaining_reasons: list<string>,
+     *     message: string
+     * }
+     */
+    public function makeUnavailable(
+        string $type,
+        int $entityId,
+        ?MonthlyBillingPeriod $billingPeriod = null,
+    ): array {
+        $billingPeriod ??= MonthlyBillingPeriod::resolve();
+
+        try {
+            return DB::transaction(function () use ($type, $entityId, $billingPeriod): array {
+                return match ($type) {
+                    UnifiedDueLedger::TYPE_SHOP => $this->makeShopUnavailable($entityId, $billingPeriod),
+                    UnifiedDueLedger::TYPE_PLUGIN => $this->makePluginUnavailable($entityId, $billingPeriod),
+                    UnifiedDueLedger::TYPE_ENTERPRISE => $this->makeEnterpriseUnavailable($entityId, $billingPeriod),
+                    default => $this->failure(__('Unknown entity type.')),
+                };
+            });
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return $this->failure(__('Could not make this account unavailable.'));
+        }
+    }
+
+    /**
      * @return array{success: bool, on_due_list: bool, actions: list<string>, remaining_reasons: list<string>, message: string}
      */
     protected function makeShopAvailable(int $shopId, MonthlyBillingPeriod $billingPeriod): array
@@ -184,6 +218,69 @@ class DueBillMakeAvailable
         );
     }
 
+    /**
+     * @return array{success: bool, on_due_list: bool, actions: list<string>, remaining_reasons: list<string>, message: string}
+     */
+    protected function makeShopUnavailable(int $shopId, MonthlyBillingPeriod $billingPeriod): array
+    {
+        $shop = Shop::query()->find($shopId);
+        if ($shop === null) {
+            return $this->failure(__('Shop not found.'));
+        }
+
+        $shop->paid_at = $billingPeriod->paidThrough();
+        $shop->save();
+
+        return $this->resultForUnavailable(
+            type: UnifiedDueLedger::TYPE_SHOP,
+            entityId: $shop->id,
+            billingPeriod: $billingPeriod,
+            actions: [__('Marked shop as paid for this billing month.')],
+        );
+    }
+
+    /**
+     * @return array{success: bool, on_due_list: bool, actions: list<string>, remaining_reasons: list<string>, message: string}
+     */
+    protected function makePluginUnavailable(int $accessId, MonthlyBillingPeriod $billingPeriod): array
+    {
+        $access = PaymentMethodAccess::query()->find($accessId);
+        if ($access === null) {
+            return $this->failure(__('Plugin not found.'));
+        }
+
+        $access->last_paid_at = $billingPeriod->paidThrough();
+        $access->save();
+
+        return $this->resultForUnavailable(
+            type: UnifiedDueLedger::TYPE_PLUGIN,
+            entityId: $access->id,
+            billingPeriod: $billingPeriod,
+            actions: [__('Marked plugin as paid for this billing month.')],
+        );
+    }
+
+    /**
+     * @return array{success: bool, on_due_list: bool, actions: list<string>, remaining_reasons: list<string>, message: string}
+     */
+    protected function makeEnterpriseUnavailable(int $enterpriseId, MonthlyBillingPeriod $billingPeriod): array
+    {
+        $enterprise = Enterprise::query()->find($enterpriseId);
+        if ($enterprise === null) {
+            return $this->failure(__('Enterprise not found.'));
+        }
+
+        $enterprise->paid_at = $billingPeriod->paidThrough()->toDateTimeString();
+        $enterprise->save();
+
+        return $this->resultForUnavailable(
+            type: UnifiedDueLedger::TYPE_ENTERPRISE,
+            entityId: $enterprise->id,
+            billingPeriod: $billingPeriod,
+            actions: [__('Marked enterprise as paid for this billing month.')],
+        );
+    }
+
     protected function previousPaidAt(MonthlyBillingPeriod $billingPeriod): Carbon
     {
         return $billingPeriod->start->copy()->subDay()->endOfDay();
@@ -239,6 +336,39 @@ class DueBillMakeAvailable
             'actions' => $actions,
             'remaining_reasons' => $remaining,
             'message' => __('Updated, but still unavailable.'),
+        ];
+    }
+
+    /**
+     * @param  list<string>  $actions
+     * @return array{success: bool, on_due_list: bool, actions: list<string>, remaining_reasons: list<string>, message: string}
+     */
+    protected function resultForUnavailable(
+        string $type,
+        int $entityId,
+        MonthlyBillingPeriod $billingPeriod,
+        array $actions,
+    ): array {
+        $due = app(UnifiedDueLedger::class)
+            ->collect($billingPeriod, scope: UnifiedDueLedger::SCOPE_DUE)
+            ->firstWhere('id', $type.'-'.$entityId);
+
+        if ($due === null) {
+            return [
+                'success' => true,
+                'on_due_list' => false,
+                'actions' => $actions,
+                'remaining_reasons' => [],
+                'message' => __('Moved to the unavailable list.'),
+            ];
+        }
+
+        return [
+            'success' => false,
+            'on_due_list' => true,
+            'actions' => $actions,
+            'remaining_reasons' => array_values($due['reasons'] ?? []),
+            'message' => __('Updated, but still on the due list.'),
         ];
     }
 

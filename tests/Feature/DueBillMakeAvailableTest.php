@@ -171,3 +171,34 @@ it('makes an unavailable row available from the due bills page', function (): vo
     expect($shop->fresh()->paid_at->toDateTimeString())
         ->toBeLessThan($period->paidThrough()->toDateTimeString());
 });
+
+it('moves a due shop onto the unavailable list by marking it paid', function (): void {
+    $period = MonthlyBillingPeriod::resolve();
+    $shop = makeAvailableShop(['company_name' => 'Due Then Unavailable Co']);
+
+    $result = app(DueBillMakeAvailable::class)->makeUnavailable(
+        UnifiedDueLedger::TYPE_SHOP,
+        $shop->id,
+        $period,
+    );
+
+    expect($result['success'])->toBeTrue()
+        ->and($result['on_due_list'])->toBeFalse()
+        ->and($shop->fresh()->paid_at->toDateTimeString())
+        ->toBe($period->paidThrough()->toDateTimeString());
+});
+
+it('makes a due row unavailable from the due bills page', function (): void {
+    $admin = makeAvailableAdmin();
+    $period = MonthlyBillingPeriod::resolve();
+    $shop = makeAvailableShop(['company_name' => 'Exclude From Due Co']);
+
+    Livewire::actingAs($admin)
+        ->test(DueBillsPage::class)
+        ->assertSee('Exclude From Due Co')
+        ->callAction(TestAction::make('makeUnavailable')->table('shop-'.$shop->id))
+        ->assertNotified(__('Moved to the unavailable list.'));
+
+    expect($shop->fresh()->paid_at->toDateTimeString())
+        ->toBe($period->paidThrough()->toDateTimeString());
+});

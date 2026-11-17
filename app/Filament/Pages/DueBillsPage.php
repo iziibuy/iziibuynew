@@ -284,6 +284,20 @@ class DueBillsPage extends Page implements HasTable
                 SelectFilter::make('type')
                     ->label(__('Type'))
                     ->options(UnifiedDueLedger::typeOptions()),
+                Filter::make('company')
+                    ->label(__('Company'))
+                    ->form([
+                        TextInput::make('company')
+                            ->label(__('Company'))
+                            ->placeholder(__('Filter by company')),
+                    ])
+                    ->indicateUsing(function (array $state): array {
+                        if (filled($state['company'] ?? null)) {
+                            return [__('Company').': '.$state['company']];
+                        }
+
+                        return [];
+                    }),
                 Filter::make('name')
                     ->label(__('Name'))
                     ->form([
@@ -363,38 +377,34 @@ class DueBillsPage extends Page implements HasTable
                             : ''))
                     ->modalSubmitActionLabel(__('Make available'))
                     ->action(function (array $record): void {
-                        $result = app(DueBillMakeAvailable::class)->makeAvailable(
-                            type: (string) ($record['type'] ?? ''),
-                            entityId: (int) ($record['entity_id'] ?? 0),
-                            billingPeriod: app(DueBillsQuery::class)->billingPeriodFromFilters($this->tableFilters),
+                        $this->notifyAvailabilityResult(
+                            app(DueBillMakeAvailable::class)->makeAvailable(
+                                type: (string) ($record['type'] ?? ''),
+                                entityId: (int) ($record['entity_id'] ?? 0),
+                                billingPeriod: app(DueBillsQuery::class)->billingPeriodFromFilters($this->tableFilters),
+                            ),
+                            expectingDue: true,
                         );
-
-                        $body = collect($result['actions'])
-                            ->merge($result['remaining_reasons'])
-                            ->filter()
-                            ->implode(' ');
-
-                        if ($result['on_due_list']) {
-                            Notification::make()
-                                ->title($result['message'])
-                                ->body($body !== '' ? $body : null)
-                                ->success()
-                                ->send();
-                        } elseif ($result['success'] === false && $result['actions'] === []) {
-                            Notification::make()
-                                ->title($result['message'])
-                                ->body($body !== '' ? $body : null)
-                                ->danger()
-                                ->send();
-                        } else {
-                            Notification::make()
-                                ->title($result['message'])
-                                ->body($body !== '' ? $body : null)
-                                ->warning()
-                                ->send();
-                        }
-
-                        $this->resetTable();
+                    }),
+                Action::make('makeUnavailable')
+                    ->label(__('Make unavailable'))
+                    ->tooltip(__('Exclude from this month’s due list'))
+                    ->icon(Heroicon::OutlinedNoSymbol)
+                    ->color('warning')
+                    ->visible(fn (): bool => $this->activeTab === UnifiedDueLedger::SCOPE_DUE)
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (array $record): string => __('Make unavailable').' — '.($record['company'] ?? ''))
+                    ->modalDescription(__('This marks the account as already paid for the selected billing month so it leaves the due list. The account stays active.'))
+                    ->modalSubmitActionLabel(__('Make unavailable'))
+                    ->action(function (array $record): void {
+                        $this->notifyAvailabilityResult(
+                            app(DueBillMakeAvailable::class)->makeUnavailable(
+                                type: (string) ($record['type'] ?? ''),
+                                entityId: (int) ($record['entity_id'] ?? 0),
+                                billingPeriod: app(DueBillsQuery::class)->billingPeriodFromFilters($this->tableFilters),
+                            ),
+                            expectingDue: false,
+                        );
                     }),
             ])
             ->emptyStateHeading($isUnavailable ? __('No unavailable accounts') : __('No due bills'))
@@ -434,6 +444,43 @@ class DueBillsPage extends Page implements HasTable
                 ? UnifiedDueLedger::SCOPE_UNAVAILABLE
                 : UnifiedDueLedger::SCOPE_DUE,
         );
+    }
+
+    /**
+     * @param  array{success: bool, on_due_list: bool, actions: list<string>, remaining_reasons: list<string>, message: string}  $result
+     */
+    protected function notifyAvailabilityResult(array $result, bool $expectingDue): void
+    {
+        $body = collect($result['actions'])
+            ->merge($result['remaining_reasons'])
+            ->filter()
+            ->implode(' ');
+
+        $matchedExpectation = $expectingDue
+            ? ($result['on_due_list'] === true)
+            : ($result['on_due_list'] === false && $result['success'] === true);
+
+        if ($matchedExpectation) {
+            Notification::make()
+                ->title($result['message'])
+                ->body($body !== '' ? $body : null)
+                ->success()
+                ->send();
+        } elseif ($result['actions'] === []) {
+            Notification::make()
+                ->title($result['message'])
+                ->body($body !== '' ? $body : null)
+                ->danger()
+                ->send();
+        } else {
+            Notification::make()
+                ->title($result['message'])
+                ->body($body !== '' ? $body : null)
+                ->warning()
+                ->send();
+        }
+
+        $this->resetTable();
     }
 
     protected function makeTable(): Table

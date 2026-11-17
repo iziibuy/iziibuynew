@@ -299,9 +299,16 @@ it('lists already-paid and inactive accounts on the unavailable scope', function
         ->toContain('Already paid');
 });
 
-it('filters by name and email', function (): void {
-    $shop = dueBillsShop();
+it('filters by company, name and email', function (): void {
+    $shop = dueBillsShop(['company_name' => 'Alpha Retail Co']);
     dueBillsPlugin();
+
+    $byCompany = app(DueBillsQuery::class)->rows(
+        filters: ['company' => ['company' => 'Alpha Retail']],
+        sortColumn: null,
+        sortDirection: null,
+        search: null,
+    );
 
     $byName = app(DueBillsQuery::class)->rows(
         filters: ['name' => ['name' => 'Shop Owner']],
@@ -317,8 +324,10 @@ it('filters by name and email', function (): void {
         search: null,
     );
 
-    expect($byName)->toHaveCount(1)
-        ->and($byName->first()['company'])->toBe('Due Shop Co')
+    expect($byCompany)->toHaveCount(1)
+        ->and($byCompany->first()['company'])->toBe('Alpha Retail Co')
+        ->and($byName)->toHaveCount(1)
+        ->and($byName->first()['company'])->toBe('Alpha Retail Co')
         ->and($byEmail)->toHaveCount(1)
         ->and($byEmail->first()['id'])->toBe('shop-'.$shop->id);
 });

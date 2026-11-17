@@ -527,6 +527,16 @@ class UnifiedDueLedger
             $rows = $rows->where('type', $type)->values();
         }
 
+        $company = data_get($filters, 'company.company')
+            ?? data_get($filters, 'company.value')
+            ?? data_get($filters, 'company');
+        if (is_string($company) && filled($company)) {
+            $needle = mb_strtolower($company);
+            $rows = $rows->filter(
+                fn (array $row): bool => str_contains(mb_strtolower((string) ($row['company'] ?? '')), $needle)
+            )->values();
+        }
+
         $name = data_get($filters, 'name.name')
             ?? data_get($filters, 'name.value')
             ?? data_get($filters, 'name');
