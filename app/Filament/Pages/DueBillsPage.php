@@ -9,7 +9,6 @@ use App\Services\Admin\DueBillsQuery;
 use App\Services\Admin\UnifiedDueLedger;
 use BackedEnum;
 use Filament\Actions\Action;
-use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Pages\Page;
@@ -113,30 +112,38 @@ class DueBillsPage extends Page implements HasTable
                 }),
                 Html::make(fn (): string => Blade::render(
                     <<<'BLADE'
-                    <div class="mb-4 flex flex-wrap gap-2">
+                    <div class="mb-4 flex flex-wrap gap-2 border-b border-gray-200 pb-3 dark:border-white/10">
                         <button
                             type="button"
                             wire:click="$set('activeTab', 'due')"
                             @class([
-                                'fi-btn fi-size-sm',
-                                'fi-btn-color-primary' => $activeTab === 'due',
-                                'fi-btn-color-gray' => $activeTab !== 'due',
+                                'inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition',
+                                'bg-primary-600 text-white' => $activeTab === 'due',
+                                'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10' => $activeTab !== 'due',
                             ])
                         >
                             {{ __('Due') }}
-                            <span class="ms-1 rounded-full bg-white/20 px-1.5 text-xs">{{ $counts['due'] ?? 0 }}</span>
+                            <span @class([
+                                'rounded-md px-1.5 py-0.5 text-xs tabular-nums',
+                                'bg-white/20' => $activeTab === 'due',
+                                'bg-white dark:bg-white/10' => $activeTab !== 'due',
+                            ])>{{ $counts['due'] ?? 0 }}</span>
                         </button>
                         <button
                             type="button"
                             wire:click="$set('activeTab', 'unavailable')"
                             @class([
-                                'fi-btn fi-size-sm',
-                                'fi-btn-color-warning' => $activeTab === 'unavailable',
-                                'fi-btn-color-gray' => $activeTab !== 'unavailable',
+                                'inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition',
+                                'bg-amber-600 text-white' => $activeTab === 'unavailable',
+                                'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10' => $activeTab !== 'unavailable',
                             ])
                         >
                             {{ __('Unavailable') }}
-                            <span class="ms-1 rounded-full bg-white/20 px-1.5 text-xs">{{ $counts['unavailable'] ?? 0 }}</span>
+                            <span @class([
+                                'rounded-md px-1.5 py-0.5 text-xs tabular-nums',
+                                'bg-white/20' => $activeTab === 'unavailable',
+                                'bg-white dark:bg-white/10' => $activeTab !== 'unavailable',
+                            ])>{{ $counts['unavailable'] ?? 0 }}</span>
                         </button>
                     </div>
                     BLADE,

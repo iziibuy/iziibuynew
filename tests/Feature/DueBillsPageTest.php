@@ -35,6 +35,9 @@ function dueBillsAdmin(): User
 
 function dueBillsShop(array $attributes = []): Shop
 {
+    $companyName = $attributes['company_name'] ?? 'Due Shop Co';
+    unset($attributes['company_name']);
+
     $owner = User::factory()->create([
         'name' => 'Shop',
         'last_name' => 'Owner',
@@ -57,13 +60,13 @@ function dueBillsShop(array $attributes = []): Shop
     ], $attributes));
 
     $shop->createMetas([
-        'company_name' => 'Due Shop Co',
+        'company_name' => $companyName,
         'contact_email' => $owner->email,
     ]);
 
     $owner->update(['shop_id' => $shop->id]);
 
-    return $shop->fresh();
+    return $shop->fresh(['metas', 'user', 'users']);
 }
 
 function dueBillsPlugin(array $attributes = []): PaymentMethodAccess
@@ -269,4 +272,88 @@ it('checks an owner user id from the due bills page', function (): void {
         ->assertSet('ownerInspection.user_id', $shop->user_id)
         ->assertSee('On due list')
         ->assertSee('Due Shop Co');
+});
+
+it('lists already-paid and inactive accounts on the unavailable scope', function (): void {
+    $period = MonthlyBillingPeriod::resolve();
+    $paidShop = dueBillsShop([
+        'paid_at' => $period->paidThrough(),
+        'company_name' => 'Paid Shop Co',
+    ]);
+    $inactiveShop = dueBillsShop([
+        'status' => 0,
+        'company_name' => 'Inactive Shop Co',
+    ]);
+    dueBillsShop(['company_name' => 'Active Due Shop Co']);
+
+    $unavailable = app(UnifiedDueLedger::class)->collect($period, scope: UnifiedDueLedger::SCOPE_UNAVAILABLE);
+    $due = app(UnifiedDueLedger::class)->collect($period, scope: UnifiedDueLedger::SCOPE_DUE);
+
+    expect($unavailable->pluck('id')->all())
+        ->toContain('shop-'.$paidShop->id)
+        ->toContain('shop-'.$inactiveShop->id)
+        ->and($due->pluck('id')->all())
+        ->not->toContain('shop-'.$paidShop->id)
+        ->not->toContain('shop-'.$inactiveShop->id)
+        ->and($unavailable->firstWhere('id', 'shop-'.$paidShop->id)['unavailable_reason'])
+        ->toContain('Already paid');
+});
+
+it('filters by name and email', function (): void {
+    $shop = dueBillsShop();
+    dueBillsPlugin();
+
+    $byName = app(DueBillsQuery::class)->rows(
+        filters: ['name' => ['name' => 'Shop Owner']],
+        sortColumn: null,
+        sortDirection: null,
+        search: null,
+    );
+
+    $byEmail = app(DueBillsQuery::class)->rows(
+        filters: ['email' => ['email' => $shop->contact_email]],
+        sortColumn: null,
+        sortDirection: null,
+        search: null,
+    );
+
+    expect($byName)->toHaveCount(1)
+        ->and($byName->first()['company'])->toBe('Due Shop Co')
+        ->and($byEmail)->toHaveCount(1)
+        ->and($byEmail->first()['id'])->toBe('shop-'.$shop->id);
+});
+
+it('includes an owed amount breakdown on each row', function (): void {
+    $shop = dueBillsShop(['monthly_cost' => 200, 'establishment' => 0, 'establishment_cost' => 50]);
+    $plugin = dueBillsPlugin(['fee' => 100]);
+
+    $rows = app(UnifiedDueLedger::class)->collect()->keyBy('id');
+
+    expect($rows['shop-'.$shop->id]['breakdown']['total'])->toBe((float) $shop->subscriptionFeeFull())
+        ->and(collect($rows['shop-'.$shop->id]['breakdown']['lines'])->pluck('label')->all())
+        ->toContain('Establishment fee')
+        ->toContain('Monthly fee')
+        ->and($rows['plugin-'.$plugin->id]['breakdown']['lines'])
+        ->toHaveCount(2)
+        ->and($rows['plugin-'.$plugin->id]['breakdown']['total'])->toBe(125.0);
+});
+
+it('switches the table between due and unavailable tabs', function (): void {
+    $admin = dueBillsAdmin();
+    $period = MonthlyBillingPeriod::resolve();
+    dueBillsShop([
+        'paid_at' => $period->paidThrough(),
+        'company_name' => 'Paid Shop Co',
+    ]);
+    dueBillsShop(['company_name' => 'Active Due Shop Co']);
+
+    Livewire::actingAs($admin)
+        ->test(DueBillsPage::class)
+        ->assertSuccessful()
+        ->assertSee('Active Due Shop Co')
+        ->assertDontSee('Paid Shop Co')
+        ->set('activeTab', UnifiedDueLedger::SCOPE_UNAVAILABLE)
+        ->assertSet('activeTab', UnifiedDueLedger::SCOPE_UNAVAILABLE)
+        ->assertSee('Paid Shop Co')
+        ->assertSee('Already paid');
 });
