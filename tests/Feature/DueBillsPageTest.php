@@ -1,0 +1,208 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Filament\Pages\DueBillsPage;
+use App\Models\Enterprise;
+use App\Models\PaymentMethodAccess;
+use App\Models\Shop;
+use App\Models\User;
+use App\Services\Admin\DueBillsQuery;
+use App\Services\Admin\UnifiedDueLedger;
+use App\Services\Subscription\MonthlyBillingPeriod;
+use Database\Seeders\RoleSeeder;
+use Illuminate\Support\Str;
+use Livewire\Livewire;
+
+beforeEach(function (): void {
+    $this->seed(RoleSeeder::class);
+});
+
+function dueBillsAdmin(): User
+{
+    $admin = User::factory()->create([
+        'role_id' => User::ROLES['Admin'],
+        'password' => bcrypt('password'),
+        'service_type' => 'both',
+        'pt_free_tier' => false,
+    ]);
+    $admin->assignRole('admin');
+
+    return $admin;
+}
+
+function dueBillsShop(array $attributes = []): Shop
+{
+    $owner = User::factory()->create([
+        'name' => 'Shop',
+        'last_name' => 'Owner',
+        'email' => 'shop-due-'.uniqid().'@example.com',
+        'role_id' => User::ROLES['Vendor'],
+    ]);
+
+    $shop = Shop::query()->create(array_merge([
+        'user_id' => $owner->id,
+        'user_name' => 'due-shop-'.uniqid(),
+        'subscriptionMethod' => 'elavon',
+        'paymentMethod' => 'elavon',
+        'subscription_id' => 'card-due-shop',
+        'status' => 1,
+        'establishment' => 1,
+        'monthly_cost' => 299,
+        'establishment_cost' => 0,
+        'per_user_fee' => 0,
+        'paid_at' => now()->subMonth()->endOfMonth(),
+    ], $attributes));
+
+    $shop->createMetas([
+        'company_name' => 'Due Shop Co',
+        'contact_email' => $owner->email,
+    ]);
+
+    $owner->update(['shop_id' => $shop->id]);
+
+    return $shop->fresh();
+}
+
+function dueBillsPlugin(array $attributes = []): PaymentMethodAccess
+{
+    $owner = User::factory()->create([
+        'name' => 'Plugin',
+        'last_name' => 'Owner',
+        'email' => 'plugin-due-'.uniqid().'@example.com',
+        'role_id' => User::ROLES['External'],
+    ]);
+
+    $access = PaymentMethodAccess::query()->create(array_merge([
+        'user_id' => $owner->id,
+        'company_name' => 'Due Plugin Co',
+        'company_email' => $owner->email,
+        'key' => (string) Str::uuid(),
+        'fee' => 50,
+        'subscriptionMethod' => 'elavon',
+        'status' => 1,
+        'last_paid_at' => now()->subMonth()->endOfMonth(),
+    ], $attributes));
+
+    $access->subscription()->create([
+        'key' => 'plugin-card-'.uniqid(),
+        'fee' => 50,
+        'status' => 1,
+        'paid_at' => now()->subMonth()->endOfMonth(),
+    ]);
+
+    return $access->fresh(['subscription', 'user']);
+}
+
+function dueBillsEnterprise(array $attributes = []): Enterprise
+{
+    $enterprise = Enterprise::query()->create(array_merge([
+        'enterprise_name' => 'Due Enterprise Co',
+        'domain' => 'https://due-enterprise-'.uniqid().'.example',
+        'unqid' => (string) Str::uuid(),
+        'status' => 1,
+        'subscription_id' => 'enterprise-card-'.uniqid(),
+        'subscription_fee' => 450,
+        'paid_at' => now()->subMonth()->endOfMonth(),
+    ], $attributes));
+
+    $enterprise->subscription()->create([
+        'key' => 'enterprise-sub-'.uniqid(),
+        'fee' => 450,
+        'status' => 1,
+        'paid_at' => now()->subMonth()->endOfMonth(),
+    ]);
+
+    return $enterprise->fresh(['subscription']);
+}
+
+it('lists due shops, plugins, and enterprise subscriptions together', function (): void {
+    $admin = dueBillsAdmin();
+    dueBillsShop();
+    dueBillsPlugin();
+    dueBillsEnterprise();
+
+    $rows = app(UnifiedDueLedger::class)->collect();
+
+    expect($rows->pluck('company')->all())
+        ->toContain('Due Shop Co')
+        ->toContain('Due Plugin Co')
+        ->toContain('Due Enterprise Co')
+        ->and($rows->pluck('type')->unique()->sort()->values()->all())
+        ->toBe([
+            UnifiedDueLedger::TYPE_ENTERPRISE,
+            UnifiedDueLedger::TYPE_PLUGIN,
+            UnifiedDueLedger::TYPE_SHOP,
+        ]);
+
+    Livewire::actingAs($admin)
+        ->test(DueBillsPage::class)
+        ->assertSuccessful()
+        ->assertSee('Due bills')
+        ->assertSee('Due Shop Co')
+        ->assertSee('Due Plugin Co')
+        ->assertSee('Due Enterprise Co');
+});
+
+it('excludes already-paid and active-trial entities from the due ledger', function (): void {
+    $period = MonthlyBillingPeriod::resolve();
+
+    dueBillsShop(['paid_at' => $period->paidThrough()]);
+    dueBillsPlugin([
+        'last_paid_at' => $period->paidThrough(),
+    ]);
+    dueBillsPlugin([
+        'status' => 1,
+        'trial_used' => true,
+        'trial_ends_at' => now()->addDays(3),
+        'trial_charged_at' => null,
+        'last_paid_at' => null,
+    ]);
+
+    $rows = app(UnifiedDueLedger::class)->collect($period);
+
+    expect($rows)->toHaveCount(0);
+});
+
+it('calculates plugin due amount with vat and shop due from subscriptionFeeFull', function (): void {
+    $shop = dueBillsShop(['monthly_cost' => 200, 'establishment' => 1, 'per_user_fee' => 0]);
+    $plugin = dueBillsPlugin(['fee' => 100]);
+
+    $rows = app(UnifiedDueLedger::class)->collect()->keyBy('id');
+
+    expect($rows['shop-'.$shop->id]['due_amount'])->toBe((float) $shop->subscriptionFeeFull())
+        ->and($rows['plugin-'.$plugin->id]['due_amount'])->toBe(125.0)
+        ->and($rows['plugin-'.$plugin->id]['monthly_price'])->toBe(100.0);
+});
+
+it('filters due bills by type', function (): void {
+    dueBillsShop();
+    dueBillsPlugin();
+    dueBillsEnterprise();
+
+    $rows = app(DueBillsQuery::class)->rows(
+        filters: ['type' => UnifiedDueLedger::TYPE_PLUGIN],
+        sortColumn: 'company',
+        sortDirection: 'asc',
+        search: null,
+    );
+
+    expect($rows)->toHaveCount(1)
+        ->and($rows->first()['type'])->toBe(UnifiedDueLedger::TYPE_PLUGIN)
+        ->and($rows->first()['company'])->toBe('Due Plugin Co');
+});
+
+it('searches due bills by company name', function (): void {
+    dueBillsShop();
+    dueBillsPlugin();
+
+    $rows = app(DueBillsQuery::class)->rows(
+        filters: null,
+        sortColumn: null,
+        sortDirection: null,
+        search: 'Plugin Co',
+    );
+
+    expect($rows)->toHaveCount(1)
+        ->and($rows->first()['company'])->toBe('Due Plugin Co');
+});

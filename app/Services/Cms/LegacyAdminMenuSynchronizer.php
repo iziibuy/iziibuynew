@@ -56,6 +56,7 @@ final class LegacyAdminMenuSynchronizer
         'charges' => ['type' => MenuLinkType::Url, 'url' => '/panel/charges?demo=0'],
         'demo charges' => ['type' => MenuLinkType::Url, 'url' => '/panel/charges?demo=1'],
         'all charges' => ['type' => MenuLinkType::Route, 'route' => 'filament.admin.pages.all-charges'],
+        'due bills' => ['type' => MenuLinkType::Route, 'route' => 'filament.admin.pages.due-bills'],
         'menus' => ['type' => MenuLinkType::Route, 'route' => 'filament.admin.resources.cms-menu-items.menu-builder'],
         'pages' => ['type' => MenuLinkType::Resource, 'resource' => PageResource::class],
         'settings' => ['type' => MenuLinkType::Route, 'route' => 'filament.admin.pages.settings'],
@@ -106,12 +107,40 @@ final class LegacyAdminMenuSynchronizer
         });
 
         $this->ensureAllChargesMenuItem($menu);
+        $this->ensureDueBillsMenuItem($menu);
 
         return $menu->fresh();
     }
 
     private function ensureAllChargesMenuItem(CmsMenu $menu): void
     {
+        $this->ensureFinanceRouteMenuItem(
+            menu: $menu,
+            normalizedTitle: 'all charges',
+            title: 'All Charges',
+            routeName: 'filament.admin.pages.all-charges',
+            icon: 'voyager-list',
+        );
+    }
+
+    private function ensureDueBillsMenuItem(CmsMenu $menu): void
+    {
+        $this->ensureFinanceRouteMenuItem(
+            menu: $menu,
+            normalizedTitle: 'due bills',
+            title: 'Due Bills',
+            routeName: 'filament.admin.pages.due-bills',
+            icon: 'voyager-dollar',
+        );
+    }
+
+    private function ensureFinanceRouteMenuItem(
+        CmsMenu $menu,
+        string $normalizedTitle,
+        string $title,
+        string $routeName,
+        string $icon,
+    ): void {
         $items = $menu->allItems()->get();
 
         $finance = $items->first(
@@ -123,18 +152,18 @@ final class LegacyAdminMenuSynchronizer
         }
 
         $existing = $items->first(
-            fn (CmsMenuItem $item): bool => $this->normalizeTitle($item->title) === 'all charges'
+            fn (CmsMenuItem $item): bool => $this->normalizeTitle($item->title) === $normalizedTitle
         );
 
         if ($existing !== null) {
             $existing->update([
                 'parent_id' => $finance->id,
                 'link_type' => MenuLinkType::Route,
-                'route_name' => 'filament.admin.pages.all-charges',
+                'route_name' => $routeName,
                 'resource_class' => null,
                 'url' => null,
                 'is_active' => true,
-                'icon' => $existing->icon ?: 'voyager-list',
+                'icon' => $existing->icon ?: $icon,
             ]);
 
             return;
@@ -145,10 +174,10 @@ final class LegacyAdminMenuSynchronizer
         CmsMenuItem::query()->create([
             'cms_menu_id' => $menu->id,
             'parent_id' => $finance->id,
-            'title' => 'All Charges',
+            'title' => $title,
             'link_type' => MenuLinkType::Route,
-            'route_name' => 'filament.admin.pages.all-charges',
-            'icon' => 'voyager-list',
+            'route_name' => $routeName,
+            'icon' => $icon,
             'sort_order' => max($sortOrder, 1),
             'is_active' => true,
         ]);
