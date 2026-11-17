@@ -68,6 +68,34 @@
                     <li>{{ $reason }}</li>
                 @endforeach
             </ul>
+
+            @if (
+                filled($entity['type'] ?? null)
+                && filled($entity['entity_id'] ?? null)
+                && ($entity['status'] ?? '') !== 'missing'
+            )
+                <div class="mt-4 flex flex-wrap gap-2">
+                    @if (($entity['on_due_list'] ?? false) === true)
+                        <button
+                            type="button"
+                            wire:click="makeOwnerEntityUnavailable('{{ $entity['type'] }}', {{ (int) $entity['entity_id'] }})"
+                            wire:confirm="{{ __('Mark this account as paid for the billing month so it leaves the due list?') }}"
+                            class="inline-flex items-center rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-500"
+                        >
+                            {{ __('Make unavailable') }}
+                        </button>
+                    @else
+                        <button
+                            type="button"
+                            wire:click="makeOwnerEntityAvailable('{{ $entity['type'] }}', {{ (int) $entity['entity_id'] }})"
+                            wire:confirm="{{ __('Fix blockers so this account appears on the due list?') }}"
+                            class="inline-flex items-center rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-500"
+                        >
+                            {{ __('Make available') }}
+                        </button>
+                    @endif
+                </div>
+            @endif
         </div>
     @endforeach
 </div>

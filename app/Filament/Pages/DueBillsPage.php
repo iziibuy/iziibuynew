@@ -446,6 +446,35 @@ class DueBillsPage extends Page implements HasTable
         );
     }
 
+    public function makeOwnerEntityAvailable(string $type, int $entityId): void
+    {
+        $this->toggleOwnerEntityAvailability($type, $entityId, makeAvailable: true);
+    }
+
+    public function makeOwnerEntityUnavailable(string $type, int $entityId): void
+    {
+        $this->toggleOwnerEntityAvailability($type, $entityId, makeAvailable: false);
+    }
+
+    protected function toggleOwnerEntityAvailability(string $type, int $entityId, bool $makeAvailable): void
+    {
+        if ($this->ownerInspection === null) {
+            return;
+        }
+
+        $billingPeriod = app(DueBillsQuery::class)->billingPeriodFromFilters($this->tableFilters);
+        $service = app(DueBillMakeAvailable::class);
+
+        $result = $makeAvailable
+            ? $service->makeAvailable($type, $entityId, $billingPeriod)
+            : $service->makeUnavailable($type, $entityId, $billingPeriod);
+
+        $this->notifyAvailabilityResult($result, expectingDue: $makeAvailable);
+
+        $this->ownerInspection = app(DueBillOwnerInspector::class)
+            ->inspect((int) $this->ownerInspection['user_id'], $billingPeriod);
+    }
+
     /**
      * @param  array{success: bool, on_due_list: bool, actions: list<string>, remaining_reasons: list<string>, message: string}  $result
      */

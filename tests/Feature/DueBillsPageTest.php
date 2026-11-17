@@ -271,7 +271,51 @@ it('checks an owner user id from the due bills page', function (): void {
         ])
         ->assertSet('ownerInspection.user_id', $shop->user_id)
         ->assertSee('On due list')
-        ->assertSee('Due Shop Co');
+        ->assertSee('Due Shop Co')
+        ->assertSee('Make unavailable');
+});
+
+it('can make an owner entity unavailable from the owner check', function (): void {
+    $admin = dueBillsAdmin();
+    $period = MonthlyBillingPeriod::resolve();
+    $shop = dueBillsShop(['company_name' => 'Owner Toggle Shop']);
+
+    Livewire::actingAs($admin)
+        ->test(DueBillsPage::class)
+        ->callAction(TestAction::make('inspectOwner')->table(), [
+            'user_id' => $shop->user_id,
+        ])
+        ->assertSee('Make unavailable')
+        ->call('makeOwnerEntityUnavailable', UnifiedDueLedger::TYPE_SHOP, $shop->id)
+        ->assertNotified(__('Moved to the unavailable list.'))
+        ->assertSee('Make available')
+        ->assertSee('Not billed this run');
+
+    expect($shop->fresh()->paid_at->toDateTimeString())
+        ->toBe($period->paidThrough()->toDateTimeString());
+});
+
+it('can make an owner entity available from the owner check', function (): void {
+    $admin = dueBillsAdmin();
+    $period = MonthlyBillingPeriod::resolve();
+    $shop = dueBillsShop([
+        'paid_at' => $period->paidThrough(),
+        'company_name' => 'Owner Unlock Shop',
+    ]);
+
+    Livewire::actingAs($admin)
+        ->test(DueBillsPage::class)
+        ->callAction(TestAction::make('inspectOwner')->table(), [
+            'user_id' => $shop->user_id,
+        ])
+        ->assertSee('Make available')
+        ->call('makeOwnerEntityAvailable', UnifiedDueLedger::TYPE_SHOP, $shop->id)
+        ->assertNotified(__('Moved to the due list.'))
+        ->assertSee('Make unavailable')
+        ->assertSee('On due list');
+
+    expect($shop->fresh()->paid_at->toDateTimeString())
+        ->toBeLessThan($period->paidThrough()->toDateTimeString());
 });
 
 it('lists already-paid and inactive accounts on the unavailable scope', function (): void {
