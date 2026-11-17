@@ -6,13 +6,6 @@
 <div class="space-y-4 text-sm">
     <p class="text-gray-600 dark:text-gray-300">{{ $breakdown['summary'] ?? '' }}</p>
 
-    <dl class="divide-y divide-gray-200 rounded-lg bg-gray-50 px-3 dark:divide-white/10 dark:bg-white/5">
-        <div class="flex items-center justify-between gap-4 py-2">
-            <dt class="font-medium text-gray-500 dark:text-gray-400">{{ __('Billing period') }}</dt>
-            <dd class="text-gray-950 dark:text-white">{{ $breakdown['period'] ?? '-' }}</dd>
-        </div>
-    </dl>
-
     <table class="w-full">
         <tbody class="divide-y divide-gray-200 dark:divide-white/10">
             @foreach (($breakdown['lines'] ?? []) as $line)

@@ -19,9 +19,6 @@
                 @endif
             </p>
         @endif
-        <p class="mt-2 text-gray-500 dark:text-gray-400">
-            {{ __('Billing period') }}: {{ $inspection['billing_period'] }}
-        </p>
     </div>
 
     @foreach ($inspection['entities'] as $entity)

@@ -174,7 +174,7 @@ class UnifiedDueLedger
                     userId: $owner?->id,
                     onDueList: $onDueList,
                     reasons: $onDueList
-                        ? [__('On the due list for :period.', ['period' => $billingPeriod->label()])]
+                        ? [__('On the due list.')]
                         : $reasons,
                     breakdown: $breakdown,
                 );
@@ -240,7 +240,7 @@ class UnifiedDueLedger
                     userId: $owner?->id,
                     onDueList: $onDueList,
                     reasons: $onDueList
-                        ? [__('On the due list for :period.', ['period' => $billingPeriod->label()])]
+                        ? [__('On the due list.')]
                         : $reasons,
                     breakdown: $breakdown,
                 );
@@ -307,7 +307,7 @@ class UnifiedDueLedger
                     userId: null,
                     onDueList: $onDueList,
                     reasons: $onDueList
-                        ? [__('On the due list for :period.', ['period' => $billingPeriod->label()])]
+                        ? [__('On the due list.')]
                         : $reasons,
                     breakdown: $breakdown,
                 );

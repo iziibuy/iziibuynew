@@ -80,7 +80,7 @@ class DueBillOwnerInspector
             ->where('user_id', $userId)
             ->orderBy('id')
             ->get()
-            ->map(function (Shop $shop) use ($billingPeriod, $paidThrough): array {
+            ->map(function (Shop $shop) use ($paidThrough): array {
                 $reasons = [];
                 $rawStatus = (int) ($shop->getAttributes()['status'] ?? 0);
 
@@ -122,7 +122,7 @@ class DueBillOwnerInspector
                     'due_amount' => $onDueList ? (float) $shop->subscriptionFeeFull() : null,
                     'last_paid_at' => $shop->paid_at?->toDateTimeString(),
                     'reasons' => $onDueList
-                        ? [__('This shop is on the due list for :period.', ['period' => $billingPeriod->label()])]
+                        ? [__('This shop is on the due list.')]
                         : $reasons,
                 ];
             });
@@ -140,7 +140,7 @@ class DueBillOwnerInspector
             ->where('user_id', $userId)
             ->orderBy('id')
             ->get()
-            ->map(function (PaymentMethodAccess $access) use ($billingPeriod, $paidThrough): array {
+            ->map(function (PaymentMethodAccess $access) use ($paidThrough): array {
                 $reasons = [];
                 $rawStatus = (int) ($access->getAttributes()['status'] ?? 0);
 
@@ -189,7 +189,7 @@ class DueBillOwnerInspector
                     'due_amount' => $onDueList ? $access->monthlyRenewalFee() : null,
                     'last_paid_at' => $access->last_paid_at?->toDateTimeString(),
                     'reasons' => $onDueList
-                        ? [__('This plugin is on the due list for :period.', ['period' => $billingPeriod->label()])]
+                        ? [__('This plugin is on the due list.')]
                         : $reasons,
                 ];
             });
