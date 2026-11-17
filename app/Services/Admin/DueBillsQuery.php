@@ -23,6 +23,7 @@ class DueBillsQuery
         ?string $sortDirection,
         ?string $search,
         ?MonthlyBillingPeriod $billingPeriod = null,
+        string $scope = UnifiedDueLedger::SCOPE_DUE,
     ): Collection {
         $billingPeriod ??= $this->billingPeriodFromFilters($filters);
 
@@ -31,6 +32,7 @@ class DueBillsQuery
             filters: $filters,
             sortColumn: $sortColumn,
             sortDirection: $sortDirection,
+            scope: $scope,
         );
 
         if (blank($search)) {
@@ -45,11 +47,24 @@ class DueBillsQuery
                 $row['name'] ?? '',
                 $row['email'] ?? '',
                 $row['type_label'] ?? '',
+                $row['unavailable_reason'] ?? '',
                 (string) ($row['entity_id'] ?? ''),
+                (string) ($row['user_id'] ?? ''),
             ]));
 
             return str_contains($haystack, $needle);
         })->values();
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $filters
+     * @return array{due: int, unavailable: int}
+     */
+    public function counts(?array $filters = null, ?MonthlyBillingPeriod $billingPeriod = null): array
+    {
+        $billingPeriod ??= $this->billingPeriodFromFilters($filters);
+
+        return app(UnifiedDueLedger::class)->counts($billingPeriod, $filters);
     }
 
     /**

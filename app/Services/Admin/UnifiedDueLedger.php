@@ -24,6 +24,10 @@ class UnifiedDueLedger
 
     public const TYPE_ENTERPRISE = 'enterprise';
 
+    public const SCOPE_DUE = 'due';
+
+    public const SCOPE_UNAVAILABLE = 'unavailable';
+
     /**
      * @return array<string, string>
      */
@@ -37,8 +41,17 @@ class UnifiedDueLedger
     }
 
     /**
-     * Entities the monthly charge commands would attempt to bill for the given period.
-     *
+     * @return array<string, string>
+     */
+    public static function scopeOptions(): array
+    {
+        return [
+            self::SCOPE_DUE => __('Due'),
+            self::SCOPE_UNAVAILABLE => __('Unavailable'),
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>|null  $filters
      * @return Collection<int, array<string, mixed>>
      */
@@ -47,14 +60,15 @@ class UnifiedDueLedger
         ?array $filters = null,
         ?string $sortColumn = null,
         ?string $sortDirection = null,
+        string $scope = self::SCOPE_DUE,
     ): Collection {
         $billingPeriod ??= MonthlyBillingPeriod::resolve();
         $filters ??= [];
+        $scope = $scope === self::SCOPE_UNAVAILABLE ? self::SCOPE_UNAVAILABLE : self::SCOPE_DUE;
 
-        $rows = collect()
-            ->concat($this->dueShops($billingPeriod))
-            ->concat($this->duePlugins($billingPeriod))
-            ->concat($this->dueEnterprises($billingPeriod));
+        $rows = $scope === self::SCOPE_UNAVAILABLE
+            ? $this->unavailableRows($billingPeriod)
+            : $this->dueRows($billingPeriod);
 
         $rows = $this->applyFilters($rows, $filters);
 
@@ -69,29 +83,82 @@ class UnifiedDueLedger
     }
 
     /**
+     * @return array{due: int, unavailable: int}
+     */
+    public function counts(?MonthlyBillingPeriod $billingPeriod = null, ?array $filters = null): array
+    {
+        $billingPeriod ??= MonthlyBillingPeriod::resolve();
+        $filters ??= [];
+
+        return [
+            self::SCOPE_DUE => $this->applyFilters($this->dueRows($billingPeriod), $filters)->count(),
+            self::SCOPE_UNAVAILABLE => $this->applyFilters($this->unavailableRows($billingPeriod), $filters)->count(),
+        ];
+    }
+
+    /**
      * @return Collection<int, array<string, mixed>>
      */
-    protected function dueShops(MonthlyBillingPeriod $billingPeriod): Collection
+    protected function dueRows(MonthlyBillingPeriod $billingPeriod): Collection
     {
-        $paidThrough = $billingPeriod->paidThrough()->toDateTimeString();
+        return collect()
+            ->concat($this->shopCandidates($billingPeriod)->where('on_due_list', true)->values())
+            ->concat($this->pluginCandidates($billingPeriod)->where('on_due_list', true)->values())
+            ->concat($this->enterpriseCandidates($billingPeriod)->where('on_due_list', true)->values())
+            ->values();
+    }
+
+    /**
+     * @return Collection<int, array<string, mixed>>
+     */
+    protected function unavailableRows(MonthlyBillingPeriod $billingPeriod): Collection
+    {
+        return collect()
+            ->concat($this->shopCandidates($billingPeriod)->where('on_due_list', false)->values())
+            ->concat($this->pluginCandidates($billingPeriod)->where('on_due_list', false)->values())
+            ->concat($this->enterpriseCandidates($billingPeriod)->where('on_due_list', false)->values())
+            ->values();
+    }
+
+    /**
+     * @return Collection<int, array<string, mixed>>
+     */
+    protected function shopCandidates(MonthlyBillingPeriod $billingPeriod): Collection
+    {
+        $paidThrough = $billingPeriod->paidThrough();
 
         return Shop::query()
             ->with(['user', 'users', 'metas'])
-            ->where('status', 1)
             ->where(fn (Builder $query) => $query
-                ->whereNull('paid_at')
-                ->orWhere('paid_at', '<', $paidThrough))
+                ->where('status', 1)
+                ->orWhereNotNull('paid_at')
+                ->orWhereNotNull('subscription_id')
+                ->orWhereNotNull('elavon_subscription_id'))
             ->orderBy('id')
             ->get()
-            ->filter(function (Shop $shop): bool {
-                if ($shop->requiresElavonResubscription()) {
-                    return false;
+            ->map(function (Shop $shop) use ($billingPeriod, $paidThrough): array {
+                $reasons = [];
+                $rawStatus = (int) ($shop->getAttributes()['status'] ?? 0);
+
+                if ($rawStatus !== 1) {
+                    $reasons[] = __('Inactive (status=:status).', ['status' => $rawStatus]);
                 }
 
-                // Elavon-native plans are billed by Elavon, not monthly:charge.
-                return ! $shop->usesElavonNativeSubscription();
-            })
-            ->map(function (Shop $shop) use ($billingPeriod): array {
+                if ($shop->paid_at !== null
+                    && $shop->paid_at->toDateTimeString() >= $paidThrough->toDateTimeString()) {
+                    $reasons[] = __('Already paid for this billing month.');
+                }
+
+                if ($shop->requiresElavonResubscription()) {
+                    $reasons[] = __('Needs Elavon resubscription.');
+                }
+
+                if ($shop->usesElavonNativeSubscription()) {
+                    $reasons[] = __('Elavon-native subscription (billed by Elavon).');
+                }
+
+                $onDueList = $reasons === [];
+                $breakdown = $this->shopBreakdown($shop, $billingPeriod);
                 $owner = $shop->user;
 
                 return $this->row(
@@ -101,10 +168,15 @@ class UnifiedDueLedger
                     name: trim((string) (($owner?->name ?? '').' '.($owner?->last_name ?? ''))) ?: (string) ($owner?->email ?? '-'),
                     email: (string) ($shop->contact_email ?: $owner?->email ?: '-'),
                     monthlyPrice: (float) ($shop->monthly_cost ?? 0),
-                    dueAmount: (float) $shop->subscriptionFeeFull(),
+                    dueAmount: (float) ($breakdown['total'] ?? 0),
                     lastPaidAt: $shop->paid_at?->toDateTimeString(),
                     billingPeriod: $billingPeriod->label(),
                     userId: $owner?->id,
+                    onDueList: $onDueList,
+                    reasons: $onDueList
+                        ? [__('On the due list for :period.', ['period' => $billingPeriod->label()])]
+                        : $reasons,
+                    breakdown: $breakdown,
                 );
             })
             ->values();
@@ -113,23 +185,46 @@ class UnifiedDueLedger
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    protected function duePlugins(MonthlyBillingPeriod $billingPeriod): Collection
+    protected function pluginCandidates(MonthlyBillingPeriod $billingPeriod): Collection
     {
-        $paidThrough = $billingPeriod->paidThrough()->toDateTimeString();
+        $paidThrough = $billingPeriod->paidThrough();
 
         return PaymentMethodAccess::query()
             ->with(['user', 'subscription'])
-            ->where('status', 1)
             ->where(fn (Builder $query) => $query
-                ->whereNull('last_paid_at')
-                ->orWhere('last_paid_at', '<', $paidThrough))
-            ->where(fn (Builder $query) => $query
-                ->whereNull('trial_ends_at')
-                ->orWhereNotNull('trial_charged_at'))
+                ->where('status', 1)
+                ->orWhereNotNull('last_paid_at')
+                ->orWhereNotNull('trial_ends_at')
+                ->orWhereHas('subscription'))
             ->orderBy('id')
             ->get()
-            ->filter(fn (PaymentMethodAccess $access): bool => (int) ($access->subscription?->status ?? 0) === 1)
-            ->map(function (PaymentMethodAccess $access) use ($billingPeriod): array {
+            ->map(function (PaymentMethodAccess $access) use ($billingPeriod, $paidThrough): array {
+                $reasons = [];
+                $rawStatus = (int) ($access->getAttributes()['status'] ?? 0);
+
+                if ($rawStatus !== 1) {
+                    $reasons[] = __('Inactive (status=:status).', ['status' => $rawStatus]);
+                }
+
+                if ($access->last_paid_at !== null
+                    && $access->last_paid_at->toDateTimeString() >= $paidThrough->toDateTimeString()) {
+                    $reasons[] = __('Already paid for this billing month.');
+                }
+
+                if ($access->trial_ends_at !== null && $access->trial_charged_at === null) {
+                    $reasons[] = __('Free trial unsettled.');
+                }
+
+                if ($access->subscription === null) {
+                    $reasons[] = __('Missing subscription row.');
+                } elseif ((int) $access->subscription->status !== 1) {
+                    $reasons[] = __('Subscription inactive (status=:status).', [
+                        'status' => (int) $access->subscription->status,
+                    ]);
+                }
+
+                $onDueList = $reasons === [];
+                $breakdown = $this->pluginBreakdown($access, $billingPeriod);
                 $owner = $access->user;
 
                 return $this->row(
@@ -139,10 +234,15 @@ class UnifiedDueLedger
                     name: trim((string) (($owner?->name ?? '').' '.($owner?->last_name ?? ''))) ?: (string) ($owner?->email ?? '-'),
                     email: (string) ($access->company_email ?: $owner?->email ?: '-'),
                     monthlyPrice: $access->baseMonthlyFee(),
-                    dueAmount: $access->monthlyRenewalFee(),
+                    dueAmount: (float) ($breakdown['total'] ?? 0),
                     lastPaidAt: $access->last_paid_at?->toDateTimeString(),
                     billingPeriod: $billingPeriod->label(),
                     userId: $owner?->id,
+                    onDueList: $onDueList,
+                    reasons: $onDueList
+                        ? [__('On the due list for :period.', ['period' => $billingPeriod->label()])]
+                        : $reasons,
+                    breakdown: $breakdown,
                 );
             })
             ->values();
@@ -151,23 +251,46 @@ class UnifiedDueLedger
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    protected function dueEnterprises(MonthlyBillingPeriod $billingPeriod): Collection
+    protected function enterpriseCandidates(MonthlyBillingPeriod $billingPeriod): Collection
     {
         $paidThrough = $billingPeriod->paidThrough();
 
         return Enterprise::query()
             ->with('subscription')
-            ->where('status', 1)
             ->where(fn (Builder $query) => $query
-                ->whereNull('paid_at')
-                ->orWhere('paid_at', '<', $paidThrough))
+                ->where('status', 1)
+                ->orWhereNotNull('paid_at')
+                ->orWhereNotNull('subscription_id'))
             ->orderBy('id')
             ->get()
-            ->filter(fn (Enterprise $enterprise): bool => $enterprise->subscription !== null
-                && filled($enterprise->subscription_id)
-                && (int) $enterprise->subscription->status === 1)
-            ->map(function (Enterprise $enterprise) use ($billingPeriod): array {
-                $fee = $this->resolveEnterpriseFee($enterprise);
+            ->map(function (Enterprise $enterprise) use ($billingPeriod, $paidThrough): array {
+                $reasons = [];
+                $rawStatus = (int) ($enterprise->getAttributes()['status'] ?? 0);
+
+                if ($rawStatus !== 1) {
+                    $reasons[] = __('Inactive (status=:status).', ['status' => $rawStatus]);
+                }
+
+                if (filled($enterprise->paid_at)
+                    && Carbon::parse($enterprise->paid_at)->toDateTimeString() >= $paidThrough->toDateTimeString()) {
+                    $reasons[] = __('Already paid for this billing month.');
+                }
+
+                if (! filled($enterprise->subscription_id)) {
+                    $reasons[] = __('Missing stored card (subscription_id).');
+                }
+
+                if ($enterprise->subscription === null) {
+                    $reasons[] = __('Missing subscription row.');
+                } elseif ((int) $enterprise->subscription->status !== 1) {
+                    $reasons[] = __('Subscription inactive (status=:status).', [
+                        'status' => (int) $enterprise->subscription->status,
+                    ]);
+                }
+
+                $onDueList = $reasons === [];
+                $breakdown = $this->enterpriseBreakdown($enterprise, $billingPeriod);
+                $fee = (float) ($breakdown['total'] ?? 0);
 
                 return $this->row(
                     type: self::TYPE_ENTERPRISE,
@@ -182,14 +305,130 @@ class UnifiedDueLedger
                         : null,
                     billingPeriod: $billingPeriod->label(),
                     userId: null,
+                    onDueList: $onDueList,
+                    reasons: $onDueList
+                        ? [__('On the due list for :period.', ['period' => $billingPeriod->label()])]
+                        : $reasons,
+                    breakdown: $breakdown,
                 );
             })
             ->values();
     }
 
     /**
-     * Prefer stored fees; avoid remote details() HTTP calls on the due list.
+     * @return array{summary: string, period: string, lines: list<array{label: string, amount: float, note: ?string}>, total: float, currency: string}
      */
+    protected function shopBreakdown(Shop $shop, MonthlyBillingPeriod $billingPeriod): array
+    {
+        $shop->loadMissing('users');
+
+        $lines = [];
+        $establishment = 0.0;
+        if ((int) $shop->establishment === 0) {
+            $establishment = (float) $shop->establishment_cost;
+            $lines[] = [
+                'label' => __('Establishment fee'),
+                'amount' => $establishment,
+                'note' => __('One-time opening fee'),
+            ];
+        }
+
+        $monthly = (float) $shop->monthly_cost;
+        $lines[] = [
+            'label' => __('Monthly fee'),
+            'amount' => $monthly,
+            'note' => null,
+        ];
+
+        $managers = 0.0;
+        if ($shop->users->count() > 1) {
+            $managers = (float) $shop->singleUserCost();
+            $lines[] = [
+                'label' => __('Extra managers'),
+                'amount' => $managers,
+                'note' => __(':count users', ['count' => $shop->users->count()]),
+            ];
+        }
+
+        $net = $establishment + $monthly + $managers;
+        $taxRate = $shop->registrationTax();
+        $tax = $net * ($taxRate / 100);
+        if ($tax > 0) {
+            $lines[] = [
+                'label' => __('VAT (:rate%)', ['rate' => rtrim(rtrim(number_format($taxRate, 2), '0'), '.')]),
+                'amount' => round($tax, 2),
+                'note' => null,
+            ];
+        }
+
+        $total = round($net + $tax, 2);
+
+        return [
+            'summary' => __('Shop renewal charge for :company', [
+                'company' => (string) ($shop->company_name ?: $shop->user_name ?: 'Shop #'.$shop->id),
+            ]),
+            'period' => $billingPeriod->label(),
+            'lines' => $lines,
+            'total' => $total,
+            'currency' => 'NOK',
+        ];
+    }
+
+    /**
+     * @return array{summary: string, period: string, lines: list<array{label: string, amount: float, note: ?string}>, total: float, currency: string}
+     */
+    protected function pluginBreakdown(PaymentMethodAccess $access, MonthlyBillingPeriod $billingPeriod): array
+    {
+        $base = $access->baseMonthlyFee();
+        $vat = round($base * 0.25, 2);
+        $total = round($base + $vat, 2);
+
+        return [
+            'summary' => __('Plugin renewal charge for :company', [
+                'company' => (string) ($access->company_name ?: 'Plugin #'.$access->id),
+            ]),
+            'period' => $billingPeriod->label(),
+            'lines' => [
+                [
+                    'label' => __('Monthly fee'),
+                    'amount' => $base,
+                    'note' => __('Excluding VAT'),
+                ],
+                [
+                    'label' => __('VAT (25%)'),
+                    'amount' => $vat,
+                    'note' => null,
+                ],
+            ],
+            'total' => $total,
+            'currency' => 'NOK',
+        ];
+    }
+
+    /**
+     * @return array{summary: string, period: string, lines: list<array{label: string, amount: float, note: ?string}>, total: float, currency: string}
+     */
+    protected function enterpriseBreakdown(Enterprise $enterprise, MonthlyBillingPeriod $billingPeriod): array
+    {
+        $fee = $this->resolveEnterpriseFee($enterprise);
+
+        return [
+            'summary' => __('Enterprise subscription charge for :company', [
+                'company' => (string) ($enterprise->enterprise_name ?: $enterprise->domain ?: 'Enterprise #'.$enterprise->id),
+            ]),
+            'period' => $billingPeriod->label(),
+            'lines' => [
+                [
+                    'label' => __('Subscription fee'),
+                    'amount' => $fee,
+                    'note' => __('Stored subscription / enterprise fee'),
+                ],
+            ],
+            'total' => $fee,
+            'currency' => 'NOK',
+        ];
+    }
+
     protected function resolveEnterpriseFee(Enterprise $enterprise): float
     {
         $subscriptionFee = $enterprise->subscription?->fee;
@@ -206,6 +445,8 @@ class UnifiedDueLedger
     }
 
     /**
+     * @param  list<string>  $reasons
+     * @param  array{summary: string, period: string, lines: list<array{label: string, amount: float, note: ?string}>, total: float, currency: string}  $breakdown
      * @return array<string, mixed>
      */
     protected function row(
@@ -219,6 +460,9 @@ class UnifiedDueLedger
         ?string $lastPaidAt,
         string $billingPeriod,
         ?int $userId,
+        bool $onDueList,
+        array $reasons,
+        array $breakdown,
     ): array {
         return [
             'id' => $type.'-'.$id,
@@ -233,6 +477,10 @@ class UnifiedDueLedger
             'last_paid_at' => $lastPaidAt,
             'billing_period' => $billingPeriod,
             'user_id' => $userId,
+            'on_due_list' => $onDueList,
+            'unavailable_reason' => $onDueList ? null : implode(' ', $reasons),
+            'reasons' => $reasons,
+            'breakdown' => $breakdown,
             'entity_url' => $this->entityUrl($type, $id),
             'owner_url' => $this->ownerUrl($userId),
         ];
@@ -272,13 +520,31 @@ class UnifiedDueLedger
     protected function applyFilters(Collection $rows, array $filters): Collection
     {
         $type = data_get($filters, 'type.value');
-
         if ($type === null && array_key_exists('type', $filters) && ! is_array($filters['type'])) {
             $type = $filters['type'];
         }
-
         if (is_string($type) && filled($type) && $type !== 'all') {
             $rows = $rows->where('type', $type)->values();
+        }
+
+        $name = data_get($filters, 'name.name')
+            ?? data_get($filters, 'name.value')
+            ?? data_get($filters, 'name');
+        if (is_string($name) && filled($name)) {
+            $needle = mb_strtolower($name);
+            $rows = $rows->filter(
+                fn (array $row): bool => str_contains(mb_strtolower((string) ($row['name'] ?? '')), $needle)
+            )->values();
+        }
+
+        $email = data_get($filters, 'email.email')
+            ?? data_get($filters, 'email.value')
+            ?? data_get($filters, 'email');
+        if (is_string($email) && filled($email)) {
+            $needle = mb_strtolower($email);
+            $rows = $rows->filter(
+                fn (array $row): bool => str_contains(mb_strtolower((string) ($row['email'] ?? '')), $needle)
+            )->values();
         }
 
         return $rows;

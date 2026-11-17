@@ -14,7 +14,10 @@ use Filament\Forms\Components\TextInput;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Html;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
@@ -23,6 +26,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Contracts\View\View;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -62,6 +66,9 @@ class DueBillsPage extends Page implements HasTable
     #[Url(as: 'search')]
     public $tableSearch = '';
 
+    #[Url(as: 'tab')]
+    public string $activeTab = UnifiedDueLedger::SCOPE_DUE;
+
     /**
      * @var array{
      *     user_id: int,
@@ -79,11 +86,18 @@ class DueBillsPage extends Page implements HasTable
 
     public function getSubheading(): string|Htmlable|null
     {
-        return __('Shops, plugins, and enterprise subscriptions due for the selected billing month.');
+        return __('Shops, plugins, and enterprise subscriptions for the selected billing month.');
+    }
+
+    public function updatedActiveTab(): void
+    {
+        $this->resetTable();
     }
 
     public function content(Schema $schema): Schema
     {
+        $counts = app(DueBillsQuery::class)->counts($this->tableFilters);
+
         return $schema
             ->components([
                 Html::make(function (): string {
@@ -96,12 +110,31 @@ class DueBillsPage extends Page implements HasTable
                         ['inspection' => $this->ownerInspection],
                     );
                 }),
-                EmbeddedTable::make(),
+                Tabs::make('dueBillTabs')
+                    ->live()
+                    ->persistTabInQueryString('tab')
+                    ->activeTab(fn (): int => $this->activeTab === UnifiedDueLedger::SCOPE_UNAVAILABLE ? 2 : 1)
+                    ->tabs([
+                        Tab::make(__('Due'))
+                            ->badge($counts[UnifiedDueLedger::SCOPE_DUE] ?? 0)
+                            ->icon(Heroicon::OutlinedBanknotes)
+                            ->schema([
+                                EmbeddedTable::make(),
+                            ]),
+                        Tab::make(__('Unavailable'))
+                            ->badge($counts[UnifiedDueLedger::SCOPE_UNAVAILABLE] ?? 0)
+                            ->icon(Heroicon::OutlinedNoSymbol)
+                            ->schema([
+                                EmbeddedTable::make(),
+                            ]),
+                    ]),
             ]);
     }
 
     public function table(Table $table): Table
     {
+        $isUnavailable = $this->activeTab === UnifiedDueLedger::SCOPE_UNAVAILABLE;
+
         return $table
             ->records(function (
                 ?array $filters,
@@ -136,11 +169,13 @@ class DueBillsPage extends Page implements HasTable
                 TextColumn::make('name')
                     ->label(__('Name'))
                     ->searchable()
+                    ->sortable()
                     ->wrap()
                     ->limit(40),
                 TextColumn::make('email')
                     ->label(__('Email'))
                     ->searchable()
+                    ->sortable()
                     ->copyable()
                     ->limit(40),
                 TextColumn::make('type_label')
@@ -153,6 +188,12 @@ class DueBillsPage extends Page implements HasTable
                         default => 'gray',
                     })
                     ->sortable(),
+                TextColumn::make('unavailable_reason')
+                    ->label(__('Why unavailable'))
+                    ->wrap()
+                    ->visible($isUnavailable)
+                    ->placeholder('-')
+                    ->toggleable(),
                 TextColumn::make('monthly_price')
                     ->label(__('Price / month'))
                     ->alignEnd()
@@ -216,6 +257,34 @@ class DueBillsPage extends Page implements HasTable
                 SelectFilter::make('type')
                     ->label(__('Type'))
                     ->options(UnifiedDueLedger::typeOptions()),
+                Filter::make('name')
+                    ->label(__('Name'))
+                    ->form([
+                        TextInput::make('name')
+                            ->label(__('Name'))
+                            ->placeholder(__('Filter by owner name')),
+                    ])
+                    ->indicateUsing(function (array $state): array {
+                        if (filled($state['name'] ?? null)) {
+                            return [__('Name').': '.$state['name']];
+                        }
+
+                        return [];
+                    }),
+                Filter::make('email')
+                    ->label(__('Email'))
+                    ->form([
+                        TextInput::make('email')
+                            ->label(__('Email'))
+                            ->placeholder(__('Filter by email')),
+                    ])
+                    ->indicateUsing(function (array $state): array {
+                        if (filled($state['email'] ?? null)) {
+                            return [__('Email').': '.$state['email']];
+                        }
+
+                        return [];
+                    }),
                 Filter::make('month')
                     ->label(__('Billing month'))
                     ->form([
@@ -233,9 +302,65 @@ class DueBillsPage extends Page implements HasTable
                         return [];
                     }),
             ])
-            ->emptyStateHeading(__('No due bills'))
-            ->emptyStateDescription(__('Nothing matches the due criteria for this billing month.'))
-            ->emptyStateIcon(Heroicon::OutlinedBanknotes);
+            ->recordActions([
+                Action::make('breakdown')
+                    ->label(__('Breakdown'))
+                    ->tooltip(__('Owed amount breakdown'))
+                    ->icon(Heroicon::OutlinedCalculator)
+                    ->iconButton()
+                    ->color('gray')
+                    ->modalHeading(fn (array $record): string => __('Due bill breakdown').' — '.($record['company'] ?? ''))
+                    ->modalWidth(Width::Large)
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel(__('Close'))
+                    ->modalContent(fn (array $record): View => view('filament.pages.partials.due-bill-breakdown', [
+                        'breakdown' => $record['breakdown'] ?? [
+                            'summary' => '',
+                            'period' => '',
+                            'lines' => [],
+                            'total' => 0,
+                            'currency' => 'NOK',
+                        ],
+                    ])),
+            ])
+            ->emptyStateHeading($isUnavailable ? __('No unavailable accounts') : __('No due bills'))
+            ->emptyStateDescription($isUnavailable
+                ? __('Nothing is excluded from billing for this month with the current filters.')
+                : __('Nothing matches the due criteria for this billing month.'))
+            ->emptyStateIcon($isUnavailable ? Heroicon::OutlinedNoSymbol : Heroicon::OutlinedBanknotes);
+    }
+
+    /**
+     * Keep the active tab in sync when Filament tabs change via query string.
+     */
+    public function updated($property): void
+    {
+        if ($property === 'tab' || str_starts_with((string) $property, 'tab')) {
+            // no-op placeholder for Livewire property watchers
+        }
+    }
+
+    public function mount(): void
+    {
+        $tab = request()->query('tab');
+
+        if ($tab === UnifiedDueLedger::SCOPE_UNAVAILABLE || $tab === '2' || $tab === 2) {
+            $this->activeTab = UnifiedDueLedger::SCOPE_UNAVAILABLE;
+        } elseif ($tab === UnifiedDueLedger::SCOPE_DUE || $tab === '1' || $tab === 1) {
+            $this->activeTab = UnifiedDueLedger::SCOPE_DUE;
+        }
+    }
+
+    /**
+     * Called by Filament tab persistence / Livewire when the tab query changes.
+     */
+    public function setActiveBillingTab(string $scope): void
+    {
+        $this->activeTab = $scope === UnifiedDueLedger::SCOPE_UNAVAILABLE
+            ? UnifiedDueLedger::SCOPE_UNAVAILABLE
+            : UnifiedDueLedger::SCOPE_DUE;
+
+        $this->resetTable();
     }
 
     /**
@@ -259,7 +384,15 @@ class DueBillsPage extends Page implements HasTable
      */
     protected function dueRows(?array $filters, ?string $sortColumn, ?string $sortDirection, ?string $search): Collection
     {
-        return app(DueBillsQuery::class)->rows($filters, $sortColumn, $sortDirection, $search);
+        return app(DueBillsQuery::class)->rows(
+            filters: $filters,
+            sortColumn: $sortColumn,
+            sortDirection: $sortDirection,
+            search: $search,
+            scope: $this->activeTab === UnifiedDueLedger::SCOPE_UNAVAILABLE
+                ? UnifiedDueLedger::SCOPE_UNAVAILABLE
+                : UnifiedDueLedger::SCOPE_DUE,
+        );
     }
 
     protected function makeTable(): Table
