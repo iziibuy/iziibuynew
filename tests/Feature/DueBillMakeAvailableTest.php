@@ -153,6 +153,28 @@ it('settles a free-trial plugin so it becomes due', function (): void {
         ->and($plugin->fresh()->trial_charged_at)->not->toBeNull();
 });
 
+it('creates a missing plugin subscription row when making available', function (): void {
+    $period = MonthlyBillingPeriod::resolve();
+    $plugin = makeAvailablePlugin(['last_paid_at' => now()->subMonth()->endOfMonth()]);
+    $plugin->subscription()->delete();
+    $plugin->unsetRelation('subscription');
+
+    expect($plugin->fresh()->subscription)->toBeNull();
+
+    $result = app(DueBillMakeAvailable::class)->makeAvailable(
+        UnifiedDueLedger::TYPE_PLUGIN,
+        $plugin->id,
+        $period,
+    );
+
+    $plugin->refresh()->load('subscription');
+
+    expect($result['on_due_list'])->toBeTrue()
+        ->and($result['actions'])->toContain(__('Created plugin subscription row.'))
+        ->and($plugin->subscription)->not->toBeNull()
+        ->and((int) $plugin->subscription->status)->toBe(1);
+});
+
 it('makes an unavailable row available from the due bills page', function (): void {
     $admin = makeAvailableAdmin();
     $period = MonthlyBillingPeriod::resolve();

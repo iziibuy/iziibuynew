@@ -162,7 +162,14 @@ class DueBillMakeAvailable
             $access->save();
         }
 
-        if ($access->subscription !== null && (int) $access->subscription->status !== 1) {
+        if ($access->subscription === null) {
+            $access->subscription()->create([
+                'fee' => (int) round($access->baseMonthlyFee()),
+                'status' => 1,
+            ]);
+            $access->load('subscription');
+            $actions[] = __('Created plugin subscription row.');
+        } elseif ((int) $access->subscription->status !== 1) {
             $access->subscription->status = 1;
             $access->subscription->save();
             $actions[] = __('Activated plugin subscription.');
@@ -204,7 +211,18 @@ class DueBillMakeAvailable
             $enterprise->save();
         }
 
-        if ($enterprise->subscription !== null && (int) $enterprise->subscription->status !== 1) {
+        if ($enterprise->subscription === null) {
+            $fee = filled($enterprise->subscription_fee) && is_numeric($enterprise->subscription_fee)
+                ? (float) $enterprise->subscription_fee
+                : 299.0;
+
+            $enterprise->subscription()->create([
+                'fee' => (int) round($fee),
+                'status' => 1,
+            ]);
+            $enterprise->load('subscription');
+            $actions[] = __('Created enterprise subscription row.');
+        } elseif ((int) $enterprise->subscription->status !== 1) {
             $enterprise->subscription->status = 1;
             $enterprise->subscription->save();
             $actions[] = __('Activated enterprise subscription.');
