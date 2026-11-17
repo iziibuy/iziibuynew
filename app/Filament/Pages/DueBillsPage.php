@@ -9,13 +9,12 @@ use App\Services\Admin\DueBillsQuery;
 use App\Services\Admin\UnifiedDueLedger;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Html;
-use Filament\Schemas\Components\Tabs;
-use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
@@ -91,13 +90,15 @@ class DueBillsPage extends Page implements HasTable
 
     public function updatedActiveTab(): void
     {
+        if (! in_array($this->activeTab, [UnifiedDueLedger::SCOPE_DUE, UnifiedDueLedger::SCOPE_UNAVAILABLE], true)) {
+            $this->activeTab = UnifiedDueLedger::SCOPE_DUE;
+        }
+
         $this->resetTable();
     }
 
     public function content(Schema $schema): Schema
     {
-        $counts = app(DueBillsQuery::class)->counts($this->tableFilters);
-
         return $schema
             ->components([
                 Html::make(function (): string {
@@ -110,24 +111,41 @@ class DueBillsPage extends Page implements HasTable
                         ['inspection' => $this->ownerInspection],
                     );
                 }),
-                Tabs::make('dueBillTabs')
-                    ->live()
-                    ->persistTabInQueryString('tab')
-                    ->activeTab(fn (): int => $this->activeTab === UnifiedDueLedger::SCOPE_UNAVAILABLE ? 2 : 1)
-                    ->tabs([
-                        Tab::make(__('Due'))
-                            ->badge($counts[UnifiedDueLedger::SCOPE_DUE] ?? 0)
-                            ->icon(Heroicon::OutlinedBanknotes)
-                            ->schema([
-                                EmbeddedTable::make(),
-                            ]),
-                        Tab::make(__('Unavailable'))
-                            ->badge($counts[UnifiedDueLedger::SCOPE_UNAVAILABLE] ?? 0)
-                            ->icon(Heroicon::OutlinedNoSymbol)
-                            ->schema([
-                                EmbeddedTable::make(),
-                            ]),
-                    ]),
+                Html::make(fn (): string => Blade::render(
+                    <<<'BLADE'
+                    <div class="mb-4 flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            wire:click="$set('activeTab', 'due')"
+                            @class([
+                                'fi-btn fi-size-sm',
+                                'fi-btn-color-primary' => $activeTab === 'due',
+                                'fi-btn-color-gray' => $activeTab !== 'due',
+                            ])
+                        >
+                            {{ __('Due') }}
+                            <span class="ms-1 rounded-full bg-white/20 px-1.5 text-xs">{{ $counts['due'] ?? 0 }}</span>
+                        </button>
+                        <button
+                            type="button"
+                            wire:click="$set('activeTab', 'unavailable')"
+                            @class([
+                                'fi-btn fi-size-sm',
+                                'fi-btn-color-warning' => $activeTab === 'unavailable',
+                                'fi-btn-color-gray' => $activeTab !== 'unavailable',
+                            ])
+                        >
+                            {{ __('Unavailable') }}
+                            <span class="ms-1 rounded-full bg-white/20 px-1.5 text-xs">{{ $counts['unavailable'] ?? 0 }}</span>
+                        </button>
+                    </div>
+                    BLADE,
+                    [
+                        'activeTab' => $this->activeTab,
+                        'counts' => app(DueBillsQuery::class)->counts($this->tableFilters),
+                    ],
+                )),
+                EmbeddedTable::make(),
             ]);
     }
 
@@ -328,39 +346,6 @@ class DueBillsPage extends Page implements HasTable
                 ? __('Nothing is excluded from billing for this month with the current filters.')
                 : __('Nothing matches the due criteria for this billing month.'))
             ->emptyStateIcon($isUnavailable ? Heroicon::OutlinedNoSymbol : Heroicon::OutlinedBanknotes);
-    }
-
-    /**
-     * Keep the active tab in sync when Filament tabs change via query string.
-     */
-    public function updated($property): void
-    {
-        if ($property === 'tab' || str_starts_with((string) $property, 'tab')) {
-            // no-op placeholder for Livewire property watchers
-        }
-    }
-
-    public function mount(): void
-    {
-        $tab = request()->query('tab');
-
-        if ($tab === UnifiedDueLedger::SCOPE_UNAVAILABLE || $tab === '2' || $tab === 2) {
-            $this->activeTab = UnifiedDueLedger::SCOPE_UNAVAILABLE;
-        } elseif ($tab === UnifiedDueLedger::SCOPE_DUE || $tab === '1' || $tab === 1) {
-            $this->activeTab = UnifiedDueLedger::SCOPE_DUE;
-        }
-    }
-
-    /**
-     * Called by Filament tab persistence / Livewire when the tab query changes.
-     */
-    public function setActiveBillingTab(string $scope): void
-    {
-        $this->activeTab = $scope === UnifiedDueLedger::SCOPE_UNAVAILABLE
-            ? UnifiedDueLedger::SCOPE_UNAVAILABLE
-            : UnifiedDueLedger::SCOPE_DUE;
-
-        $this->resetTable();
     }
 
     /**
