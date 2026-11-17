@@ -150,7 +150,9 @@ class DueBillOwnerInspector
                     ]);
                 }
 
-                if ($access->last_paid_at !== null && $access->last_paid_at->gte($paidThrough)) {
+                // Match payment-method-access:charge SQL: last_paid_at < paidThrough()->toDateTimeString()
+                if ($access->last_paid_at !== null
+                    && $access->last_paid_at->toDateTimeString() >= $paidThrough->toDateTimeString()) {
                     $reasons[] = __('Already paid for this billing month (last_paid_at=:paid_at, paid through=:paid_through).', [
                         'paid_at' => $access->last_paid_at->toDateTimeString(),
                         'paid_through' => $paidThrough->toDateTimeString(),

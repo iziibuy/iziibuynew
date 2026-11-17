@@ -226,12 +226,6 @@ it('explains why an already-paid owner shop is not billed', function (): void {
 
     $inspection = app(DueBillOwnerInspector::class)->inspect((int) $shop->user_id, $period);
     $entity = $inspection['entities'][0];
-    dump([
-        'paid_at' => $shop->paid_at?->toDateTimeString(),
-        'paid_through' => $period->paidThrough()->toDateTimeString(),
-        'gte' => $shop->paid_at?->gte($period->paidThrough()),
-        'entity' => $entity,
-    ]);
 
     expect($entity['on_due_list'])->toBeFalse()
         ->and($entity['status'])->toBe(DueBillOwnerInspector::STATUS_NOT_DUE)
