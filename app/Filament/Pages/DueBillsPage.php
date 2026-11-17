@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Services\Admin\DueBillMakeAvailable;
 use App\Services\Admin\DueBillOwnerInspector;
 use App\Services\Admin\DueBillsQuery;
 use App\Services\Admin\UnifiedDueLedger;
@@ -11,6 +12,7 @@ use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Html;
@@ -347,6 +349,53 @@ class DueBillsPage extends Page implements HasTable
                             'currency' => 'NOK',
                         ],
                     ])),
+                Action::make('makeAvailable')
+                    ->label(__('Make available'))
+                    ->tooltip(__('Fix blockers so this account appears on the due list'))
+                    ->icon(Heroicon::OutlinedCheckCircle)
+                    ->color('success')
+                    ->visible(fn (): bool => $this->activeTab === UnifiedDueLedger::SCOPE_UNAVAILABLE)
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (array $record): string => __('Make available').' — '.($record['company'] ?? ''))
+                    ->modalDescription(fn (array $record): string => __('This will activate the account when inactive, clear this month’s paid marker, settle an open free trial, and reactivate a subscription when possible.').' '
+                        .(filled($record['unavailable_reason'] ?? null)
+                            ? __('Current reason: :reason', ['reason' => $record['unavailable_reason']])
+                            : ''))
+                    ->modalSubmitActionLabel(__('Make available'))
+                    ->action(function (array $record): void {
+                        $result = app(DueBillMakeAvailable::class)->makeAvailable(
+                            type: (string) ($record['type'] ?? ''),
+                            entityId: (int) ($record['entity_id'] ?? 0),
+                            billingPeriod: app(DueBillsQuery::class)->billingPeriodFromFilters($this->tableFilters),
+                        );
+
+                        $body = collect($result['actions'])
+                            ->merge($result['remaining_reasons'])
+                            ->filter()
+                            ->implode(' ');
+
+                        if ($result['on_due_list']) {
+                            Notification::make()
+                                ->title($result['message'])
+                                ->body($body !== '' ? $body : null)
+                                ->success()
+                                ->send();
+                        } elseif ($result['success'] === false && $result['actions'] === []) {
+                            Notification::make()
+                                ->title($result['message'])
+                                ->body($body !== '' ? $body : null)
+                                ->danger()
+                                ->send();
+                        } else {
+                            Notification::make()
+                                ->title($result['message'])
+                                ->body($body !== '' ? $body : null)
+                                ->warning()
+                                ->send();
+                        }
+
+                        $this->resetTable();
+                    }),
             ])
             ->emptyStateHeading($isUnavailable ? __('No unavailable accounts') : __('No due bills'))
             ->emptyStateDescription($isUnavailable
