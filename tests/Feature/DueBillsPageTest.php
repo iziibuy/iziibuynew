@@ -430,8 +430,13 @@ it('charges the open billing month from the due bills page', function (): void {
                 'label' => $period->label(),
                 'dry_run' => false,
                 'due_count' => 0,
-                'exit_code' => 0,
+                'exit_code' => 1,
                 'output' => '',
+                'entries' => [[
+                    'account' => '#96 dykkerhuset',
+                    'status' => 'failed',
+                    'details' => ['FAIL: The request is invalid | storedCard: The stored card referenced does not exist'],
+                ]],
             ]);
     });
 
@@ -440,7 +445,16 @@ it('charges the open billing month from the due bills page', function (): void {
         ->assertSee('Charge due accounts')
         ->assertSee($period->start->format('F Y'))
         ->callAction(TestAction::make('chargeDueAccounts')->table())
-        ->assertNotified(__('Charge finished for :month', ['month' => $period->start->format('F Y')]));
+        ->assertActionMounted('chargeResult')
+        ->assertSet('chargeResult.entries.0.account', '#96 dykkerhuset');
+
+    expect(view('filament.pages.partials.due-bill-charge-result', [
+        'result' => ['month' => 'October 2026', 'entries' => [[
+            'account' => '#96 dykkerhuset',
+            'status' => 'failed',
+            'details' => ['FAIL: The request is invalid | storedCard: The stored card referenced does not exist'],
+        ]]],
+    ])->render())->toContain('#96 dykkerhuset')->toContain('stored card referenced does not exist');
 });
 
 it('queues due notices only for rows with a valid email and an amount due', function (): void {
@@ -466,4 +480,16 @@ it('renders the due notice email', function (): void {
     ))->render();
 
     expect($html)->toContain('Saffar IT')->toContain('248.75');
+});
+
+it('parses charge command output into per-account entries with the exact error', function (): void {
+    $output = "Payment method access (plugin) monthly charge\n  Mode: live\n\n→ #96 dykkerhuset\n    last_paid_at: 2026-09-30\n    fee: 248.75 NOK\n    FAIL: The request is invalid | storedCard: The stored card referenced does not exist (status set to 1)\n\n→ #5 Other\n    OK: charged. transaction=abc\n";
+
+    $entries = app(DueBillCharger::class)->parseEntries($output);
+
+    expect($entries)->toHaveCount(2)
+        ->and($entries[0]['status'])->toBe('failed')
+        ->and($entries[0]['account'])->toBe('#96 dykkerhuset')
+        ->and(implode(' ', $entries[0]['details']))->toContain('stored card referenced does not exist')
+        ->and($entries[1]['status'])->toBe('charged');
 });

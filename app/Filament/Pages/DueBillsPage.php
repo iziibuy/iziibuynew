@@ -81,6 +81,11 @@ class DueBillsPage extends Page implements HasTable
      */
     public ?array $ownerInspection = null;
 
+    /**
+     * @var array{month: string, entries: list<array{account: string, status: string, details: list<string>}>}|null
+     */
+    public ?array $chargeResult = null;
+
     public function getTitle(): string|Htmlable
     {
         return __('Due bills');
@@ -95,6 +100,18 @@ class DueBillsPage extends Page implements HasTable
             'month' => $period->start->format('F Y'),
             'next' => $nextMonth->format('F Y'),
         ]);
+    }
+
+    public function chargeResultAction(): Action
+    {
+        return Action::make('chargeResult')
+            ->modalHeading(fn (): string => __('Charge result for :month', ['month' => $this->chargeResult['month'] ?? '']))
+            ->modalContent(fn (): View => view('filament.pages.partials.due-bill-charge-result', [
+                'result' => $this->chargeResult ?? ['month' => '', 'entries' => []],
+            ]))
+            ->modalWidth(Width::ThreeExtraLarge)
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel(__('Close'));
     }
 
     public function updatedActiveTab(): void
@@ -551,32 +568,13 @@ class DueBillsPage extends Page implements HasTable
             enterpriseId: $enterpriseId,
         );
 
-        $details = collect(preg_split('/\R/', (string) $result['output']) ?: [])
-            ->map(fn (string $line): string => trim($line))
-            ->filter(fn (string $line): bool => preg_match('/^(→|OK:|SKIP:|FAIL:|ERROR:|No .* matched|Payment method access #|Shop #|Enterprise)/', $line) === 1)
-            ->take(30)
-            ->implode("\n");
+        $this->chargeResult = [
+            'month' => $period->start->format('F Y'),
+            'entries' => $result['entries'] ?? app(DueBillCharger::class)->parseEntries((string) ($result['output'] ?? '')),
+        ];
 
-        $problems = preg_match('/(SKIP:|FAIL:|ERROR:|matched the due criteria)/', (string) $result['output']) === 1;
-        $succeeded = $result['exit_code'] === 0 && ! $problems;
-
-        $title = $succeeded
-            ? __('Charge finished for :month', ['month' => $period->start->format('F Y')])
-            : __('Charge did not complete for :month', ['month' => $period->start->format('F Y')]);
-
-        $notification = Notification::make()
-            ->title($title)
-            ->body($details !== '' ? $details : __('The charge command returned no output.'))
-            ->persistent();
-
-        if ($succeeded) {
-            $notification->success();
-        } else {
-            $notification->warning();
-        }
-
-        $notification->send();
         $this->resetTable();
+        $this->replaceMountedAction('chargeResult');
     }
 
     /**
