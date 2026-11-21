@@ -496,15 +496,25 @@ class DueBillsPage extends Page implements HasTable
             enterpriseId: $enterpriseId,
         );
 
-        $title = $result['exit_code'] === 0
+        $details = collect(preg_split('/\R/', (string) $result['output']) ?: [])
+            ->map(fn (string $line): string => trim($line))
+            ->filter(fn (string $line): bool => preg_match('/^(→|OK:|SKIP:|FAIL:|ERROR:|No .* matched|Payment method access #|Shop #|Enterprise)/', $line) === 1)
+            ->take(30)
+            ->implode("\n");
+
+        $problems = preg_match('/(SKIP:|FAIL:|ERROR:|matched the due criteria)/', (string) $result['output']) === 1;
+        $succeeded = $result['exit_code'] === 0 && ! $problems;
+
+        $title = $succeeded
             ? __('Charge finished for :month', ['month' => $period->start->format('F Y')])
-            : __('Charge finished with failures for :month', ['month' => $period->start->format('F Y')]);
+            : __('Charge did not complete for :month', ['month' => $period->start->format('F Y')]);
 
         $notification = Notification::make()
             ->title($title)
-            ->body(__('Accounts already paid for this month were skipped. Failed charges stay on the due list.'));
+            ->body($details !== '' ? $details : __('The charge command returned no output.'))
+            ->persistent();
 
-        if ($result['exit_code'] === 0) {
+        if ($succeeded) {
             $notification->success();
         } else {
             $notification->warning();
