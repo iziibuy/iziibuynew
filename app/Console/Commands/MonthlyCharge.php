@@ -7,11 +7,10 @@ use App\Models\Shop;
 use App\Payment\Elavon\ElavonShopSubscription;
 use App\Services\RetailerCommission;
 use App\Services\Subscription\MonthlyBillingPeriod;
-use Error;
-use Exception;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use QuickPay\QuickPay;
+use Throwable;
 
 class MonthlyCharge extends Command
 {
@@ -23,7 +22,8 @@ class MonthlyCharge extends Command
     protected $signature = 'monthly:charge
                             {status=0 : Status to set on failed charge (0=deactivate, 1=keep active)}
                             {--month= : Bill for this calendar month (YYYY-MM), default: current month}
-                            {--shop= : Only process this shop ID}';
+                            {--shop= : Only process this shop ID}
+                            {--dry-run : List due shops without charging}';
 
     /**
      * The console command description.
@@ -61,9 +61,6 @@ class MonthlyCharge extends Command
         }
         $this->newLine();
 
-        $api_key = setting('payment.api_key');
-        $callback = route('callback.subscription');
-        $quickpay = new QuickPay(":{$api_key}", ["QuickPay-Callback-Url:{$callback}"]);
         $shops = Shop::query()
             ->where('status', 1)
             ->where(fn ($query) => $query
@@ -81,6 +78,21 @@ class MonthlyCharge extends Command
 
         $this->info('Found '.$shops->count().' shop(s) to process.');
         $this->newLine();
+
+        if ((bool) $this->option('dry-run')) {
+            foreach ($shops as $shop) {
+                $this->line('→ #'.$shop->id.' '.($shop->company_name ?: $shop->user_name ?: 'Shop'));
+                $this->line('    paid_at: '.($shop->paid_at?->toDateTimeString() ?? 'null'));
+                $this->comment('    DRY-RUN: would charge now.');
+                $this->newLine();
+            }
+
+            return self::SUCCESS;
+        }
+
+        $api_key = setting('payment.api_key');
+        $callback = route('callback.subscription');
+        $quickpay = new QuickPay(":{$api_key}", ["QuickPay-Callback-Url:{$callback}"]);
 
         foreach ($shops as $shop) {
             try {
@@ -175,9 +187,13 @@ class MonthlyCharge extends Command
                         ]);
                     }
                 }
-            } catch (Exception $e) {
-                continue;
-            } catch (Error $e) {
+            } catch (Throwable $e) {
+                if ((int) $this->argument('status') === 1 && ! $billingPeriod->isPaidThrough($shop->fresh()?->paid_at)) {
+                    $shop->update([
+                        'status' => 1,
+                    ]);
+                }
+
                 continue;
             }
         }

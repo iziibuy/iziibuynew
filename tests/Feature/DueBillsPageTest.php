@@ -7,6 +7,7 @@ use App\Models\Enterprise;
 use App\Models\PaymentMethodAccess;
 use App\Models\Shop;
 use App\Models\User;
+use App\Services\Admin\DueBillCharger;
 use App\Services\Admin\DueBillOwnerInspector;
 use App\Services\Admin\DueBillsQuery;
 use App\Services\Admin\UnifiedDueLedger;
@@ -56,7 +57,7 @@ function dueBillsShop(array $attributes = []): Shop
         'monthly_cost' => 299,
         'establishment_cost' => 0,
         'per_user_fee' => 0,
-        'paid_at' => now()->subMonth()->endOfMonth(),
+        'paid_at' => now()->subMonths(2)->endOfMonth(),
     ], $attributes));
 
     $shop->createMetas([
@@ -86,14 +87,14 @@ function dueBillsPlugin(array $attributes = []): PaymentMethodAccess
         'fee' => 50,
         'subscriptionMethod' => 'elavon',
         'status' => 1,
-        'last_paid_at' => now()->subMonth()->endOfMonth(),
+        'last_paid_at' => now()->subMonths(2)->endOfMonth(),
     ], $attributes));
 
     $access->subscription()->create([
         'key' => 'plugin-card-'.uniqid(),
         'fee' => 50,
         'status' => 1,
-        'paid_at' => now()->subMonth()->endOfMonth(),
+        'paid_at' => now()->subMonths(2)->endOfMonth(),
     ]);
 
     return $access->fresh(['subscription', 'user']);
@@ -108,14 +109,14 @@ function dueBillsEnterprise(array $attributes = []): Enterprise
         'status' => 1,
         'subscription_id' => 'enterprise-card-'.uniqid(),
         'subscription_fee' => 450,
-        'paid_at' => now()->subMonth()->endOfMonth(),
+        'paid_at' => now()->subMonths(2)->endOfMonth(),
     ], $attributes));
 
     $enterprise->subscription()->create([
         'key' => 'enterprise-sub-'.uniqid(),
         'fee' => 450,
         'status' => 1,
-        'paid_at' => now()->subMonth()->endOfMonth(),
+        'paid_at' => now()->subMonths(2)->endOfMonth(),
     ]);
 
     return $enterprise->fresh(['subscription']);
@@ -277,7 +278,7 @@ it('checks an owner user id from the due bills page', function (): void {
 
 it('can make an owner entity unavailable from the owner check', function (): void {
     $admin = dueBillsAdmin();
-    $period = MonthlyBillingPeriod::resolve();
+    $period = MonthlyBillingPeriod::openChargeMonth();
     $shop = dueBillsShop(['company_name' => 'Owner Toggle Shop']);
 
     Livewire::actingAs($admin)
@@ -409,4 +410,32 @@ it('switches the table between due and unavailable tabs', function (): void {
         ->assertSet('activeTab', UnifiedDueLedger::SCOPE_UNAVAILABLE)
         ->assertSee('Paid Shop Co')
         ->assertSee('Already paid');
+});
+
+it('charges the open billing month from the due bills page', function (): void {
+    $admin = dueBillsAdmin();
+    $period = MonthlyBillingPeriod::openChargeMonth();
+
+    $this->mock(DueBillCharger::class, function ($mock) use ($period): void {
+        $mock->shouldReceive('charge')
+            ->once()
+            ->withArgs(function (MonthlyBillingPeriod $billingPeriod): bool {
+                return $billingPeriod->start->toDateString() === MonthlyBillingPeriod::openChargeMonth()->start->toDateString();
+            })
+            ->andReturn([
+                'month' => $period->start->format('Y-m'),
+                'label' => $period->label(),
+                'dry_run' => false,
+                'due_count' => 0,
+                'exit_code' => 0,
+                'output' => '',
+            ]);
+    });
+
+    Livewire::actingAs($admin)
+        ->test(DueBillsPage::class)
+        ->assertSee('Charge due accounts')
+        ->assertSee($period->start->format('F Y'))
+        ->callAction(TestAction::make('chargeDueAccounts')->table())
+        ->assertNotified(__('Charge finished for :month', ['month' => $period->start->format('F Y')]));
 });

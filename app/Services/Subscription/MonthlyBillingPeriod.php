@@ -77,4 +77,15 @@ final class MonthlyBillingPeriod
 
         return self::forMonth($reference);
     }
+
+    /**
+     * Month collected while the following month is still in progress.
+     * During November this is October. On 1 December it becomes November.
+     */
+    public static function openChargeMonth(?Carbon $reference = null): self
+    {
+        $reference ??= today();
+
+        return self::forMonth($reference->copy()->subMonth());
+    }
 }

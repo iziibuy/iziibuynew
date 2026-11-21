@@ -80,6 +80,10 @@ class DueBillsQuery
             $month = $month['month'] ?? null;
         }
 
-        return MonthlyBillingPeriod::resolve(is_string($month) && filled($month) ? $month : null);
+        if (is_string($month) && filled($month)) {
+            return MonthlyBillingPeriod::resolve($month);
+        }
+
+        return MonthlyBillingPeriod::openChargeMonth();
     }
 }

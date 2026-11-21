@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Services\Admin\DueBillCharger;
 use App\Services\Admin\DueBillMakeAvailable;
 use App\Services\Admin\DueBillOwnerInspector;
 use App\Services\Admin\DueBillsQuery;
@@ -86,7 +87,13 @@ class DueBillsPage extends Page implements HasTable
 
     public function getSubheading(): string|Htmlable|null
     {
-        return __('Shops, plugins, and enterprise subscriptions for the selected billing month.');
+        $period = app(DueBillsQuery::class)->billingPeriodFromFilters($this->tableFilters);
+        $nextMonth = $period->start->copy()->addMonth();
+
+        return __('Due for :month. A successful charge leaves this list and shows again for :next after :next ends. Failed charges stay here.', [
+            'month' => $period->start->format('F Y'),
+            'next' => $nextMonth->format('F Y'),
+        ]);
     }
 
     public function updatedActiveTab(): void
@@ -251,6 +258,28 @@ class DueBillsPage extends Page implements HasTable
             ->defaultPaginationPageOption(25)
             ->striped()
             ->headerActions([
+                Action::make('chargeDueAccounts')
+                    ->label(__('Charge due accounts'))
+                    ->icon(Heroicon::OutlinedCreditCard)
+                    ->color('danger')
+                    ->visible(fn (): bool => $this->activeTab === UnifiedDueLedger::SCOPE_DUE)
+                    ->requiresConfirmation()
+                    ->modalHeading(__('Charge due accounts'))
+                    ->modalDescription(function (): string {
+                        $period = app(DueBillsQuery::class)->billingPeriodFromFilters($this->tableFilters);
+                        $count = app(DueBillsQuery::class)->counts(billingPeriod: $period)[UnifiedDueLedger::SCOPE_DUE];
+                        $nextMonth = $period->start->copy()->addMonth()->format('F Y');
+
+                        return __('This charges :count due account(s) for :month. Accounts already paid for :month are skipped. Successful charges leave this list and show again for :next after :next ends. Failed charges stay on this list.', [
+                            'count' => $count,
+                            'month' => $period->start->format('F Y'),
+                            'next' => $nextMonth,
+                        ]);
+                    })
+                    ->modalSubmitActionLabel(__('Charge now'))
+                    ->action(function (): void {
+                        $this->chargeBillingPeriod();
+                    }),
                 Action::make('inspectOwner')
                     ->label(__('Check owner'))
                     ->icon(Heroicon::OutlinedMagnifyingGlass)
@@ -332,7 +361,8 @@ class DueBillsPage extends Page implements HasTable
                         Select::make('month')
                             ->label(__('Month'))
                             ->options($this->monthOptions())
-                            ->placeholder(__('Current month'))
+                            ->placeholder(__('Last month'))
+                            ->helperText(__('Leave empty to use last month. Accounts already paid for that month stay off this list until the next month ends.'))
                             ->native(false),
                     ])
                     ->indicateUsing(function (array $state): array {
@@ -363,6 +393,33 @@ class DueBillsPage extends Page implements HasTable
                             'currency' => 'NOK',
                         ],
                     ])),
+                Action::make('chargeAccount')
+                    ->label(__('Charge'))
+                    ->tooltip(__('Charge this account for the selected month'))
+                    ->icon(Heroicon::OutlinedCreditCard)
+                    ->color('danger')
+                    ->visible(fn (): bool => $this->activeTab === UnifiedDueLedger::SCOPE_DUE)
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (array $record): string => __('Charge').' — '.($record['company'] ?? ''))
+                    ->modalDescription(function (array $record): string {
+                        $period = app(DueBillsQuery::class)->billingPeriodFromFilters($this->tableFilters);
+
+                        return __('Charge :company for :month. If this month is already paid, it is skipped. A failed charge stays on the due list.', [
+                            'company' => (string) ($record['company'] ?? ''),
+                            'month' => $period->start->format('F Y'),
+                        ]);
+                    })
+                    ->modalSubmitActionLabel(__('Charge now'))
+                    ->action(function (array $record): void {
+                        $type = (string) ($record['type'] ?? '');
+                        $entityId = (int) ($record['entity_id'] ?? 0);
+
+                        $this->chargeBillingPeriod(
+                            shopId: $type === UnifiedDueLedger::TYPE_SHOP ? $entityId : null,
+                            pluginId: $type === UnifiedDueLedger::TYPE_PLUGIN ? $entityId : null,
+                            enterpriseId: $type === UnifiedDueLedger::TYPE_ENTERPRISE ? $entityId : null,
+                        );
+                    }),
                 Action::make('makeAvailable')
                     ->label(__('Make available'))
                     ->tooltip(__('Fix blockers so this account appears on the due list'))
@@ -427,6 +484,34 @@ class DueBillsPage extends Page implements HasTable
         }
 
         return $options;
+    }
+
+    protected function chargeBillingPeriod(?int $shopId = null, ?int $pluginId = null, ?int $enterpriseId = null): void
+    {
+        $period = app(DueBillsQuery::class)->billingPeriodFromFilters($this->tableFilters);
+        $result = app(DueBillCharger::class)->charge(
+            billingPeriod: $period,
+            shopId: $shopId,
+            pluginId: $pluginId,
+            enterpriseId: $enterpriseId,
+        );
+
+        $title = $result['exit_code'] === 0
+            ? __('Charge finished for :month', ['month' => $period->start->format('F Y')])
+            : __('Charge finished with failures for :month', ['month' => $period->start->format('F Y')]);
+
+        $notification = Notification::make()
+            ->title($title)
+            ->body(__('Accounts already paid for this month were skipped. Failed charges stay on the due list.'));
+
+        if ($result['exit_code'] === 0) {
+            $notification->success();
+        } else {
+            $notification->warning();
+        }
+
+        $notification->send();
+        $this->resetTable();
     }
 
     /**

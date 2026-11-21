@@ -54,7 +54,7 @@ function makeAvailableShop(array $attributes = []): Shop
         'monthly_cost' => 299,
         'establishment_cost' => 0,
         'per_user_fee' => 0,
-        'paid_at' => now()->subMonth()->endOfMonth(),
+        'paid_at' => now()->subMonths(2)->endOfMonth(),
     ], $attributes));
 
     $shop->createMetas([
@@ -84,14 +84,14 @@ function makeAvailablePlugin(array $attributes = []): PaymentMethodAccess
         'fee' => 50,
         'subscriptionMethod' => 'elavon',
         'status' => 1,
-        'last_paid_at' => now()->subMonth()->endOfMonth(),
+        'last_paid_at' => now()->subMonths(2)->endOfMonth(),
     ], $attributes));
 
     $access->subscription()->create([
         'key' => 'plugin-card-'.uniqid(),
         'fee' => 50,
         'status' => 1,
-        'paid_at' => now()->subMonth()->endOfMonth(),
+        'paid_at' => now()->subMonths(2)->endOfMonth(),
     ]);
 
     return $access->fresh(['subscription', 'user']);
@@ -212,7 +212,7 @@ it('moves a due shop onto the unavailable list by marking it paid', function ():
 
 it('makes a due row unavailable from the due bills page', function (): void {
     $admin = makeAvailableAdmin();
-    $period = MonthlyBillingPeriod::resolve();
+    $period = MonthlyBillingPeriod::openChargeMonth();
     $shop = makeAvailableShop(['company_name' => 'Exclude From Due Co']);
 
     Livewire::actingAs($admin)
