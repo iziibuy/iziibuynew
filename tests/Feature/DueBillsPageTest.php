@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Filament\Pages\DueBillsPage;
+use App\Mail\DueNoticeMail;
 use App\Models\Enterprise;
 use App\Models\PaymentMethodAccess;
 use App\Models\Shop;
@@ -10,10 +11,12 @@ use App\Models\User;
 use App\Services\Admin\DueBillCharger;
 use App\Services\Admin\DueBillOwnerInspector;
 use App\Services\Admin\DueBillsQuery;
+use App\Services\Admin\DueNoticeSender;
 use App\Services\Admin\UnifiedDueLedger;
 use App\Services\Subscription\MonthlyBillingPeriod;
 use Database\Seeders\RoleSeeder;
 use Filament\Actions\Testing\TestAction;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 
@@ -438,4 +441,29 @@ it('charges the open billing month from the due bills page', function (): void {
         ->assertSee($period->start->format('F Y'))
         ->callAction(TestAction::make('chargeDueAccounts')->table())
         ->assertNotified(__('Charge finished for :month', ['month' => $period->start->format('F Y')]));
+});
+
+it('queues due notices only for rows with a valid email and an amount due', function (): void {
+    Mail::fake();
+
+    $rows = collect([
+        ['email' => 'a@example.com', 'due_amount' => 248.75, 'name' => 'A', 'company' => 'A Co', 'type_label' => 'Plugin'],
+        ['email' => 'A@example.com', 'due_amount' => 248.75, 'name' => 'A', 'company' => 'A Co 2', 'type_label' => 'Shop'],
+        ['email' => 'not-an-email', 'due_amount' => 10, 'name' => 'B', 'company' => 'B Co', 'type_label' => 'Shop'],
+        ['email' => 'c@example.com', 'due_amount' => 0, 'name' => 'C', 'company' => 'C Co', 'type_label' => 'Shop'],
+    ]);
+
+    $result = app(DueNoticeSender::class)->send($rows, MonthlyBillingPeriod::resolve('2026-10'));
+
+    expect($result)->toBe(['sent' => 1, 'skipped' => 2]);
+    Mail::assertQueued(DueNoticeMail::class, 1);
+});
+
+it('renders the due notice email', function (): void {
+    $html = (new DueNoticeMail(
+        ['name' => 'Emir', 'company' => 'Saffar IT', 'type_label' => 'Plugin', 'monthly_price' => 199, 'due_amount' => 248.75, 'last_paid_at' => '2026-09-30 23:59:00'],
+        'October 2026',
+    ))->render();
+
+    expect($html)->toContain('Saffar IT')->toContain('248.75');
 });

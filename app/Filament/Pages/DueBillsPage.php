@@ -8,6 +8,7 @@ use App\Services\Admin\DueBillCharger;
 use App\Services\Admin\DueBillMakeAvailable;
 use App\Services\Admin\DueBillOwnerInspector;
 use App\Services\Admin\DueBillsQuery;
+use App\Services\Admin\DueNoticeSender;
 use App\Services\Admin\UnifiedDueLedger;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -280,6 +281,27 @@ class DueBillsPage extends Page implements HasTable
                     ->action(function (): void {
                         $this->chargeBillingPeriod();
                     }),
+                Action::make('emailAllDue')
+                    ->label(__('Email due notices'))
+                    ->icon(Heroicon::OutlinedEnvelope)
+                    ->color('gray')
+                    ->visible(fn (): bool => $this->activeTab === UnifiedDueLedger::SCOPE_DUE)
+                    ->requiresConfirmation()
+                    ->modalHeading(__('Email due notices'))
+                    ->modalDescription(__('Sends a payment-due email to every account currently shown on the due list (current filters and search apply). Accounts without a valid email are skipped.'))
+                    ->modalSubmitActionLabel(__('Send emails'))
+                    ->action(function (): void {
+                        $period = app(DueBillsQuery::class)->billingPeriodFromFilters($this->tableFilters);
+                        $rows = app(DueBillsQuery::class)->rows(
+                            filters: $this->tableFilters,
+                            sortColumn: null,
+                            sortDirection: null,
+                            search: $this->tableSearch,
+                            billingPeriod: $period,
+                        );
+
+                        $this->notifyDueNotices(app(DueNoticeSender::class)->send($rows, $period));
+                    }),
                 Action::make('inspectOwner')
                     ->label(__('Check owner'))
                     ->icon(Heroicon::OutlinedMagnifyingGlass)
@@ -420,6 +442,21 @@ class DueBillsPage extends Page implements HasTable
                             enterpriseId: $type === UnifiedDueLedger::TYPE_ENTERPRISE ? $entityId : null,
                         );
                     }),
+                Action::make('emailDueNotice')
+                    ->label(__('Email'))
+                    ->tooltip(__('Email this account its due notice'))
+                    ->icon(Heroicon::OutlinedEnvelope)
+                    ->color('gray')
+                    ->visible(fn (): bool => $this->activeTab === UnifiedDueLedger::SCOPE_DUE)
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (array $record): string => __('Email due notice').' — '.($record['company'] ?? ''))
+                    ->modalDescription(fn (array $record): string => __('Send a payment-due email to :email?', ['email' => $record['email'] ?? '-']))
+                    ->modalSubmitActionLabel(__('Send email'))
+                    ->action(function (array $record): void {
+                        $period = app(DueBillsQuery::class)->billingPeriodFromFilters($this->tableFilters);
+
+                        $this->notifyDueNotices(app(DueNoticeSender::class)->send(collect([$record]), $period));
+                    }),
                 Action::make('makeAvailable')
                     ->label(__('Make available'))
                     ->tooltip(__('Fix blockers so this account appears on the due list'))
@@ -484,6 +521,24 @@ class DueBillsPage extends Page implements HasTable
         }
 
         return $options;
+    }
+
+    /**
+     * @param  array{sent: int, skipped: int}  $result
+     */
+    protected function notifyDueNotices(array $result): void
+    {
+        $notification = Notification::make()
+            ->title($result['sent'] > 0
+                ? __(':count due notice(s) queued', ['count' => $result['sent']])
+                : __('No due notices sent'))
+            ->body($result['skipped'] > 0
+                ? __(':count account(s) skipped (no valid email or nothing due).', ['count' => $result['skipped']])
+                : null);
+
+        $result['sent'] > 0 ? $notification->success() : $notification->warning();
+
+        $notification->send();
     }
 
     protected function chargeBillingPeriod(?int $shopId = null, ?int $pluginId = null, ?int $enterpriseId = null): void
