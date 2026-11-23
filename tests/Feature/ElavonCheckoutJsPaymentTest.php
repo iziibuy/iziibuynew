@@ -191,6 +191,26 @@ it('renders the checkoutjs payment page for pending checkoutjs orders', function
         ->assertSee('Jane Doe', false);
 });
 
+it('adds apple pay and google pay buttons only when enabled on the plugin', function (): void {
+    [, $access, $api] = createCheckoutJsPlugin();
+    $order = createCheckoutJsOrder($access, $api);
+    $publicId = $order->uuid ?? $order->ulid;
+
+    $this->get(route('elavon.checkoutjs.pay', $publicId))
+        ->assertSuccessful()
+        ->assertDontSee('id="google-pay-button"', false)
+        ->assertDontSee('id="apple-pay-button"', false);
+
+    $access->update(['wallet_google_pay' => true, 'wallet_apple_pay' => true]);
+    config()->set('services.enterprise_elavon.checkoutjs_apple_pay_domain', 'pay.example.com');
+
+    $this->get(route('elavon.checkoutjs.pay', $publicId))
+        ->assertSuccessful()
+        ->assertSee('id="google-pay-button"', false)
+        ->assertSee('id="apple-pay-button"', false)
+        ->assertSee('pay.example.com', false);
+});
+
 it('does not render checkoutjs page for hosted-mode buttons', function (): void {
     [, $access, $api] = createCheckoutJsPlugin(apiOverrides: [
         'elavon_link_mode' => PaymentApi::ELAVON_LINK_MODE_HOSTED,

@@ -120,6 +120,17 @@ class ShopResource extends Resource
                                             ->helperText(__('Uses ELAVON_ENTERPRISE_SANDBOX_* from .env. When off, uses ELAVON_ENTERPRISE_* production keys.'))
                                             ->default(false),
                                     ]),
+                                Section::make(__('Checkout wallets'))
+                                    ->description(__('Digital wallet buttons on this shop\'s CheckoutJS payment page.'))
+                                    ->columns(['default' => 1, 'md' => 2])
+                                    ->schema([
+                                        Toggle::make('wallet_google_pay')
+                                            ->label(__('Google Pay on checkout'))
+                                            ->helperText(__('Shows the Google Pay button on CheckoutJS. Enable Google Pay in the Elavon portal first.')),
+                                        Toggle::make('wallet_apple_pay')
+                                            ->label(__('Apple Pay on checkout'))
+                                            ->helperText(__('Shows the Apple Pay button on CheckoutJS. Needs Apple Pay enabled and the domain registered with Elavon.')),
+                                    ]),
                                 Section::make(__('Subscription details'))
                                     ->columns(['default' => 1, 'md' => 2])
                                     ->schema([

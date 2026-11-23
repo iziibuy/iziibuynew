@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Payment\Elavon\CheckoutJsTheme;
+use App\Payment\Elavon\CheckoutJsWallets;
 use App\Payment\Elavon\ElavonPayment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -47,6 +48,7 @@ class ShopElavonCheckoutJsController extends Controller
         $publicId = (string) $order->uuid;
 
         return view('payments.elavon-checkoutjs', [
+            'wallets' => CheckoutJsWallets::forShop($order->shop),
             'order' => $this->checkoutViewOrder($order),
             'sessionId' => $session['payment_id'] ?? $order->payment_id,
             'hostedFieldsScriptUrl' => $elavon->hostedFieldsScriptUrl(),

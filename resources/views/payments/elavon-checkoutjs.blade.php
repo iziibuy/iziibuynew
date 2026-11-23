@@ -2,6 +2,8 @@
     $previewMode = $previewMode ?? false;
     $companyNameFallback = $companyNameFallback ?? $companyName;
     $subscriptionIntervalDays = $subscriptionIntervalDays ?? null;
+    $wallets = $wallets ?? ['googlePay' => false, 'applePay' => false, 'applePayDomain' => ''];
+    $showWallets = ! $previewMode && ! $subscriptionIntervalDays && ($wallets['googlePay'] || $wallets['applePay']);
 @endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
@@ -721,6 +723,10 @@
         }
 
         .hidden { display: none !important; }
+        .wallets { display: grid; gap: 10px; margin-bottom: 18px; }
+        .wallets-divider { align-items: center; color: #6b7a73; display: flex; font-size: 13px; gap: 12px; margin-top: 4px; }
+        .wallets-divider::before, .wallets-divider::after { background: #dfe6e2; content: ''; flex: 1; height: 1px; }
+        .wallet-button { min-height: 0; }
 
         @keyframes shimmer {
             0% { background-position: 200% 0; }
@@ -881,6 +887,18 @@
                     <div class="row-2"><span></span><span></span></div>
                 </div>
 
+                @if ($showWallets)
+                    <div id="wallets" class="wallets hidden">
+                        @if ($wallets['applePay'])
+                            <div id="apple-pay-button" class="wallet-button"></div>
+                        @endif
+                        @if ($wallets['googlePay'])
+                            <div id="google-pay-button" class="wallet-button"></div>
+                        @endif
+                        <div class="wallets-divider">{{ __('or pay with card') }}</div>
+                    </div>
+                @endif
+
                 <form id="checkout-form" @class(['hidden' => ! $previewMode]) autocomplete="off" novalidate>
                     <div class="fields">
                         <div class="field">
@@ -1008,6 +1026,7 @@
             const sessionId = @json($sessionId);
             const completeUrl = @json($completeUrl);
             const tokenizeCard = @json((bool) $subscriptionIntervalDays);
+            const wallets = @json($showWallets ? $wallets : null);
             const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             const billTo = {
                 fullName: @json($order->customer_name),
@@ -1021,6 +1040,8 @@
             const shopperEmailAddress = @json($order->customer_email ?: '');
 
             const form = document.getElementById('checkout-form');
+            const walletsEl = document.getElementById('wallets');
+            const walletFieldTypes = ['googlePayButton', 'applePayButton'];
             const skeleton = document.getElementById('fields-skeleton');
             const payButton = document.getElementById('pay-button');
             const statusEl = document.getElementById('status');
@@ -1130,6 +1151,19 @@
             }
 
             function messageHandler(message) {
+                if (walletFieldTypes.includes(message.fieldType)) {
+                    if (message.type === 'fieldLoaded' && walletsEl) {
+                        walletsEl.classList.remove('hidden');
+                    }
+
+                    if (message.type === 'error') {
+                        setPaying(false);
+                        setStatus(message.message || 'Wallet payment failed. Please try again or use a card.', 'error');
+
+                        return;
+                    }
+                }
+
                 if (message.type === 'fieldFocusChanged' || (message.fieldType && typeof message.isFocused === 'boolean' && message.type !== 'fieldValueChanged' && message.type !== 'fieldValidityChanged')) {
                     markFieldFocus(message.fieldType, message.isFocused === true);
                     if (message.isFocused === true && elavonHostedFields) {
@@ -1208,14 +1242,36 @@
                     return;
                 }
 
+                const fields = {
+                    cardholderName: { wrapperId: 'cardholder-name', className: 'field-height' },
+                    cardNumber: { wrapperId: 'card-number', className: 'stripe-input' },
+                    cardExpirationDate: { wrapperId: 'card-exp-date', className: 'stripe-input' },
+                    cardCvv: { wrapperId: 'card-cvv', className: 'stripe-input' },
+                };
+
+                if (wallets && wallets.googlePay) {
+                    fields.googlePayButton = {
+                        wrapperId: 'google-pay-button',
+                        buttonColor: 'black',
+                        buttonType: 'pay',
+                        buttonSizeMode: 'fill',
+                        buttonLocale: document.documentElement.lang.slice(0, 2) || 'en',
+                    };
+                }
+
+                if (wallets && wallets.applePay) {
+                    fields.applePayButton = {
+                        wrapperId: 'apple-pay-button',
+                        registeredDomain: wallets.applePayDomain,
+                        buttonstyle: 'black',
+                        type: 'pay',
+                        locale: document.documentElement.lang || 'en-US',
+                    };
+                }
+
                 elavonHostedFields = new window.ElavonHostedFields({
                     sessionId: sessionId,
-                    fields: {
-                        cardholderName: { wrapperId: 'cardholder-name', className: 'field-height' },
-                        cardNumber: { wrapperId: 'card-number', className: 'stripe-input' },
-                        cardExpirationDate: { wrapperId: 'card-exp-date', className: 'stripe-input' },
-                        cardCvv: { wrapperId: 'card-cvv', className: 'stripe-input' },
-                    },
+                    fields: fields,
                     styles: {
                         'input': {
                             'width': '100%',
@@ -1253,7 +1309,8 @@
                 }
 
                 const state = elavonHostedFields.getState();
-                if (!state.isValid) {
+                const cardFieldsValid = Object.values(fieldTypes).every((type) => state.fields?.[type]?.isValid);
+                if (!cardFieldsValid) {
                     Object.keys(fieldTypes).forEach((key) => {
                         const type = fieldTypes[key];
                         if (!state.fields?.[type]?.isValid) {

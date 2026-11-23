@@ -121,6 +121,12 @@ class PaymentMethodAccessForm
                                                 'test' => 'test',
                                             ])
                                             ->default('live'),
+                                        Toggle::make('wallet_google_pay')
+                                            ->label(__('Google Pay on checkout'))
+                                            ->helperText(__('Shows the Google Pay button on CheckoutJS. Enable Google Pay in the Elavon portal first.')),
+                                        Toggle::make('wallet_apple_pay')
+                                            ->label(__('Apple Pay on checkout'))
+                                            ->helperText(__('Shows the Apple Pay button on CheckoutJS. Needs Apple Pay enabled and the domain registered with Elavon.')),
                                         TextInput::make('quickpay_api_key')
                                             ->label(__('words.shop_api_kay'))
                                             ->maxLength(255)

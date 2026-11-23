@@ -69,6 +69,9 @@ return [
         'disable_hpp_3ds' => filter_var(env('ELAVON_HPP_DISABLE_3DS', false), FILTER_VALIDATE_BOOLEAN),
         'charge_on_server' => filter_var(env('ELAVON_HPP_CHARGE_ON_SERVER', false), FILTER_VALIDATE_BOOLEAN),
         'hpp_origin_url' => env('ELAVON_HPP_ORIGIN_URL'),
+        // Digital wallet buttons on CheckoutJS are toggled per shop / plugin (wallet_google_pay, wallet_apple_pay).
+        // Optional override for the domain registered with Elavon for Apple Pay (defaults to the page host).
+        'checkoutjs_apple_pay_domain' => env('ELAVON_CHECKOUTJS_APPLE_PAY_DOMAIN'),
         // Credentials saved on a shop / payment_method_access when its free trial starts.
         'trial_credentials' => [
             'merchant_alias' => env('ELAVON_TRIAL_MERCHANT_ALIAS'),
