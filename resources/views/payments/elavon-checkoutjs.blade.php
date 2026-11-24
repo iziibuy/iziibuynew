@@ -1151,6 +1151,10 @@
             }
 
             function messageHandler(message) {
+                if (wallets && walletFieldTypes.includes(message.fieldType)) {
+                    console.info('[CheckoutJS wallet]', message);
+                }
+
                 if (walletFieldTypes.includes(message.fieldType)) {
                     if (message.type === 'fieldLoaded' && walletsEl) {
                         walletsEl.classList.remove('hidden');
@@ -1241,6 +1245,8 @@
                     revealForm();
                     return;
                 }
+
+                console.info('[CheckoutJS wallet] config', wallets);
 
                 const fields = {
                     cardholderName: { wrapperId: 'cardholder-name', className: 'field-height' },
