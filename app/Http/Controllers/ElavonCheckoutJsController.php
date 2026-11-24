@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ExternalOrder;
+use App\Models\PaymentMethodAccess;
 use App\Payment\Elavon\ApiElavonPayment;
 use App\Payment\Elavon\CheckoutJsTheme;
 use App\Payment\Elavon\CheckoutJsWallets;
@@ -48,7 +49,7 @@ class ElavonCheckoutJsController extends Controller
         $theme = CheckoutJsTheme::fromApi($order->paymentApi);
 
         return view('payments.elavon-checkoutjs', [
-            'wallets' => CheckoutJsWallets::forPaymentMethodAccess($access),
+            'wallets' => $this->wallets($order, $access),
             'order' => $order,
             'sessionId' => $session['payment_id'] ?? $order->payment_id,
             'hostedFieldsScriptUrl' => $elavon->hostedFieldsScriptUrl(),
@@ -119,5 +120,22 @@ class ElavonCheckoutJsController extends Controller
     protected function orderPublicId(ExternalOrder $order): string
     {
         return (string) ($order->uuid ?? $order->ulid ?? $order->id);
+    }
+
+    /**
+     * @return array{googlePay: bool, applePay: bool, applePayDomain: string}
+     */
+    protected function wallets(ExternalOrder $order, ?PaymentMethodAccess $access): array
+    {
+        $test = session('elavon_checkoutjs_test');
+
+        if (is_array($test) && (int) ($test['order_id'] ?? 0) === (int) $order->id && is_array($test['wallets'] ?? null)) {
+            return array_merge(CheckoutJsWallets::forPaymentMethodAccess(null), [
+                'googlePay' => (bool) ($test['wallets']['googlePay'] ?? false),
+                'applePay' => (bool) ($test['wallets']['applePay'] ?? false),
+            ]);
+        }
+
+        return CheckoutJsWallets::forPaymentMethodAccess($access);
     }
 }

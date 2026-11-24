@@ -20,8 +20,12 @@ use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -35,101 +39,153 @@ class PaymentapisRelationManager extends RelationManager
 
     public function form(Schema $schema): Schema
     {
+        $checkoutJsVisible = fn (Get $get): bool => $this->ownerIsElavon()
+            && $get('elavon_link_mode') === PaymentApi::ELAVON_LINK_MODE_CHECKOUTJS;
+
         return $schema
+            ->columns(1)
             ->components([
-                TextInput::make('key')
-                    ->label(__('Source key'))
-                    ->required()
-                    ->maxLength(255)
-                    ->unique(PaymentApi::class, 'key', ignoreRecord: true)
-                    ->copyable()
-                    ->helperText(__('Used as source_key in the Iziipay JavaScript SDK and API requests.')),
-                TextInput::make('domain')
-                    ->label(__('Domain'))
-                    ->url()
-                    ->required()
-                    ->maxLength(255),
-                TextInput::make('success_redirect_url')
-                    ->label(__('Success redirect URL'))
-                    ->url()
-                    ->required()
-                    ->maxLength(255),
-                TextInput::make('failed_redirect_url')
-                    ->label(__('Failed redirect URL'))
-                    ->url()
-                    ->required()
-                    ->maxLength(255),
-                TextInput::make('cancel_callback_url')
-                    ->label(__('Cancel callback URL'))
-                    ->url()
-                    ->maxLength(255),
-                Toggle::make('status')
-                    ->label(__('Active'))
-                    ->default(true),
-                Select::make('elavon_link_mode')
-                    ->label(__('Elavon payment link'))
-                    ->options([
-                        PaymentApi::ELAVON_LINK_MODE_HOSTED => __('Hosted payment page (Elavon HPP redirect)'),
-                        PaymentApi::ELAVON_LINK_MODE_CHECKOUTJS => __('Own CheckoutJS page (card fields on our payment page)'),
-                    ])
-                    ->default(PaymentApi::ELAVON_LINK_MODE_HOSTED)
-                    ->native(false)
-                    ->live()
-                    ->helperText(__('Hosted sends customers to Elavon. CheckoutJS sends your branded payment page using Elavon Hosted Fields.'))
-                    ->visible(fn (): bool => $this->ownerIsElavon()),
-                Section::make(__('Elavon checkout page'))
-                    ->description(__('Customize the branded CheckoutJS payment page customers see.'))
-                    ->columns(2)
-                    ->visible(fn (Get $get): bool => $this->ownerIsElavon()
-                        && $get('elavon_link_mode') === PaymentApi::ELAVON_LINK_MODE_CHECKOUTJS)
-                    ->schema([
-                        TextInput::make('checkoutjs_appearance.company_name')
-                            ->label(__('Company name'))
-                            ->maxLength(120),
-                        FileUpload::make('checkoutjs_appearance.logo')
-                            ->label(__('Logo'))
-                            ->image()
-                            ->disk(CheckoutJsTheme::disk())
-                            ->directory('checkoutjs-logos')
-                            ->maxSize(2048)
-                            ->helperText(__('PNG, JPG, or WebP. Up to 2 MB.')),
-                        ColorPicker::make('checkoutjs_appearance.primary_color')
-                            ->label(__('Primary color'))
-                            ->default(CheckoutJsTheme::DEFAULT_PRIMARY),
-                        ColorPicker::make('checkoutjs_appearance.secondary_color')
-                            ->label(__('Accent color'))
-                            ->default(CheckoutJsTheme::DEFAULT_SECONDARY),
-                        ColorPicker::make('checkoutjs_appearance.background_color')
-                            ->label(__('Background'))
-                            ->default(CheckoutJsTheme::DEFAULT_BACKGROUND),
-                        TextInput::make('checkoutjs_appearance.heading')
-                            ->label(__('Form heading'))
-                            ->maxLength(120),
-                        TextInput::make('checkoutjs_appearance.pay_button_label')
-                            ->label(__('Pay button label'))
-                            ->maxLength(80),
-                        TextInput::make('checkoutjs_appearance.cancel_label')
-                            ->label(__('Cancel link text'))
-                            ->maxLength(80),
-                        TextInput::make('checkoutjs_appearance.summary_note')
-                            ->label(__('Summary note'))
-                            ->maxLength(200),
-                        Textarea::make('checkoutjs_appearance.lead')
-                            ->label(__('Form description'))
-                            ->rows(2)
-                            ->maxLength(400)
-                            ->columnSpanFull(),
-                        Textarea::make('checkoutjs_appearance.footer')
-                            ->label(__('Footer'))
-                            ->rows(2)
-                            ->maxLength(300)
-                            ->columnSpanFull(),
-                        Textarea::make('checkoutjs_appearance.custom_css')
-                            ->label(__('Custom CSS'))
-                            ->rows(10)
-                            ->maxLength(CheckoutJsTheme::CUSTOM_CSS_MAX_LENGTH)
-                            ->helperText(__('Optional styles for the checkout page. HTML and JavaScript are not allowed.'))
-                            ->columnSpanFull(),
+                Tabs::make('Iziipay API')
+                    ->persistTabInQueryString(false)
+                    ->contained(false)
+                    ->tabs([
+                        Tab::make(__('Connection'))
+                            ->icon(Heroicon::OutlinedLink)
+                            ->schema([
+                                Section::make(__('API credentials'))
+                                    ->description(__('The source key identifies this integration in the Iziipay SDK and API requests.'))
+                                    ->columns(2)
+                                    ->schema([
+                                        TextInput::make('key')
+                                            ->label(__('Source key'))
+                                            ->required()
+                                            ->maxLength(255)
+                                            ->unique(PaymentApi::class, 'key', ignoreRecord: true)
+                                            ->copyable()
+                                            ->columnSpanFull()
+                                            ->helperText(__('Used as source_key in the Iziipay JavaScript SDK and API requests.')),
+                                        TextInput::make('domain')
+                                            ->label(__('Domain'))
+                                            ->url()
+                                            ->required()
+                                            ->maxLength(255),
+                                        Toggle::make('status')
+                                            ->label(__('Active'))
+                                            ->default(true)
+                                            ->inline(false),
+                                    ]),
+                                Section::make(__('Redirects'))
+                                    ->description(__('Where customers are sent after paying, failing or cancelling.'))
+                                    ->columns(2)
+                                    ->schema([
+                                        TextInput::make('success_redirect_url')
+                                            ->label(__('Success redirect URL'))
+                                            ->url()
+                                            ->required()
+                                            ->maxLength(255),
+                                        TextInput::make('failed_redirect_url')
+                                            ->label(__('Failed redirect URL'))
+                                            ->url()
+                                            ->required()
+                                            ->maxLength(255),
+                                        TextInput::make('cancel_callback_url')
+                                            ->label(__('Cancel callback URL'))
+                                            ->url()
+                                            ->maxLength(255)
+                                            ->columnSpanFull(),
+                                    ]),
+                                Section::make(__('Elavon payment link'))
+                                    ->visible(fn (): bool => $this->ownerIsElavon())
+                                    ->schema([
+                                        Select::make('elavon_link_mode')
+                                            ->label(__('Payment page type'))
+                                            ->options([
+                                                PaymentApi::ELAVON_LINK_MODE_HOSTED => __('Hosted payment page (Elavon HPP redirect)'),
+                                                PaymentApi::ELAVON_LINK_MODE_CHECKOUTJS => __('Own CheckoutJS page (card fields on our payment page)'),
+                                            ])
+                                            ->default(PaymentApi::ELAVON_LINK_MODE_HOSTED)
+                                            ->native(false)
+                                            ->live()
+                                            ->helperText(__('Hosted sends customers to Elavon. CheckoutJS shows your branded payment page using Elavon Hosted Fields. Branding options appear in the next tabs.')),
+                                    ]),
+                            ]),
+                        Tab::make(__('Branding'))
+                            ->icon(Heroicon::OutlinedPaintBrush)
+                            ->visible($checkoutJsVisible)
+                            ->schema([
+                                Section::make(__('Identity'))
+                                    ->columns(2)
+                                    ->schema([
+                                        TextInput::make('checkoutjs_appearance.company_name')
+                                            ->label(__('Company name'))
+                                            ->maxLength(120),
+                                        FileUpload::make('checkoutjs_appearance.logo')
+                                            ->label(__('Logo'))
+                                            ->image()
+                                            ->disk(CheckoutJsTheme::disk())
+                                            ->directory('checkoutjs-logos')
+                                            ->maxSize(2048)
+                                            ->helperText(__('PNG, JPG, or WebP. Up to 2 MB.')),
+                                    ]),
+                                Section::make(__('Colors'))
+                                    ->columns(3)
+                                    ->schema([
+                                        ColorPicker::make('checkoutjs_appearance.primary_color')
+                                            ->label(__('Primary color'))
+                                            ->default(CheckoutJsTheme::DEFAULT_PRIMARY),
+                                        ColorPicker::make('checkoutjs_appearance.secondary_color')
+                                            ->label(__('Accent color'))
+                                            ->default(CheckoutJsTheme::DEFAULT_SECONDARY),
+                                        ColorPicker::make('checkoutjs_appearance.background_color')
+                                            ->label(__('Background'))
+                                            ->default(CheckoutJsTheme::DEFAULT_BACKGROUND),
+                                    ]),
+                            ]),
+                        Tab::make(__('Texts'))
+                            ->icon(Heroicon::OutlinedChatBubbleBottomCenterText)
+                            ->visible($checkoutJsVisible)
+                            ->schema([
+                                Section::make(__('Form'))
+                                    ->columns(2)
+                                    ->schema([
+                                        TextInput::make('checkoutjs_appearance.heading')
+                                            ->label(__('Form heading'))
+                                            ->maxLength(120),
+                                        TextInput::make('checkoutjs_appearance.summary_note')
+                                            ->label(__('Summary note'))
+                                            ->maxLength(200),
+                                        TextInput::make('checkoutjs_appearance.pay_button_label')
+                                            ->label(__('Pay button label'))
+                                            ->maxLength(80),
+                                        TextInput::make('checkoutjs_appearance.cancel_label')
+                                            ->label(__('Cancel link text'))
+                                            ->maxLength(80),
+                                        Textarea::make('checkoutjs_appearance.lead')
+                                            ->label(__('Form description'))
+                                            ->rows(2)
+                                            ->maxLength(400)
+                                            ->columnSpanFull(),
+                                        Textarea::make('checkoutjs_appearance.footer')
+                                            ->label(__('Footer'))
+                                            ->rows(2)
+                                            ->maxLength(300)
+                                            ->columnSpanFull(),
+                                    ]),
+                            ]),
+                        Tab::make(__('Advanced'))
+                            ->icon(Heroicon::OutlinedCodeBracket)
+                            ->visible($checkoutJsVisible)
+                            ->schema([
+                                Section::make(__('Custom CSS'))
+                                    ->schema([
+                                        Textarea::make('checkoutjs_appearance.custom_css')
+                                            ->hiddenLabel()
+                                            ->rows(12)
+                                            ->extraInputAttributes(['class' => 'font-mono text-sm'])
+                                            ->maxLength(CheckoutJsTheme::CUSTOM_CSS_MAX_LENGTH)
+                                            ->helperText(__('Optional styles for the checkout page. HTML and JavaScript are not allowed.')),
+                                    ]),
+                            ]),
                     ]),
             ]);
     }
@@ -172,6 +228,7 @@ class PaymentapisRelationManager extends RelationManager
             ])
             ->headerActions([
                 CreateAction::make()
+                    ->modalWidth(Width::FourExtraLarge)
                     ->label(__('Create Iziipay API'))
                     ->mutateFormDataUsing(function (array $data): array {
                         $data['key'] = filled($data['key'] ?? null)
@@ -184,6 +241,7 @@ class PaymentapisRelationManager extends RelationManager
             ])
             ->recordActions([
                 EditAction::make()
+                    ->modalWidth(Width::FourExtraLarge)
                     ->mutateFormDataUsing(function (array $data): array {
                         $record = $this->getMountedTableActionRecord();
 

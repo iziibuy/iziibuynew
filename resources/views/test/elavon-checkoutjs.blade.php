@@ -120,6 +120,16 @@
                         </div>
                     </div>
 
+                    <label>Wallets (test override, ignores the plugin toggle)</label>
+                    <div style="margin-bottom:1rem; display:flex; gap:1.5rem;">
+                        <label style="display:flex; gap:.5rem; align-items:center; margin:0;">
+                            <input type="checkbox" name="wallet_google_pay" value="1" style="width:auto; margin:0;" @checked(old('wallet_google_pay'))> Google Pay
+                        </label>
+                        <label style="display:flex; gap:.5rem; align-items:center; margin:0;">
+                            <input type="checkbox" name="wallet_apple_pay" value="1" style="width:auto; margin:0;" @checked(old('wallet_apple_pay'))> Apple Pay
+                        </label>
+                    </div>
+
                     <button type="submit">Create temporary order &amp; pay</button>
                 </form>
             @endif

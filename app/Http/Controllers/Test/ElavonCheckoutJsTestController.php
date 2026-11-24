@@ -51,6 +51,8 @@ class ElavonCheckoutJsTestController extends Controller
             'currency' => ['required', 'string', 'size:3'],
             'customer_name' => ['nullable', 'string', 'max:255'],
             'customer_email' => ['nullable', 'email', 'max:255'],
+            'wallet_google_pay' => ['nullable', 'boolean'],
+            'wallet_apple_pay' => ['nullable', 'boolean'],
         ]);
 
         $access = PaymentMethodAccess::query()->findOrFail($validated['payment_method_access_id']);
@@ -121,6 +123,10 @@ class ElavonCheckoutJsTestController extends Controller
                 'amount' => $order->amount,
                 'currency' => $order->currency,
                 'created_at' => now()->toDateTimeString(),
+                'wallets' => [
+                    'googlePay' => $request->boolean('wallet_google_pay'),
+                    'applePay' => $request->boolean('wallet_apple_pay'),
+                ],
             ],
         ]);
 
